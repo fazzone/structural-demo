@@ -28,8 +28,9 @@ span.many {
 }
                      
 span.ε:hover {
-    /* background-color: #ae81ff; */
-    background-color: #2a4a2a;
+    background-color: #ae81ff;
+    cursor: pointer;
+    /* background-color: #2a4a2a; */
 }
 span.ε {
     padding-left: 1ch;

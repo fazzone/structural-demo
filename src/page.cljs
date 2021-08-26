@@ -2,6 +2,7 @@
   (:require
    [rewrite-clj.zip :as z]
    [embed :as e]
+   [debug :as debug]
    [datascript.core :as d]
    [clojure.string :as string]
    [rum.core :as rum]
@@ -16,6 +17,7 @@
     :state/display-form {:db/valueType :db.type/ref}
     :state/selected-form {:db/valueType :db.type/ref}
     :form/editing {:db/unique :db.unique/identity} 
+    :form/edit-initial {}
     :form/highlight {:db/unique :db.unique/identity}}))
 
 (def test-form-data '(defn register-sub
@@ -146,7 +148,7 @@
   [e]
   (cond
     (:form/editing e)
-    (edit-box (:db/id e))
+    (edit-box (:db/id e) (:form/edit-initial e))
     
     (:form/highlight e)
     [:span.selected (form-component* e)]
@@ -154,29 +156,7 @@
     :else
     (form-component* e)))
 
-(rum/defc datoms-table-eavt* [ds]
-  [:table
-   [:thead
-    [:tr
-     [:td {:style {:width "3em"}} "E"]
-     [:td {:style {:width "20em"}} "A"]
-     [:td {:style {:width "20em"}} "V"]
-     [:td {:style {:width "10em"}} "T"]
-     [:td "added?"]]]
-   [:tbody
-    {} 
-    (->> ds
-         (map-indexed
-          (fn [i [e a v t r]]
-            [:tr {:key i}
-             [:td [:code (str e)]]
-             [:td [:code (str a)]]
-             [:td [:code (str v)]]
-             [:td [:code (str t)]]
-             [:td [:code (str r)]]])))]])
 
-(rum/defc datoms-table < rum/reactive []
-  (datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
 
 (defn select-form-tx
   [eid]
@@ -202,22 +182,25 @@
         :coll/contains (:db/id new-node)}])))
 
 (register-sub ::edit-new-node-after-selected
-              (fn [[_]]
+              (fn [[_ init]]
                 (let [db @conn
                       {:state/keys [selected-form]} (d/entity db ::state)
-                      new-node {:db/id "newnode" :form/editing true}]
+                      new-node {:db/id "newnode"
+                                :form/editing true
+                                :form/edit-initial (or init "")}]
                   (d/transact! conn
                                (into [new-node]
                                      (insert-after-tx selected-form new-node))))))
 
 (register-sub ::edit-new-wrapped
-              (fn [[_ coll-type]]
+              (fn [[_ coll-type init]]
                 (let [db @conn
                       {:state/keys [selected-form]} (d/entity db ::state)
                       new-node {:db/id "newnode"
                                 :coll/type coll-type
                                 :coll/elements {:seq/first {:db/id "inner"
                                                             :coll/_contains "newnode"
+                                                            :form/edit-initial (or init "")
                                                             :form/editing true}}}]
                   (d/transact! conn
                                (into [new-node]
@@ -243,6 +226,10 @@
 
 (defmethod move :move/up [_ e]
   (some-> (:coll/_contains e) first))
+
+(defmethod move :move/forward-up [_ e]
+  (or (move :move/next-sibling e)
+      (move :move/up e)))
 
 (defmethod move :move/backward-up [_ e]
   (or (move :move/prev-sibling e)
@@ -281,42 +268,59 @@
 
 (register-sub ::delete-with-movement
               (fn [[_ movement-type]]
+
                 (let [db @conn
                       {:state/keys [selected-form]} (d/entity db ::state)
                       next-selection (some-> (move movement-type selected-form))]
+                  (prn "DWM " movement-type next-selection)
                   (d/transact! conn
                                (concat (form-delete-tx selected-form)
                                        (select-form-tx (:db/id next-selection)))))))
 
+(defn accept-edit!
+  [form-eid value]
+  (d/transact! conn (into [[:db/retract form-eid :form/editing true]
+                           [:db/add form-eid :symbol/value value]]
+                          (select-form-tx form-eid))))
+
+(defn reject-edit!
+  [form-eid]
+  (d/transact! conn (form-delete-tx (d/entity @conn form-eid))))
+
+(defn finish-edit!
+  [form-eid value]
+  (if-not (empty? value)
+    (accept-edit! form-eid value)
+    (do (reject-edit! form-eid)
+        nil)))
 
 (rum/defcs edit-box
-  < (rum/local "" ::text) (focus-ref-on-mount "the-input") editing-when-mounted
-  [{::keys [text]} form-eid]
-  (letfn [(accept []
-            (d/transact! conn (into [[:db/retract form-eid :form/editing true]
-                                     [:db/add form-eid :symbol/value @text]]
-                                    (select-form-tx form-eid))))
-          (reject []
-            (d/transact! conn (form-delete-tx (d/entity @conn form-eid))))
-          (accept! [ev]
-            (accept)
-            (.preventDefault ev))] 
-    [:form.edit-box {:on-submit accept!}
+  < (rum/local ::empty ::text) (focus-ref-on-mount "the-input") editing-when-mounted
+  [{::keys [text]} form-eid init]
+  (let [value (if (= ::empty @text)
+                init
+                @text)]
+    [:form.edit-box {:on-submit #(do (accept-edit! form-eid value)
+                                     (.preventDefault %))}
      [:input {:type :text
               :ref "the-input"
-              :value @text
-              :style {:width (str (count @text) "ch")}
-              :on-change (fn [ev]
-                           (reset! text (.-value (.-target ev))))
+              :value value
+              :style {:width (str (count value) "ch")}
+              :on-change #(reset! text (string/trim (.-value (.-target %))))
               :on-key-down (fn [ev]
                              (case (.-key ev )
-                               "Escape" (reject)
-                               "Backspace" (when (= @text "")
-                                             (reject))
-                               " " (do (accept! ev)
-                                       (pub! [::edit-new-node-after-selected]))
+                               ("Escape") (reject-edit! form-eid)
+                               "Backspace" (when (empty? @text)
+                                             (reject-edit! form-eid))
+                               (")" "]") (when (finish-edit! form-eid value)
+                                           (println "The edit was finished!")
+                                           (pub! [::move :move/up]))
+                               " " (do (.preventDefault ev)
+                                       (when (finish-edit! form-eid value)
+                                         (pub! [::edit-new-node-after-selected])))
                                nil))
-              :on-blur accept!}]])) 
+              :on-blur #(do (accept-edit! form-eid value)
+                            (.preventDefault %))}]])) 
 
 
 (rum/defc focus-info < rum/reactive
@@ -331,16 +335,19 @@
 (def special-key-map
   {" "         [::edit-new-node-after-selected]
    "\""        [::edit-new-node-after-selected]
-   ":"         [::edit-new-node-after-selected]
+   ":"         [::edit-new-node-after-selected ":"]
+   "'"         [::edit-new-node-after-selected "'"]
    "Escape"    [::select-display-form]
    "("         [::edit-new-wrapped :list]
+   "9"         [::edit-new-wrapped :list]
    "["         [::edit-new-wrapped :vec ]
    "u"         [::move :move/up]
+   "]"         [::move :move/up]
+   "0"         [::move :move/up]
    "j"         [::move :move/next-sibling]
    "k"         [::move :move/prev-sibling]
    "f"         [::move :move/flow]
-   "b"         [::move :move/flow-prev]
-   "x"         [::delete-with-movement :move/next-sibling]
+   "x"         [::delete-with-movement :move/forward-up]
    "Backspace" [::delete-with-movement :move/backward-up]})
 
 (rum/defc key-bindings-table []
@@ -351,13 +358,15 @@
       [:td {:style {:width "30em"}} "Message (click to send)"]]]
     [:tbody
      {} 
-     (for [[k msg] special-key-map]
+     (for [[k msg] (sort-by (comp  pr-str val) (seq special-key-map))]
        [:tr {:key k}
         [:td [:code k]]
         [:td [:button {:style {:font-family "monospace"}
                        :on-click #(pub! msg) } (pr-str msg)]]])]])
 
 
+(rum/defc all-datoms-table < rum/reactive []
+  (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
 
 (rum/defc root-component
   []
@@ -373,11 +382,11 @@
                 :overflow :auto
                 :resize :both
                 :height "300px"
-                :border "1px solid tomato"}}
+                :border "1px solid #ae81ff"}}
        (form-component (:state/display-form (d/entity db ::state)))]]
      (focus-info)
-     (key-bindings-table)
-     #_(datoms-table)]))
+     #_(all-datoms-table)
+     (key-bindings-table)]))
 
 (defn global-keydown*
   [ev]
@@ -386,18 +395,15 @@
       (do (pub! mut)
           (.preventDefault ev)
           (.stopPropagation ev))
-      (.log js/console "Key" ev))))
+      #_(.log js/console "Key" ev))))
 
 (defonce global-keydown
   (fn [ev] 
     (global-keydown* ev)))
 
 (defn  ^:dev/after-load init []
-  (let [el (.getElementById js/document "root")]
-    (js/document.removeEventListener "keydown" global-keydown true)
-    (js/document.addEventListener "keydown" global-keydown true)
-    
-    (when el
-      (rum/mount (root-component) el)
-      (pub! [::select-form (:db/id (:state/display-form (d/entity @conn ::state)))])
-      )))
+  (js/document.removeEventListener "keydown" global-keydown true)
+  (js/document.addEventListener "keydown" global-keydown true)
+  
+  (rum/mount (root-component) (.getElementById js/document "root"))
+  (pub! [::select-form (:db/id (:state/display-form (d/entity @conn ::state)))]))
