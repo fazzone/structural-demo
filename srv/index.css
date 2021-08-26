@@ -1,0 +1,47 @@
+body {
+    background-color: #000;
+    color: #fff;
+}
+.top-level-form {
+    font-family: monospace;
+    line-height: 2;
+}
+span.symbol:not(:first-of-type) {
+    padding-left: 4px;
+}
+span.number:not(:first-of-type) {
+    padding-left: 4px;
+}
+
+span.flex {
+    display: flex;
+    flex-wrap: wrap;
+                   
+}
+span.many {
+    display: flex;
+    /* flex-wrap: wrap; */
+    margin-left: 10px;
+    border: 1px solid;
+    /* padding: 2px; */
+
+}
+                     
+span.ε:hover {
+    /* background-color: #ae81ff; */
+    background-color: #2a4a2a;
+}
+span.ε {
+    padding-left: 1ch;
+    padding-right: 1ch;
+}
+span.selected {
+    background-color: #2a4a2a;
+}
+
+.edit-box {
+    display: inline;
+}
+.edit-box input {
+    font-family: monospace;
+}
