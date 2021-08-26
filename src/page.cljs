@@ -94,11 +94,6 @@
              :else (recur (inc i)))))))})
 
 (declare form-component)
-(rum/defc map-entry-component < ereactive
-  [{:map-entry/keys [key val]}]
-  (rum/fragment
-   (rum/with-key (form-component key) (:db/id key))
-   (rum/with-key (form-component val) (:db/id val))))
 
 (rum/defc form-component*  ;; < ereactive
   [e]
@@ -121,10 +116,7 @@
        (case (:coll/type e) :list "(" :vec "[" :map "{")
        (for [x (e/seq->vec (:coll/elements e))]
          (rum/with-key (form-component x) (:db/id x)))
-       (case (:coll/type e) :list ")" :vec "]" :map "}"))
-      
-      (:map-entry/key e)
-      (rum/with-key (map-entry-component e) (:db/id e)))))
+       (case (:coll/type e) :list ")" :vec "]" :map "}")))))
 
 (defn focus-ref-on-mount
   [ref-name]
@@ -168,6 +160,14 @@
      [:db/add eid :form/highlight true]]))
 
 (register-sub ::select-form (fn [[_ eid]] (d/transact! conn (select-form-tx eid))))
+
+(register-sub ::import-form-text
+              (fn [[_ text]]
+                (let [txe (update (e/->tx (cljs.reader/read-string text)) :db/id #(or % "top"))]
+                  (d/transact! conn (into [txe
+                                           {:db/ident ::state
+                                            :state/display-form (:db/id txe)}]
+                                          (select-form-tx (:db/id txe)))))))
 
 (defn insert-after-tx
   [target new-node]
@@ -294,14 +294,16 @@
     (do (reject-edit! form-eid)
         nil)))
 
+
 (rum/defcs edit-box
-  < (rum/local ::empty ::text) (focus-ref-on-mount "the-input") editing-when-mounted
+  < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
   [{::keys [text]} form-eid init]
-  (let [value (if (= ::empty @text)
+  (let [value (if (= [] @text)
                 init
                 @text)]
-    [:form.edit-box {:on-submit #(do (accept-edit! form-eid value)
-                                     (.preventDefault %))}
+    [:form.edit-box
+     {:on-submit #(do (finish-edit! form-eid value)
+                      (.preventDefault %))}
      [:input {:type :text
               :ref "the-input"
               :value value
@@ -309,15 +311,15 @@
               :on-change #(reset! text (string/trim (.-value (.-target %))))
               :on-key-down (fn [ev]
                              (case (.-key ev )
-                               ("Escape") (reject-edit! form-eid)
-                               "Backspace" (when (empty? @text)
-                                             (reject-edit! form-eid))
-                               (")" "]") (when (finish-edit! form-eid value)
-                                           (println "The edit was finished!")
-                                           (pub! [::move :move/up]))
-                               " " (do (.preventDefault ev)
-                                       (when (finish-edit! form-eid value)
-                                         (pub! [::edit-new-node-after-selected])))
+                               "Escape"      (reject-edit! form-eid)
+                               "Backspace"   (when (empty? @text)
+                                               (reject-edit! form-eid))
+                               (")" "]" "}") (when (finish-edit! form-eid value)
+                                               (println "The edit was finished!")
+                                               (pub! [::move :move/up]))
+                               " "           (do (.preventDefault ev)
+                                                 (when (finish-edit! form-eid value)
+                                                   (pub! [::edit-new-node-after-selected])))
                                nil))
               :on-blur #(do (accept-edit! form-eid value)
                             (.preventDefault %))}]])) 
@@ -341,6 +343,7 @@
    "("         [::edit-new-wrapped :list]
    "9"         [::edit-new-wrapped :list]
    "["         [::edit-new-wrapped :vec ]
+   "{"         [::edit-new-wrapped :map ]
    "u"         [::move :move/up]
    "]"         [::move :move/up]
    "0"         [::move :move/up]
@@ -352,21 +355,67 @@
 
 (rum/defc key-bindings-table []
   [:table
-    [:thead
-     [:tr
-      [:td {:style {:width "8em"}} "Key"]
-      [:td {:style {:width "30em"}} "Message (click to send)"]]]
-    [:tbody
-     {} 
-     (for [[k msg] (sort-by (comp  pr-str val) (seq special-key-map))]
-       [:tr {:key k}
-        [:td [:code k]]
-        [:td [:button {:style {:font-family "monospace"}
-                       :on-click #(pub! msg) } (pr-str msg)]]])]])
-
+   [:thead
+    [:tr
+     [:td {:style {:width "8em"}} "Key"]
+     [:td {:style {:width "30em"}} "Message (click to send)"]]]
+   [:tbody
+    {} 
+    (for [[k msg] (sort-by (comp  pr-str val) (seq special-key-map))]
+      [:tr {:key k}
+       [:td [:code k]]
+       [:td [:button {:style {:font-family "monospace"}
+                      :on-click #(pub! msg) } (pr-str msg)]]])]])
 
 (rum/defc all-datoms-table < rum/reactive []
   (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
+
+(rum/defc notes
+  []
+  [:div
+   [:h3 "Getting started"]
+   [:p "First, press " [:code "f"] " to 'flow' into the top-level form."]
+   [:p
+    "Now, you can press space to insert a new node. "
+    "There are a few keybinds to do various kinds of insertion.  "
+    "The idea is that you can almost type the code normally and it should do the right thing."]
+   [:h3 "Notes"]
+   [:p
+    "This is a small demonstration of what a purely-structural editor might be like.  "]
+   [:ul
+    [:li "When editing a node, there is an important difference between accepting the edit with "
+     [:code "Enter"] " or " [:code "Space"] "."
+     [:ul
+      [:li [:code "Enter"] " exits edit mode and leaves the cursor over the inserted node"]
+      [:li [:code "Space"] " inserts the node and immediately starts inserting another"]]]
+    [:li "It really doesn't like it when you try to do any kind of mutation with the cursor over the top-level form."]
+    [:li "An attempt was made to implement " [:code ":move/flow"] " but there is no backwards version of this"
+     [:ul
+      [:li "It seems not entirely clear what exactly backwards flow would do"]]]
+
+    [:li "Right now there is only one top-level form edit widget.  Multiple form editing could be implemented in a few different ways and I am not sure which is best"]
+    [:li "When you begin editing a node, it immediately exists in the database so that it can take up space and be rendered properly."
+     [:ul
+      [:li "The problem with this is that is forfeits the invariant that the form under structural editing is always valid"]]]
+    [:li "I am not sure the performance hacks are necessary.  "
+     [:ul
+      [:li "The idea is that you should be able to edit a reasonably large form and hold "
+       [:code "f"] " to page through it"]
+      [:li " This should be limited by your key repeat speed and not the renderer performance"]]]]])
+
+(rum/defcs text-import-form < (rum/local "" ::text)
+  [{::keys [text]}]
+  [:form
+   {:on-submit #(do (pub! [::import-form-text @text])
+                    (.preventDefault %))}
+   [:input {:on-change #(reset! text (.-value (.-target %)) )
+            :value @text}]
+   [:input {:type "submit" :value "import clj text"}]])
+
+
+(rum/defc top-level-form-component < ereactive
+  [state]
+  (form-component (:state/display-form state)))
 
 (rum/defc root-component
   []
@@ -383,10 +432,13 @@
                 :resize :both
                 :height "300px"
                 :border "1px solid #ae81ff"}}
-       (form-component (:state/display-form (d/entity db ::state)))]]
+       (top-level-form-component (d/entity db ::state))]]
+     
      (focus-info)
+     (text-import-form)
      #_(all-datoms-table)
-     (key-bindings-table)]))
+     (key-bindings-table)
+     (notes)]))
 
 (defn global-keydown*
   [ev]
