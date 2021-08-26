@@ -383,16 +383,24 @@
    [:p
     "This is a small demonstration of what a purely-structural editor might be like.  "]
    [:ul
+    [:li "There is no whitespace or layout of any kind"
+     [:ul
+      [:li "The only reason that symbols aren't right next to each other is padding on their span class"]
+      [:li "I am really not sure about the best way to implement this"
+       [:ul
+        [:li "Should the layout be persisted in the database?  If so, how?"]
+        [:li "How should the rendering work?"]
+        [:li "Should there even be a concept of 'lines' at all?"]]]]]
     [:li "When editing a node, there is an important difference between accepting the edit with "
      [:code "Enter"] " or " [:code "Space"] "."
      [:ul
       [:li [:code "Enter"] " exits edit mode and leaves the cursor over the inserted node"]
       [:li [:code "Space"] " inserts the node and immediately starts inserting another"]]]
     [:li "It really doesn't like it when you try to do any kind of mutation with the cursor over the top-level form."]
+
     [:li "An attempt was made to implement " [:code ":move/flow"] " but there is no backwards version of this"
      [:ul
       [:li "It seems not entirely clear what exactly backwards flow would do"]]]
-
     [:li "Right now there is only one top-level form edit widget.  Multiple form editing could be implemented in a few different ways and I am not sure which is best"]
     [:li "When you begin editing a node, it immediately exists in the database so that it can take up space and be rendered properly."
      [:ul
@@ -401,7 +409,10 @@
      [:ul
       [:li "The idea is that you should be able to edit a reasonably large form and hold "
        [:code "f"] " to page through it"]
-      [:li " This should be limited by your key repeat speed and not the renderer performance"]]]]])
+      [:li "This should be limited by your key repeat speed and not the renderer performance"]
+      [:li "I think for forms of appreciable size it may be too slow to do it naively"]]]
+    [:li "Because I don't understand key handlers, typing doesn't really work into the import text form"
+     [:ul [:li "Just paste into it instead"]]]]])
 
 (rum/defcs text-import-form < (rum/local "" ::text)
   [{::keys [text]}]
