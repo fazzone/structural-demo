@@ -4,7 +4,7 @@
    [rum.core :as rum]))
 
 
-(def log2size 3)
+(def log2size 10)
 (def history-index (atom 0))
 (def history-size (bit-shift-left 1 log2size))
 (def history-buffer (js/Array. history-size))
@@ -61,15 +61,15 @@
          (for [e (backwards-index-seq)]
            (when-let [{:keys [tempids tx-data] :as k} (aget history-buffer e)]
              (let [t (:db/current-tx tempids)]
-               [:li
+               [:li {:key t}
                 [:a {:href "#"
                      :on-click #(do (.preventDefault %)
                                     (swap! toggle update t not))}
                  (str t)]
-                (when (get @toggle t)
+                (when-not (get @toggle t)
                   [:pre (with-out-str
                           (doseq [[e a v t a?] tx-data]
-                            (println "[" e a (pr-str v) t a? "]")))]
+                            (println "[" e a (pr-str v) #_t a? "]")))]
                   )])))]]))])
 
 
