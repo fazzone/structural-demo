@@ -27,22 +27,25 @@ span.many {
 
 }
                      
-span.ε:hover {
+span.tk:hover {
     background-color: #ae81ff;
     cursor: pointer;
     /* background-color: #2a4a2a; */
 }
-span.ε {
+span.tk {
     padding-left: 1ch;
     padding-right: 1ch;
 }
+span.tk.s { color: #81a2be; }
+span.tk.k { color: #70c0b1; }
+span.tk.p { color: #a6a6a0; }
+span.tk.l { color: #b5bd68; }
+
 span.selected {
     background-color: #2a4a2a;
 }
 
 .edit-box {
-    display: inline;
-}
-.edit-box input {
     font-family: monospace;
+    display: inline;
 }

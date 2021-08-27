@@ -1,5 +1,7 @@
 (ns debug
   (:require
+   [clojure.edn :as edn]
+   [cljs.pprint :as pprint]
    [datascript.core :as d]
    [rum.core :as rum]))
 
@@ -26,3 +28,38 @@
              [:td [:code (str r)]]])))]])
 
 
+
+(rum/defcs transaction-edit-area < (rum/local "" ::text) < (rum/local nil ::tx-result)
+  [{::keys [text tx-result]} conn]
+  [:div
+   [:textarea {:value @text
+               :style {:width "50%"
+                       :height "100px"}
+               :on-change (fn [ev]
+                            (let [new-text (.-value (.-target ev))]
+                              (reset! text new-text)))}]
+   (try
+     (let [edn (edn/read-string @text)]
+       [:div
+        [:pre (pr-str edn)]
+        [:input {:type "button"
+                 :value "transact!"
+                 :on-click (fn [ev]
+                             (try
+                               (reset! tx-result {:tx-success (d/transact! conn edn)})
+                               (catch js/Error e
+                                 (reset! tx-result {:tx-error e}))))}]])
+     (catch js/Error e
+       [:div (str "error" e)]))
+   (when-let [ex (:tx-error @tx-result)]
+     [:div "Transaction error!"
+      [:pre (str ex)]])
+   (when-let [r (:tx-success @tx-result)]
+     [:div
+      "Transaction success!"
+      [:br]
+      "tx-data:"
+      (datoms-table-eavt* (:tx-data r))
+      [:br]
+      "tempids"
+      [:pre (with-out-str (pprint/pprint (:tempids r)))]])])
