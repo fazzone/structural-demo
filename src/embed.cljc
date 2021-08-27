@@ -9,7 +9,6 @@
    :keyword/value {:db/index true}
    :whitespace/value {}
    :coll/type {}
-   :coll/elements {:db/valueType :db.type/ref}
    :coll/contains {:db/valueType :db.type/ref
                    :db/cardinality :db.cardinality/many}
    :seq/first {:db/valueType :db.type/ref}
@@ -37,9 +36,8 @@
   (letfn [(coll-tx [coll-type xs]
             (let [id (new-tempid)]
               (cond-> {:db/id id :coll/type coll-type}
-                (seq xs) (assoc :coll/elements
-                                (seq-tx (for [x xs]
-                                         (assoc (->tx x) :coll/_contains id)))))))]
+                (seq xs) (merge (seq-tx (for [x xs]
+                                          (assoc (->tx x) :coll/_contains id)))))))]
    (cond 
      (symbol? e)    {:symbol/value (str e)}
      (keyword? e)   {:keyword/value e}
@@ -60,7 +58,7 @@
   [e]
   (or (some-> (:symbol/value e) symbol)
       (when-let [ct (:coll/type e)]
-        (let [elems (some->> (:coll/elements e) (seq->vec) (map ->form))]
+        (let [elems (some->> (seq->vec e) (map ->form))]
           (or (case ct
                 :list elems
                 :vec  (vec elems)
@@ -95,13 +93,7 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity))))))))
-  (run! prn
-        (sort-by first
-                 (:tx-data
-                  (d/with @(d/create-conn form-schema)
-                          [{:db/id -1
-                            :coll/type :vec
-                            :coll/elements {:seq/first {:string/value "ok" :coll/_contains -1}}}])))))
+)
 
 
 

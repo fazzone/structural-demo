@@ -143,7 +143,7 @@
       (:coll/type e)
       (rum/fragment 
        (case (:coll/type e) :list "(" :vec "[" :map "{")
-       (for [x (e/seq->vec (:coll/elements e))]
+       (for [x (e/seq->vec e)]
          (rum/with-key (form-component x) (:db/id x)))
        (case (:coll/type e) :list ")" :vec "]" :map "}")))))
 
@@ -218,14 +218,11 @@
   (let [spine (first (:seq/_first e))
         next  (some-> spine :seq/next)
         prev  (some-> spine :seq/_next first)
-        coll  (some-> spine :coll/_elements first)]
+        ]
     [[:db/retractEntity (:db/id e)]
-     (when coll
-       [:db/retract (:db/id coll) :coll/elements (:db/id spine)])
      (cond
        (and prev next) [:db/add (:db/id prev) :seq/next (:db/id next)]
-       prev            [:db/retract (:db/id prev) :seq/next (:db/id spine)]
-       next            [:db/add (:db/id coll) :coll/elements (:db/id next)])]))
+       prev            [:db/retract (:db/id prev) :seq/next (:db/id spine)])]))
 
 (defn form-replace-tx
   [e replacement-eid]
@@ -277,10 +274,10 @@
   (let [sel (get-selected-form db)
         new-node {:db/id "newnode"
                   :coll/type coll-type
-                  :coll/elements {:seq/first {:db/id "inner"
-                                              :coll/_contains "newnode"
-                                              :form/edit-initial (or init "")
-                                              :form/editing true}}}]
+                  :seq/first {:db/id "inner"
+                              :coll/_contains "newnode"
+                              :form/edit-initial (or init "")
+                              :form/editing true}}]
     (into [new-node]
           (concat (insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
@@ -304,7 +301,7 @@
         (recur (some-> (:coll/_contains e) first)))))
 
 (defmethod move :move/flow [_ e]
-  (or (some-> (:coll/elements e) :seq/first)
+  (or (:seq/first e)
       (flow* e)))
 
 (defmethod move :move/up [_ e]
@@ -361,10 +358,10 @@
   (into [[:db/retract form-eid :form/editing true]
          {:db/id "newnode"
           :coll/type ct
-          :coll/elements {:seq/first {:db/id "inner"
-                                      :coll/_contains "newnode"
-                                      :form/edit-initial (or value "")
-                                      :form/editing true}}}]
+          :seq/first {:db/id "inner"
+                      :coll/_contains "newnode"
+                      :form/edit-initial (or value "")
+                      :form/editing true}}]
         (concat
          (form-replace-tx (d/entity db form-eid) "newnode")
          (move-selection-tx form-eid "inner"))))
