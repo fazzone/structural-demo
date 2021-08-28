@@ -203,10 +203,10 @@
   (cond
     (:form/editing e)
     (edit-box (:db/id e) (or (:form/edit-initial e)
-                             (let [okay (or (:symbol/value e)
-                                            (:keyword/value e)
+                             (let [okay (or (some-> (:symbol/value e) str)
+                                            (some-> (:keyword/value e) str)
                                             (:string/value e)
-                                            (:number/value e))]
+                                            (some-> (:number/value e) str))]
                                (println "Okay" (pr-str okay))
                                okay)))
     
