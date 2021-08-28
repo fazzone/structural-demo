@@ -22,7 +22,7 @@
     :form/edit-initial {}
     :form/highlight {:db/unique :db.unique/identity}
     :form/indent {}
-    :form/created-tx {:db/valueType :db.type/ref}}))
+    :form/edited-tx {:db/valueType :db.type/ref}}))
 
 (def test-form-data
   '[
@@ -76,12 +76,6 @@
   (async/put! bus e))
 
 (def ^:dynamic *et-index* (js/Array. 1024))
-(def ^:dynamic *last-tx-report* (atom nil))
-
-(defmulti message->mutation* (fn [_db msg & params] msg))
-
-(defmethod message->mutation* :default [_ msg a b c]
-  (println "?" msg a))
 
 (defn ->mutation
   [tx-fn]
@@ -462,14 +456,41 @@
 
 (register-sub ::recursively-set-indent (->mutation recursively-set-indent-tx))
 
+;; history
+
+(defn form-eids-by-edit-tx-desc
+  [db]
+  (->> (d/rseek-datoms db :avet :form/edited-tx)
+       (take-while (fn [[_ a]] (= a :form/edited-tx)))
+       (map (fn [[e]] e))))
+
+(register-sub ::global-keydown
+              (let [tab-index (atom 0)
+                    tab-seq (atom nil)]
+                (fn [[_ k]]
+                  (case k
+                    "Tab"
+                    (let [ts (or @tab-seq
+                                 (reset! tab-seq (vec (form-eids-by-edit-tx-desc @conn))))]
+                      (when-not (= 0 (count ts))
+                        (let [ti (swap! tab-index #(rem (inc %) (count ts)))]
+                          (pub! [::select-form (nth ts ti)]))))
+                    
+                    (do
+                      (println 'Reset-tab-state )
+                      (reset! tab-index 0)
+                      (reset! tab-seq nil))))))
+
+
 ;; edit box
 
 (defn accept-edit-tx
   [form-eid value]
-  [{:db/id :db/current-tx :whatever "Okay"}
+  [{:db/id :db/current-tx}
    [:db/add form-eid :symbol/value value]
-   [:db/add form-eid :form/created-tx :db/current-tx]
-   [:db/retract form-eid :form/editing true]])
+   [:db/add form-eid :form/edited-tx :db/current-tx]
+   [:db/retract form-eid :form/editing true]
+   [:db/retract form-eid :form/edit-initial]])
 
 (defn reject-edit-tx
   [db form-eid]
@@ -580,8 +601,9 @@
    "Backspace" [::delete-with-movement :move/backward-up]
    "d"         [::duplicate-selected-form]
    "i"         [::indent-form]
-   "M"         [::recursively-set-indent true]
-   "O"         [::recursively-set-indent false]})
+   "Tab"       [::tabby]
+   "M" [::recursively-set-indent true]
+   "O" [::recursively-set-indent false]})
 
 (rum/defc key-bindings-table []
   [:table
@@ -601,14 +623,7 @@
 (rum/defc all-datoms-table < rum/reactive []
   (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
 
-(rum/defc last-tx-table < rum/reactive []
-  (let [{:keys [tx-data tempids]} (rum/react *last-tx-report*)]
-    (when tx-data
-      [:div
-       (str "Transaction #" (:db/current-tx tempids))
-       [:pre (with-out-str
-               (doseq [[e a v t a?] tx-data]
-                 (println "[" e a (pr-str v) t a? "]")))]])))
+
 
 (rum/defc top-level-form-component < ereactive
   [e]
@@ -616,10 +631,19 @@
    [:span.form-title.code-font (str "#" (:db/id e))]
    [:div.top-level-form.code-font (form-component e)]])
 
-(rum/defc edit-history
+(rum/defc edit-history < rum/reactive
   []
-  
-  )
+  (let [db (rum/react conn)
+        sel-eid (d/entid db  [:form/highlight true])]
+    [:ul
+     (for [e (form-eids-by-edit-tx-desc db)]
+       [:div {:key e}
+        [:a {:href "#"
+             :on-click #(do (.preventDefault %)
+                            (pub! [::select-form e]))}
+         (str "Edited #" e)
+         (when (= e sel-eid)
+           " (Selected)")]])]))
 
 (rum/defc root-component
   []
@@ -627,23 +651,27 @@
     [:div.root-cols
      [:div.sidebar-left
       (focus-info)
+      (edit-history)
       (h/history-view conn)]
      [:div {:style {:display :flex
                     :flex-direction :column}}
       (for [df (:state/display-form (d/entity db ::state))]
         (rum/with-key (top-level-form-component df) (:db/id df)))]]))
 
-
-
 (defn global-keydown*
   [ev]
   (when-not (or @global-editing-flag
                 (.-ctrlKey ev))
-    (if-let [mut (get special-key-map (.-key ev))]
-      (do (pub! mut)
-          (.preventDefault ev)
-          (.stopPropagation ev))
-      (.log js/console "Key" ev))))
+    (let [jj (str (when (.-altKey ev) "M-")
+                  (when (.-ctrlKey ev ) "C-")
+                  (when (.-shiftKey ev) "S-")
+                  (.-key ev))]
+      (pub! [::global-keydown jj])
+      (if-let [mut (get special-key-map (.-key ev))]
+        (do (pub! mut)
+            (.preventDefault ev)
+            (.stopPropagation ev))
+        (.log js/console "Key" ev)))))
 
 (defonce global-keydown
   (fn [ev] 
