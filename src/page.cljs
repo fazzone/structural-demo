@@ -15,36 +15,45 @@
   (merge
    e/form-schema
    {:state/hover-form {:db/valueType :db.type/ref}
-    :state/display-form {:db/valueType :db.type/ref}
+    :state/display-form {:db/valueType :db.type/ref
+                         :db/cardinality :db.cardinality/many}
     ;; :state/selected-form {:db/valueType :db.type/ref}
     :form/editing {:db/unique :db.unique/identity} 
     :form/edit-initial {}
     :form/highlight {:db/unique :db.unique/identity}
-    :form/indent {}}))
+    :form/indent {}
+    :form/created-tx {:db/valueType :db.type/ref}}))
 
-(def test-form-data '(defn ->tx
-                       [e]
-                       (letfn [(coll-tx [coll-type xs]
-                                 (let [id (new-tempid)]
-                                   (cond-> {:db/id id :coll/type coll-type}
-                                     (seq xs) (merge (seq-tx (for [x xs]
-                                                               (assoc (->tx x) :coll/_contains id)))))))]
-                         (cond 
-                           (symbol? e)    {:symbol/value (str e)}
-                           (keyword? e)   {:keyword/value e}
-                           (string? e)    {:string/value e}
-                           (number? e)    {:number/value e}
-                           (list? e)      (coll-tx :list e)
-                           (vector? e)    (coll-tx :vec e)
-                           (map? e)       (coll-tx :map (flatten-map e))))))
+(def test-form-data
+  '[
+    (defn other-thing [bink] bonks)
+    (defn ->tx
+      [e]
+      (letfn [(coll-tx [coll-type xs]
+                (let [id (new-tempid)]
+                  (cond-> {:db/id id :coll/type coll-type}
+                    (seq xs) (merge (seq-tx (for [x xs]
+                                              (assoc (->tx x) :coll/_contains id)))))))]
+        (cond 
+          (symbol? e)    {:symbol/value (str e)}
+          (keyword? e)   {:keyword/value e}
+          (string? e)    {:string/value e}
+          (number? e)    {:number/value e}
+          (list? e)      (coll-tx :list e)
+          (vector? e)    (coll-tx :vec e)
+          (map? e)       (coll-tx :map (flatten-map e)))))])
 #_(def test-form-data '[f :fo  cb ])
 
 (def conn
-  (let [txe (update (e/->tx test-form-data) :db/id #(or % "top"))]
-    (doto (d/create-conn schema)
-      (d/transact! [txe
-                    {:db/ident ::state
-                     :state/display-form (:db/id txe)}]))))
+  (doto (d/create-conn schema)
+    (d/transact! (apply concat
+                        (for [f test-form-data]
+                          (let [txe (e/->tx f)]
+                            [txe
+                             {:db/ident ::state
+                              :state/display-form (:db/id txe)}]))))))
+
+
 
 
 (def bus (async/chan))
@@ -73,8 +82,6 @@
 
 (defmethod message->mutation* :default [_ msg a b c]
   (println "?" msg a))
-
-
 
 (defn ->mutation
   [tx-fn]
@@ -320,13 +327,10 @@
 (defn insert-duplicate-tx
   [db]
   (let [sel      (get-selected-form db)
-        new-node (assoc (form-duplicate-tx sel) :db/id "dup") 
-        txd      (into [new-node]
-                       (concat (insert-after-tx sel new-node)
-                               (move-selection-tx (:db/id sel) "dup")))]
-    (println "New node" new-node)
-    (println "IDT" txd)
-    txd))
+        new-node (assoc (form-duplicate-tx sel) :db/id "dup")]
+    (into [new-node]
+          (concat (insert-after-tx sel new-node)
+                  (move-selection-tx (:db/id sel) "dup")))))
 
 (register-sub ::duplicate-selected-form (->mutation insert-duplicate-tx))
 
@@ -434,8 +438,10 @@
 
 (defn accept-edit-tx
   [form-eid value]
-  [[:db/retract form-eid :form/editing true]
-   [:db/add form-eid :symbol/value value]])
+  [{:db/id :db/current-tx :whatever "Okay"}
+   [:db/add form-eid :symbol/value value]
+   [:db/add form-eid :form/created-tx :db/current-tx]
+   [:db/retract form-eid :form/editing true]])
 
 (defn reject-edit-tx
   [db form-eid]
@@ -576,9 +582,21 @@
                (doseq [[e a v t a?] tx-data]
                  (println "[" e a (pr-str v) t a? "]")))]])))
 
-(rum/defc top-level-form-component < ereactive
+#_(rum/defc top-level-form-component < ereactive
   [state]
   (form-component (:state/display-form state)))
+
+(rum/defc top-level-form-component < ereactive
+  [e]
+  [:div.form-card {:key (:db/id e)}
+   [:span.form-title.code-font (str "#" (:db/id e))]
+   [:div.top-level-form.code-font (form-component e)]
+   [:pre (with-out-str (run! (partial apply prn) (d/touch e)))]])
+
+(rum/defc edit-history
+  []
+  
+  )
 
 (rum/defc root-component
   []
@@ -587,16 +605,11 @@
      [:div {:style {:display :flex
                     :flex-direction :column
                     :justify-content :center
-                    :align-items :center
-                    ;; :height "80vh"
-                    }}
-      [:div.top-level-form.code-font
-       {:style {:width "900px"
-                :overflow :auto
-                :resize :both
-                :border "1px solid #ae81ff"}}
-       [:span {:style {:overflow  :wrap}}
-        (top-level-form-component (d/entity db ::state))]]]
+                    :align-items :center}}
+      (for [df (:state/display-form (d/entity db ::state))]
+        (top-level-form-component df))
+      
+      ]
      
      [:div {:style {:display :flex
                     :flex-direction :row
@@ -634,4 +647,4 @@
   (h/clear!)
   #_(make-subs!)
   (rum/mount (root-component) (.getElementById js/document "root"))
-  (pub! [::select-form (:db/id (:state/display-form (d/entity @conn ::state)))]))
+  #_(pub! [::select-form (:db/id (:state/display-form (d/entity @conn ::state)))]))

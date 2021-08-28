@@ -8,6 +8,7 @@ body {
 }
 
 .top-level-form {
+    border: 1px solid #ae81ff;
 }
 span.symbol:not(:first-of-type) {
     padding-left: 4px;
@@ -98,6 +99,12 @@ span.talldelim {
     border: 0;
     padding: 0;
 }
-/* .top-level-form span { */
-/*     display: flex; */
-/* } */
+
+.form-card {
+    display: flex;
+    flex-direction: column;
+    width: 800px;
+    overflow: auto;
+    resize: both;
+}
+
