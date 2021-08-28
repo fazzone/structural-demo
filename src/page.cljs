@@ -26,7 +26,7 @@
 
 (def test-form-data
   '[
-    (defn other-thing [bink] bonks)
+    (defn other-thing [something] blah)
     (defn ->tx
       [e]
       (letfn [(coll-tx [coll-type xs]
@@ -90,12 +90,25 @@
                  (doseq [e (dedupe (map first tx-data))]
                    (when-let [cs (aget *et-index* e)]
                      (doseq [c cs]
+                       #_(js/console.log "Refs=" (.-refs c ))
                        (.setState c
                                   (fn [state props]
+                                    #_(println "Setstate " state props)
                                     (let [rst (aget state :rum/state)]
                                       (vswap! rst assoc :rum/args (cons (d/entity db-after e)
                                                                         (next (:rum/args rst)))))
                                     state))))))))
+
+;; hacks
+(register-sub ::scroll-into-view
+              (fn [[_]]
+                (let [sel (d/entid @conn  [:form/highlight true])]
+                  (when-let [cs (aget *et-index* sel)]
+                    (doseq [c cs]
+                     (some-> (.-refs c)
+                             (aget "selected")
+                             (doto (js/console.log "Element") )
+                             (.scrollIntoView)))))))
 
 (def ereactive
   {:init
@@ -143,10 +156,7 @@
       leaf
       [:span {:key eid
               :data-eid eid
-              :class ["tk"
-                      leaf-class
-                      (when (:form/highlight e)
-                        "selected")]
+              :class ["tk" leaf-class]
               :on-click (fn [ev]
                           (pub! [::select-form  (-> (.-target ev ) (.-dataset) (aget "eid") (js/parseInt))])
                           (.stopPropagation ev))}
@@ -204,8 +214,6 @@
                                (println "Okay" (pr-str okay))
                                okay)))
     
-    (not (:coll/type e))
-    (form-component* e)
     
     (:form/highlight e)
     [:span.selected {:ref "selected"
@@ -297,29 +305,12 @@
 
 (register-sub ::raise-selected-form (->mutation raise-selected-form-tx))
 
-#_(defn form-duplicate-tx
-  [e contained-by-eid]
-  (cond
-    (:symbol/value e)  {:symbol/value e :coll/_contains contained-by-eid}
-    (:keyword/value e) {:keyword/value e :coll/_contains contained-by-eid}
-    (:string/value e)  {:string/value e :coll/_contains contained-by-eid}
-    (:number/value e)  {:number/value e :coll/_contains contained-by-eid}
-    (:coll/type e)     (let [cid (e/new-tempid)]
-                         (cond-> {:db/id cid :coll/type e}
-                           (:seq/first e) (assoc :seq/first (form-duplicate-tx (:seq/first e) cid ))
-                           (:seq/next e)  (assoc :seq/next (form-duplicate-tx (:seq/next e) cid))))
-    :else (println "What is this?" e)))
-
-
-
-(def duplicate-keys [:form/indent])
 (defn form-duplicate-tx
   [e]
   (letfn [(dup-spine [parent head]
             (if-let [x (:seq/first head)]
               (cond-> {:seq/first (assoc (form-duplicate-tx x) :coll/_contains parent )}
                 (:seq/next head) (assoc :seq/next (dup-spine parent (:seq/next head))))))]
-    
     (cond 
       (:symbol/value e)  {:symbol/value (:symbol/value e)}
       (:keyword/value e) {:keyword/value (:keyword/value e)}
@@ -329,8 +320,6 @@
                            (merge (cond-> {:db/id us :coll/type (:coll/type e)}
                                     (:form/indent e) (assoc :form/indent true))
                                   (dup-spine us e))))))
-
-
 
 (defn insert-duplicate-tx
   [db]
@@ -342,6 +331,23 @@
                   (move-selection-tx (:db/id sel) (:db/id new-node))))))
 
 (register-sub ::duplicate-selected-form (->mutation insert-duplicate-tx))
+
+;; paredit
+#_(defn slurp-right-tx
+  [db c]
+  ;; [c] a
+  ;; [c a]
+  (let [e (if (:coll/type c)
+            c
+            (some-> (:coll/_contains c) first))
+        a (:seq/next )
+        ]
+    
+    )
+  )
+
+
+;; editing
 
 (defn insert-editing-tx
   [db edit-initial]
@@ -386,6 +392,12 @@
 
 (defmethod move :move/most-nested [_ e]
   (last (tree-seq :coll/type e/seq->vec e)))
+
+(defmethod move :move/most-upward [_ e]
+  (->> e
+       (iterate (partial move :move/up))
+       (take-while some?)
+       last))
 
 (defmethod move :move/next-sibling [_ e]
   (some-> (:seq/_first e) first :seq/next :seq/first))
@@ -464,22 +476,35 @@
        (take-while (fn [[_ a]] (= a :form/edited-tx)))
        (map (fn [[e]] e))))
 
+(defn update-tab-index
+  [prev n delta]
+  (let [i (+ prev delta)]
+    (cond
+      (= i -1) (dec n)
+      (= i  n) 0
+      :else    i)))
+
 (register-sub ::global-keydown
               (let [tab-index (atom 0)
-                    tab-seq (atom nil)]
+                    tab-seq   (atom nil)]
                 (fn [[_ k]]
                   (case k
-                    "Tab"
+                    "S-Shift"
+                    nil
+                    
+                    (= "S-Tab" "Tab")
                     (let [ts (or @tab-seq
                                  (reset! tab-seq (vec (form-eids-by-edit-tx-desc @conn))))]
                       (when-not (= 0 (count ts))
-                        (let [ti (swap! tab-index #(rem (inc %) (count ts)))]
-                          (pub! [::select-form (nth ts ti)]))))
+                        (pub! [::select-form
+                               (nth ts
+                                    (swap! tab-index
+                                           update-tab-index
+                                           (count ts)
+                                           (case k "Tab" 1 "S-Tab" -1)))])))
                     
-                    (do
-                      (println 'Reset-tab-state )
-                      (reset! tab-index 0)
-                      (reset! tab-seq nil))))))
+                    (do (reset! tab-index 0)
+                        (reset! tab-seq nil))))))
 
 
 ;; edit box
@@ -583,6 +608,7 @@
   {" "         [::edit-new-node-after-selected]
    "\""        [::edit-new-node-after-selected]
    ":"         [::edit-new-node-after-selected ":"]
+   "Escape"    [::move :move/most-upward]
    "'"         [::edit-new-node-after-selected "'"]
    "("         [::edit-new-wrapped :list]
    "9"         [::edit-new-wrapped :list]
@@ -594,6 +620,7 @@
    "]"         [::move :move/up]
    "0"         [::move :move/up]
    "j"         [::move :move/next-sibling]
+   "v"         [::scroll-into-view]
    "k"         [::move :move/prev-sibling]
    "f"         [::move :move/flow]
    "n"         [::move :move/most-nested]
@@ -601,9 +628,10 @@
    "Backspace" [::delete-with-movement :move/backward-up]
    "d"         [::duplicate-selected-form]
    "i"         [::indent-form]
-   "Tab"       [::tabby]
-   "M" [::recursively-set-indent true]
-   "O" [::recursively-set-indent false]})
+   "Tab"       [:nop] 
+   "S-Tab"     [:nop]
+   "S-M"         [::recursively-set-indent true]
+   "S-O"         [::recursively-set-indent false]})
 
 (rum/defc key-bindings-table []
   [:table
@@ -622,8 +650,6 @@
 
 (rum/defc all-datoms-table < rum/reactive []
   (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
-
-
 
 (rum/defc top-level-form-component < ereactive
   [e]
@@ -653,25 +679,29 @@
       (focus-info)
       (edit-history)
       (h/history-view conn)]
-     [:div {:style {:display :flex
-                    :flex-direction :column}}
+     [:div.main-content
       (for [df (:state/display-form (d/entity db ::state))]
         (rum/with-key (top-level-form-component df) (:db/id df)))]]))
 
 (defn global-keydown*
   [ev]
-  (when-not (or @global-editing-flag
-                (.-ctrlKey ev))
+  (when-not @global-editing-flag
     (let [jj (str (when (.-altKey ev) "M-")
                   (when (.-ctrlKey ev ) "C-")
                   (when (.-shiftKey ev) "S-")
                   (.-key ev))]
       (pub! [::global-keydown jj])
-      (if-let [mut (get special-key-map (.-key ev))]
+      (if-let [mut (get special-key-map jj)]
         (do (pub! mut)
             (.preventDefault ev)
             (.stopPropagation ev))
-        (.log js/console "Key" ev)))))
+        (.log js/console "Key" jj ev))
+      
+      #_(if-let [mut (get special-key-map (.-key ev))]
+          (do (pub! mut)
+              (.preventDefault ev)
+              (.stopPropagation ev))
+          (.log js/console "Key" ev)))))
 
 (defonce global-keydown
   (fn [ev] 

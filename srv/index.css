@@ -33,19 +33,15 @@ span.tk:hover {
     cursor: pointer;
 }
 
-
-span.selected {
-    background-color: #2a4a2a;
-    /* display: flex; */
-    /* flex-wrap: wrap; */
-}
-
 /* syntax coloring */
 span.tk.s { color: #81a2be; }
 span.tk.k { color: #70c0b1; }
 span.tk.p { color: #a6a6a0; }
 span.tk.l { color: #b5bd68; }
 
+span.selected {
+    background-color: #2a4a2a;
+}
 /* spacing between tokens */
 /* span.tk + span.tk { margin-left: 1ch; } */
 /* span.tk + span.tk::before { content: "_"; } */
@@ -63,39 +59,6 @@ span.indented {
     white-space: pre;
     /* width: fit-content; */
 }
-/* span.indented.selected { */
-/*     border: 1px solid red; */
-/* } */
-
-br.bbb { display: block; }
-
-span.open-delim {
-    color: tomato;
-    font-size: 20px;
-    width: 100px;
-    position: absolute;
-    
-}
-
-span.newline {
-    background-color: aliceblue;
-    display: block;
-    /* margin-left: 100px; */
-    /* margin-right: 1000px; */
-}
-
-span.indent-container {
-    background-color: #444;
-    float: left;
-}
-span.talldelim {
-    background-color: #444;
-    height: 0px;
-    /* height: 100%; */
-    /* position: relative; */
-    /* position: fixed; */
-    text-align: center;
-}
 
 .edit-box {
     display: inline;
@@ -109,8 +72,9 @@ span.talldelim {
     flex-direction: column;
     margin-bottom: 5ex;
     width: 800px;
-    overflow: auto;
+    /* overflow: auto; */
     resize: both;
+    flex-shrink: 0;
 }
 
 #root {
@@ -121,13 +85,20 @@ span.talldelim {
     display: flex;
     flex-direction: row;
     justify-content: flex-state;
-    border: 1px solid;
 }
 
 .sidebar-left {
     display: flex;
     flex-direction: column;
+    position: fixed;
     width: 20%;
-    overflow: auto;
+    /* overflow: auto; */
     justify-content: space-between;
+    height: 100vh;
+}
+
+.main-content {
+    display: flex;
+    flex-direction: column;
+    margin-left: 20%;
 }
