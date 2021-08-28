@@ -19,9 +19,25 @@
     ;; :state/selected-form {:db/valueType :db.type/ref}
     :form/editing {:db/unique :db.unique/identity} 
     :form/edit-initial {}
-    :form/highlight {:db/unique :db.unique/identity}}))
+    :form/highlight {:db/unique :db.unique/identity}
+    :form/indent {}}))
 
-(def test-form-data '[nothing [a b c ] here])
+(def test-form-data '(defn ->tx
+                       [e]
+                       (letfn [(coll-tx [coll-type xs]
+                                 (let [id (new-tempid)]
+                                   (cond-> {:db/id id :coll/type coll-type}
+                                     (seq xs) (merge (seq-tx (for [x xs]
+                                                               (assoc (->tx x) :coll/_contains id)))))))]
+                         (cond 
+                           (symbol? e)    {:symbol/value (str e)}
+                           (keyword? e)   {:keyword/value e}
+                           (string? e)    {:string/value e}
+                           (number? e)    {:number/value e}
+                           (list? e)      (coll-tx :list e)
+                           (vector? e)    (coll-tx :vec e)
+                           (map? e)       (coll-tx :map (flatten-map e))))))
+#_(def test-form-data '[f :fo  cb ])
 
 (def conn
   (let [txe (update (e/->tx test-form-data) :db/id #(or % "top"))]
@@ -60,17 +76,16 @@
 
 
 
-#_(defn make-subs!
-  []
-  (doseq [[dispatch-val action] (methods message->mutation*)]
-    (register-sub dispatch-val
-                  (fn [[a b c d e]]
-                    (d/transact! conn (action @conn a b c d e))))))
+(defn ->mutation
+  [tx-fn]
+  (fn [[_ & args :as mutation]]
+    (when-let [tx-data (apply tx-fn @conn args)]
+      (d/transact! conn tx-data {:mutation mutation
+                                 :input-tx-data tx-data}))))
 
 (d/listen! conn
-           (-> (fn [{:keys [db-after tx-data tempids] :as tx-report}]
-                 (reset! *last-tx-report* tx-report)
-                 (h/save-tx-report! tx-report)
+           (-> (fn [{:keys [db-after tx-data tx-meta tempids] :as tx-report}]
+                 (js/window.setTimeout #(h/save-tx-report! tx-report) 0)
                  (doseq [e (dedupe (map first tx-data))]
                    (when-let [cs (aget *et-index* e)]
                      (doseq [c cs]
@@ -86,8 +101,7 @@
    (fn [state props]
      (let [eid (some-> props (aget :rum/initial-state) :rum/args first :db/id)]
        (if-not eid
-         (do (println "No db/id! Did you mess up deletion?"
-                      (some-> props (aget :rum/initial-state)))
+         (do (println "No db/id! Did you mess up deletion?" props)
              state)
          (do (aset *et-index* eid
                    (doto (or (aget *et-index* eid) (js/Array.))
@@ -112,37 +126,51 @@
 
 (declare form-component)
 
-(defn leaf-span
-  [e]
-  #_(or (when-let [v (:symbol/value e)] (leaf-span "s" v))
-      (when-let [v (:keyword/value e)] (leaf-span "k" v))
-      (when-let [v (:string/value e)] (leaf-span "p" v))
-      (when-let [v (:number/value e)] (leaf-span "n" v)))
-  
-  )
-
-(rum/defc form-component* ;; < ereactive
+(rum/defc form-component*
   [e]
   (let [eid (:db/id e)
         leaf (or (:symbol/value e)
                  (:keyword/value e)
                  (:string/value e)
-                 (:number/value e))]
+                 (:number/value e))
+        leaf-class (cond
+                     (:symbol/value e) "s"
+                     (:keyword/value e) "k"
+                     (:string/value e) "l"
+                     :else  "")]
     (cond
       leaf
-      (js/React.createElement
-       "span"
-       #js {:key eid
-            :data-eid eid
-            :className "tk k"
-            :onClick (fn [ev]
-                       (pub! [::select-form  (-> (.-target ev ) (.-dataset) (aget "eid") (js/parseInt))])
-                       (.stopPropagation ev))}
-       #js [(str leaf)])
+      [:span {:key eid
+              :data-eid eid
+              :class ["tk"
+                      leaf-class
+                      (when (:form/highlight e)
+                        "selected")]
+              :on-click (fn [ev]
+                          (pub! [::select-form  (-> (.-target ev ) (.-dataset) (aget "eid") (js/parseInt))])
+                          (.stopPropagation ev))}
+       (str leaf)]
+      
+      #_(js/React.createElement
+         "span"
+         #js {:key eid
+              :data-eid eid
+              :className (str "tk " leaf-class)
+              :onClick (fn [ev]
+                         (pub! [::select-form  (-> (.-target ev ) (.-dataset) (aget "eid") (js/parseInt))])
+                         (.stopPropagation ev))}
+         #js [(str leaf)])
       
       (:coll/type e)
       (rum/fragment 
        (case (:coll/type e) :list "(" :vec "[" :map "{")
+       #_(for [[a b] (partition-all 2 (e/seq->vec e))]
+         (if-not b
+           (rum/with-key (form-component a) (:db/id a))
+           (rum/fragment
+            (rum/with-key (form-component a) (:db/id a))
+            " "
+            (rum/with-key (form-component b) (:db/id b)))))
        (for [x (e/seq->vec e)]
          (rum/with-key (form-component x) (:db/id x)))
        (case (:coll/type e) :list ")" :vec "]" :map "}")))))
@@ -163,14 +191,20 @@
                    state)})
 
 (declare edit-box)
+
 (rum/defc form-component < ereactive
   [e]
   (cond
     (:form/editing e)
     (edit-box (:db/id e) (:form/edit-initial e))
     
-    (:form/highlight e)
-    [:span.selected (form-component* e)]
+    (not (:coll/type e))
+    (form-component* e)
+    
+    (or (:form/highlight e) (:form/indent e))
+    [:span {:class [(when (:form/highlight e) "selected")
+                    (when (:form/indent e) "indented")]}
+     (form-component* e)]
     
     :else
     (form-component* e)))
@@ -189,15 +223,7 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-(register-sub ::select-form (fn [[_ eid]] (d/transact! conn (select-form-tx @conn eid))))
-
-#_(register-sub ::import-form-text
-              (fn [[_ text]]
-                (let [txe (update (e/->tx (cljs.reader/read-string text)) :db/id #(or % "top"))]
-                  (d/transact! conn (into [txe
-                                           {:db/ident ::state
-                                            :state/display-form (:db/id txe)}]
-                                          (select-form-tx (:db/id txe)))))))
+(register-sub ::select-form (->mutation select-form-tx ))
 
 ;; list modifications
 
@@ -217,43 +243,92 @@
   [e]
   (let [spine (first (:seq/_first e))
         next  (some-> spine :seq/next)
-        prev  (some-> spine :seq/_next first)
-        ]
+        prev  (some-> spine :seq/_next first)]
+    
     [[:db/retractEntity (:db/id e)]
      (cond
        (and prev next) [:db/add (:db/id prev) :seq/next (:db/id next)]
-       prev            [:db/retract (:db/id prev) :seq/next (:db/id spine)])]))
+       prev            [:db/retract (:db/id prev) :seq/next (:db/id spine) ]
+       next            [:db/add (:db/id spine) :seq/first (:db/id next)])]))
 
-(defn form-replace-tx
+
+(defn form-overwrite-tx
   [e replacement-eid]
   (let [spine (first (:seq/_first e))
         coll (first (:coll/_contains e))]
-    (println "FRTX" (:db/id e) spine coll)
-    (when-not (or spine coll)
-      (println "Datoms for " (:db/id e))
-      (doseq [[e a v t a?] (d/datoms (d/entity-db e) :eavt) ]
-        (when (or (= e (:db/id e))
-                  (= v (:db/id e)))
-          (println [e a v t a?]))))
-    
     (when (and spine coll)
       [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
        [:db/add (:db/id coll) :coll/contains replacement-eid]
        [:db/add (:db/id spine) :seq/first replacement-eid]])))
 
+(defn form-replace-tx
+  [e r]
+  (let [old-parent (first (:coll/_contains r))
+        old-spine (first (:seq/_first r))]
+    (into (form-overwrite-tx e (:db/id r))
+          [(when old-spine
+             [:db/retract (:db/id old-spine) :seq/first (:db/id r)])
+           (when old-parent
+             [:db/retract (:db/id old-parent) :coll/contains (:db/id r)])])))
+
 (defn form-raise-tx
   [e]
   (when-let [parent (some-> (:coll/_contains e) first)]
-    (let [rtx (form-replace-tx parent (:db/id e))]
-      (println "Raise tx" rtx)
+    (form-replace-tx parent e)))
 
-      rtx)))
+(defn raise-selected-form-tx
+  [db]
+  (form-raise-tx (get-selected-form db)))
 
-(register-sub ::raise-selected-form (fn [[_]]
-                                      (let [sel (get-selected-form @conn)]
-                                        (println "Raise SF" sel)
-                                        (some->> (form-raise-tx sel)
-                                                 (d/transact! conn)))))
+(register-sub ::raise-selected-form (->mutation raise-selected-form-tx))
+
+#_(defn form-duplicate-tx
+  [e contained-by-eid]
+  (cond
+    (:symbol/value e)  {:symbol/value e :coll/_contains contained-by-eid}
+    (:keyword/value e) {:keyword/value e :coll/_contains contained-by-eid}
+    (:string/value e)  {:string/value e :coll/_contains contained-by-eid}
+    (:number/value e)  {:number/value e :coll/_contains contained-by-eid}
+    (:coll/type e)     (let [cid (e/new-tempid)]
+                         (cond-> {:db/id cid :coll/type e}
+                           (:seq/first e) (assoc :seq/first (form-duplicate-tx (:seq/first e) cid ))
+                           (:seq/next e)  (assoc :seq/next (form-duplicate-tx (:seq/next e) cid))))
+    :else (println "What is this?" e)))
+
+
+
+(defn form-duplicate-tx
+  [e]
+  (letfn [#_(seq-dup [head]
+            (if-let [x (:seq/first head)]
+              (cond-> {:seq/first x}
+                (:seq/next head) (assoc :seq/next (seq-dup (:seq/next head))))))]
+   (cond 
+     (:symbol/value e)  {:symbol/value (:symbol/value e)}
+     (:keyword/value e) {:keyword/value (:keyword/value e)}
+     (:string/value e)  {:string/value (:string/value e)}
+     (:number/value e)  {:number/value (:number/value e)}
+     ;; (:coll/type e)     (let [id (e/new-tempid)]
+     ;;                      (cond-> {:db/id id :coll/type (:coll/type e)}
+     ;;                        (:seq/first e) (merge
+     ;;                                        (seq-dup (for [x xs]
+     ;;                                                   (assoc (form-duplicate-tx x) :coll/_contains id))))))
+     )))
+
+
+
+(defn insert-duplicate-tx
+  [db]
+  (let [sel      (get-selected-form db)
+        new-node (assoc (form-duplicate-tx sel) :db/id "dup") 
+        txd      (into [new-node]
+                       (concat (insert-after-tx sel new-node)
+                               (move-selection-tx (:db/id sel) "dup")))]
+    (println "New node" new-node)
+    (println "IDT" txd)
+    txd))
+
+(register-sub ::duplicate-selected-form (->mutation insert-duplicate-tx))
 
 (defn insert-editing-tx
   [db edit-initial]
@@ -265,9 +340,7 @@
           (concat (insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "newnode")))))
 
-(register-sub ::edit-new-node-after-selected
-              (fn [[_ init]]
-                (d/transact! conn (insert-editing-tx @conn init))))
+(register-sub ::edit-new-node-after-selected (->mutation insert-editing-tx))
 
 (defn edit-new-wrapped-tx
   [db coll-type init]
@@ -282,9 +355,7 @@
           (concat (insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
 
-(register-sub ::edit-new-wrapped
-              (fn [[_ coll-type init]]
-                (d/transact! conn (edit-new-wrapped-tx @conn coll-type init))))
+(register-sub ::edit-new-wrapped (->mutation edit-new-wrapped-tx))
 
 (defmulti move (fn [t _] t))
 
@@ -328,9 +399,7 @@
       (println "Cannot" movement-type "from" src)
       (move-selection-tx (:db/id src) (:db/id dst)))))
 
-(register-sub ::move
-              (fn [[_ movement-type]]
-                (d/transact! conn (movement-tx @conn movement-type))))
+(register-sub ::move (->mutation movement-tx))
 
 (defn move-and-delete-tx
   [db movement-type]
@@ -339,9 +408,29 @@
      (concat (form-delete-tx src)
              [[:db/add (:db/id dst) :form/highlight true]]))))
 
-(register-sub ::delete-with-movement
-              (fn [[_ movement-type]]
-                (d/transact! conn (move-and-delete-tx @conn movement-type))))
+(register-sub ::delete-with-movement (->mutation move-and-delete-tx))
+
+
+
+(defn indent-selected-form-tx
+  [db]
+  (let [sel (get-selected-form db)]
+    [[:db/add (:db/id sel) :form/indent (not (:form/indent sel))]]))
+
+(register-sub ::indent-form (->mutation indent-selected-form-tx))
+
+(defn recursively-set-indent-tx
+  [db indent]
+  (let [sel (get-selected-form db)]
+    (for [e (tree-seq :coll/type e/seq->vec sel)]
+      (when (:coll/type e)
+       [:db/add (:db/id e) :form/indent indent]))))
+
+(register-sub ::recursively-set-indent (->mutation recursively-set-indent-tx))
+
+
+
+;; edit box
 
 (defn accept-edit-tx
   [form-eid value]
@@ -363,8 +452,14 @@
                       :form/edit-initial (or value "")
                       :form/editing true}}]
         (concat
-         (form-replace-tx (d/entity db form-eid) "newnode")
+         (form-overwrite-tx (d/entity db form-eid) "newnode")
          (move-selection-tx form-eid "inner"))))
+
+(defn finish-edit-tx
+  [db eid text]
+  (if (empty? text)
+    (reject-edit-tx db eid)
+    (accept-edit-tx eid text)))
 
 (defn editbox-keydown-tx
   [db eid text key]
@@ -372,9 +467,7 @@
     "Escape"      (reject-edit-tx db eid)
     "Backspace"   (when (empty? text)
                     (reject-edit-tx db eid))
-    "Enter"       (if (empty? text)
-                    (reject-edit-tx db eid)
-                    (accept-edit-tx eid text))
+    "Enter"       (finish-edit-tx db eid text)
     (")" "]" "}") (concat (movement-tx db :move/up)
                           (if (empty? text)
                             (reject-edit-tx db eid)
@@ -392,19 +485,23 @@
   (let [value (if (= [] @text)
                 init
                 @text)]
-    [:input.edit-box
+    [:input.edit-box.code-font
      {:type        :text
       :ref         "the-input"
       :value       value
-      :style       {:width (str (count value) "ch")}
+      :style       {:width (str (max 4 (count value)) "ch")}
       :on-change   #(reset! text (string/trim (.-value (.-target %))))
       :on-key-down (fn [ev]
                      (when-let [tx (editbox-keydown-tx @conn form-eid value (.-key ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
-                       (d/transact! conn tx)))
-      :on-blur     #(do (.preventDefault %)
-                        (d/transact! conn (accept-edit-tx form-eid value)))}]))
+                       (d/transact! conn tx {:mutation [:editbox/keydown (.-key ev)]
+                                             :input-tx-data tx})))
+      ;; :on-blur     #(do (.preventDefault %)
+      ;;                   (let [tx (finish-edit-tx @conn form-eid value )]
+      ;;                     (d/transact! conn tx {:mutation [:editbox/blur]
+      ;;                                           :input-tx-data tx})))
+      }]))
 
 
 (rum/defc focus-info < rum/reactive
@@ -420,7 +517,14 @@
                  (doseq [[e a v t] (d/datoms db :avet k (:db/id sel))]
                    (println e a v))))]
        [:pre (pr-str (e/->form sel))]
-       [:pre (pr-str (e/->form (d/entity db 1)))]])))
+       [:pre {:style {:width "30em"
+                      :overflow :auto}}
+        (pr-str (e/->form (d/entity db 1)))]
+       #_[:pre {:style {:width "30em"
+                      :overflow :auto}}
+        (with-out-str
+          (doseq [el (tree-seq :coll/type e/seq->vec (d/entity db 1))]
+            (prn (:db/id el ) (e/->form el))))]])))
 
 (def special-key-map
   {" "         [::edit-new-node-after-selected]
@@ -439,7 +543,11 @@
    "k"         [::move :move/prev-sibling]
    "f"         [::move :move/flow]
    "x"         [::delete-with-movement :move/forward-up]
-   "Backspace" [::delete-with-movement :move/backward-up]})
+   "Backspace" [::delete-with-movement :move/backward-up]
+   "d"         [::duplicate-selected-form]
+   "i"         [::indent-form]
+   "M"         [::recursively-set-indent true]
+   "O"         [::recursively-set-indent false]})
 
 (rum/defc key-bindings-table []
   [:table
@@ -468,60 +576,6 @@
                (doseq [[e a v t a?] tx-data]
                  (println "[" e a (pr-str v) t a? "]")))]])))
 
-(rum/defc notes
-  []
-  [:div
-   [:h3 "Getting started"]
-   [:p "First, press " [:code "f"] " to 'flow' into the top-level form."]
-   [:p
-    "Now, you can press space to insert a new node. "
-    "There are a few keybinds to do various kinds of insertion.  "
-    "The idea is that you can almost type the code normally and it should do the right thing."]
-   [:h3 "Notes"]
-   [:p
-    "This is a small demonstration of what a purely-structural editor might be like.  "]
-   [:ul
-    [:li "There is no whitespace or layout of any kind"
-     [:ul
-      [:li "The only reason that symbols aren't right next to each other is padding on their span class"]
-      [:li "I am really not sure about the best way to implement this"
-       [:ul
-        [:li "Should the layout be persisted in the database?  If so, how?"]
-        [:li "How should the rendering work?"]
-        [:li "Should there even be a concept of 'lines' at all?"]]]]]
-    [:li "When editing a node, there is an important difference between accepting the edit with "
-     [:code "Enter"] " or " [:code "Space"] "."
-     [:ul
-      [:li [:code "Enter"] " exits edit mode and leaves the cursor over the inserted node"]
-      [:li [:code "Space"] " inserts the node and immediately starts inserting another"]]]
-    [:li "It really doesn't like it when you try to do any kind of mutation with the cursor over the top-level form."]
-
-    [:li "An attempt was made to implement " [:code ":move/flow"] " but there is no backwards version of this"
-     [:ul
-      [:li "It seems not entirely clear what exactly backwards flow would do"]]]
-    [:li "Right now there is only one top-level form edit widget.  Multiple form editing could be implemented in a few different ways and I am not sure which is best"]
-    [:li "When you begin editing a node, it immediately exists in the database so that it can take up space and be rendered properly."
-     [:ul
-      [:li "The problem with this is that is forfeits the invariant that the form under structural editing is always valid"]]]
-    [:li "I am not sure the performance hacks are necessary.  "
-     [:ul
-      [:li "The idea is that you should be able to edit a reasonably large form and hold "
-       [:code "f"] " to page through it"]
-      [:li "This should be limited by your key repeat speed and not the renderer performance"]
-      [:li "I think for forms of appreciable size it may be too slow to do it naively"]]]
-    [:li "Because I don't understand key handlers, typing doesn't really work into the import text form"
-     [:ul [:li "Just paste into it instead"]]]]])
-
-(rum/defcs text-import-form < (rum/local "" ::text)
-  [{::keys [text]}]
-  [:form
-   {:on-submit #(do (pub! [::import-form-text @text])
-                    (.preventDefault %))}
-   [:input {:on-change #(reset! text (.-value (.-target %)) )
-            :value @text}]
-   [:input {:type "submit" :value "import clj text"}]])
-
-
 (rum/defc top-level-form-component < ereactive
   [state]
   (form-component (:state/display-form state)))
@@ -534,23 +588,28 @@
                     :flex-direction :column
                     :justify-content :center
                     :align-items :center
-                    :height "50vh"}}
-      [:div.top-level-form
+                    ;; :height "80vh"
+                    }}
+      [:div.top-level-form.code-font
        {:style {:width "900px"
                 :overflow :auto
                 :resize :both
-                :height "300px"
                 :border "1px solid #ae81ff"}}
-       (top-level-form-component (d/entity db ::state))]]
+       [:span {:style {:overflow  :wrap}}
+        (top-level-form-component (d/entity db ::state))]]]
      
-     (focus-info)
-     #_(last-tx-table)
-     (h/history-view)
-     (text-import-form)
+     [:div {:style {:display :flex
+                    :flex-direction :row
+                    :justify-content :space-evenly}}
+      (h/history-view conn)
+      [:div {:style {:width "50%" }}
+       (focus-info)]]
+     
+     #_(text-import-form)
      #_(all-datoms-table)
-     (key-bindings-table)
+     #_(key-bindings-table)
      #_(debug/transaction-edit-area conn)
-     (notes)]))
+     #_(notes)]))
 
 (defn global-keydown*
   [ev]

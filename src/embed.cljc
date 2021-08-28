@@ -48,11 +48,12 @@
      (map? e)       (coll-tx :map (flatten-map e)))))
 
 (defn seq->vec
-  ([e] (seq->vec e []))
+  ([e]
+   (seq->vec e []))
   ([e a]
-   (if-not e
-     a
-     (recur (:seq/next e) (conj a (:seq/first e))))))
+   (if-let [f (:seq/first e)]
+     (recur (:seq/next e) (conj a f))
+     a)))
 
 (defn ->form
   [e]
@@ -86,6 +87,7 @@
   (test-roundtrip
    '(defn test-roundtrip
       [data]
+      []
       (let [tx-entity (update (->tx data)
                               :db/id #(or % "top"))
             {:keys [db-after tempids]}

@@ -2,9 +2,12 @@ body {
     background-color: #000;
     color: #fff;
 }
+.code-font {
+    font-family: "Iosevka Term SS03", monospace;
+    font-size: 20px;
+}
+
 .top-level-form {
-    font-family: monospace;
-    line-height: 2;
 }
 span.symbol:not(:first-of-type) {
     padding-left: 4px;
@@ -18,34 +21,83 @@ span.flex {
     flex-wrap: wrap;
                    
 }
-span.many {
-    display: flex;
-    /* flex-wrap: wrap; */
-    margin-left: 10px;
-    border: 1px solid;
-    /* padding: 2px; */
-
-}
-                     
 span.tk:hover {
     background-color: #ae81ff;
     cursor: pointer;
-    /* background-color: #2a4a2a; */
 }
-span.tk {
-    padding-left: 1ch;
-    padding-right: 1ch;
+
+
+span.selected {
+    background-color: #2a4a2a;
+    /* display: flex; */
+    /* flex-wrap: wrap; */
 }
+
+/* syntax coloring */
 span.tk.s { color: #81a2be; }
 span.tk.k { color: #70c0b1; }
 span.tk.p { color: #a6a6a0; }
 span.tk.l { color: #b5bd68; }
 
-span.selected {
-    background-color: #2a4a2a;
+/* spacing between tokens */
+/* span.tk + span.tk { margin-left: 1ch; } */
+/* span.tk + span.tk::before { content: "_"; } */
+
+
+span.tk {
+    padding-left: 1ch;
+    padding-right: 1ch;
+}
+
+span.indented {
+    margin-left: 2ch;
+    display: flex;
+    flex-wrap: wrap;
+    white-space: pre;
+    /* width: fit-content; */
+    border: 1px solid;
+
+}
+span.indented.selected {
+    border: 1px solid red;
+}
+
+br.bbb { display: block; }
+
+span.open-delim {
+    color: tomato;
+    font-size: 20px;
+    width: 100px;
+    position: absolute;
+    
+}
+
+span.newline {
+    background-color: aliceblue;
+    display: block;
+    /* margin-left: 100px; */
+    /* margin-right: 1000px; */
+}
+
+span.indent-container {
+    background-color: #444;
+    float: left;
+}
+span.talldelim {
+    background-color: #444;
+    height: 0px;
+    /* height: 100%; */
+    /* position: relative; */
+    /* position: fixed; */
+    text-align: center;
 }
 
 .edit-box {
-    font-family: monospace;
     display: inline;
+    margin-right: 1ch;
+    border: 0;
+    padding: 0;
 }
+/* .top-level-form span { */
+/*     display: flex; */
+/* } */
