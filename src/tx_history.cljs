@@ -51,35 +51,38 @@
     [:div
      [:a {:href "#"
           :on-click #(do (.preventDefault %)
+                         (println "Swtf" toggle)
                          (swap! toggle update ::self not))}
-      "History"]
-     [:ul
-      (for [e (backwards-index-seq)]
-        (when-let [{:keys [tempids tx-data tx-meta] :as tx-report} (aget history-buffer e)]
-          (let [t (:db/current-tx tempids)]
-            [:li {:key (str e " " t)}
-             #_[:a {:href "#"
-                    :on-click #(do (.preventDefault %)
-                                   (swap! toggle update t not))}
+      (if (get @toggle ::self)
+        "Hide history"
+        "Show history")]
+     (when (get @toggle ::self)
+       [:ul
+        (for [e (backwards-index-seq)]
+          (when-let [{:keys [tempids tx-data tx-meta] :as tx-report} (aget history-buffer e)]
+            (let [t (:db/current-tx tempids)]
+              [:li {:key (str e " " t)}
+               [:a {:href "#"
+                      :on-click #(do (.preventDefault %)
+                                     (swap! toggle update t not))}
                 (str e " " t)]
-             (str e " " t)
-             " "
-             [:code (pr-str (:mutation tx-meta))]
-             (when-not (get @toggle t)
-               [:div
-                "input"
-                [:pre (with-out-str
-                        (run! prn (:input-tx-data tx-meta)))]
-                "transacted"
-                [:pre (with-out-str
-                        (doseq [[e a v t a?] tx-data]
-                          (println "[" e a (pr-str v) #_t a? "]")))]
-                [:button
-                 {:on-click (fn [ev]
-                              (d/transact! the-conn
-                                           (for [[e a v t a?] (reverse tx-data)]
-                                             [(if a? :db/retract :db/add) e a v])
-                                           {:mutation [::revert (:db/current-tx tempids)]}))}
-                 "Revert"]])])))]]))
+               " "
+               [:code (pr-str (:mutation tx-meta))]
+               (when (get @toggle t)
+                 [:div
+                  "input"
+                  [:pre (with-out-str
+                          (cljs.pprint/pprint (:input-tx-data tx-meta)))]
+                  "transacted"
+                  [:pre (with-out-str
+                          (doseq [[e a v t a?] tx-data]
+                            (println "[" e a (pr-str v) #_t a? "]")))]
+                  [:button
+                   {:on-click (fn [ev]
+                                (d/transact! the-conn
+                                             (for [[e a v t a?] (reverse tx-data)]
+                                               [(if a? :db/retract :db/add) e a v])
+                                             {:mutation [::revert (:db/current-tx tempids)]}))}
+                   "Revert"]])])))])]))
 
 
