@@ -12,11 +12,20 @@
 (def shadow-server (future (server/start!)))
 (def shadow-watch (future
                     @shadow-server
+                    (Thread/sleep 200)
+                    (println "Starting watch")
                     (shadow/watch :br)))
 (def nrepl-server
   (let [port-file (io/file ".nrepl-port")
         {:keys [port]} (nrepl-server/start-server #_ #_:handler cnr/cider-nrepl-handler)]
     (spit ".nrepl-port" port)))
+
+(defn release-cljs-and-exit
+  []
+  (future-cancel shadow-watch)
+  @shadow-server
+  (shadow/release :br)
+  (System/exit 0))
 
 (comment
   (shadow/watch :br)
