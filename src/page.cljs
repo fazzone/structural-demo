@@ -1,18 +1,17 @@
 (ns page
   (:require
-   [rewrite-clj.zip :as z]
+   [clojure.edn :as edn]
    [embed :as e]
    [debug :as debug]
    [tx-history :as h]
    [goog.string :as gstring]
    [datascript.core :as d]
    [clojure.string :as string]
+   [db-reactive :as dbrx]
    [rum.core :as rum]
    [cljs.core.async :as async])
   (:require-macros
    [cljs.core.async.macros :refer [go go-loop]]))
-
-
 
 (def schema
   (merge
@@ -50,7 +49,7 @@
          (map? e)       (coll-tx :map (flatten-map e)))))])
 #_(def test-form-data '[f :fo  cb ])
 
-(defonce conn
+(def conn
   (doto (d/create-conn schema)
     (d/transact! (apply concat
                         (for [f test-form-data]
@@ -83,7 +82,7 @@
 (defn pub! [e]
   (async/put! bus e))
 
-(def ^:dynamic *et-index* (js/Array. 1024))
+#_(def ^:dynamic *et-index* (js/Array. 1024))
 
 (defn ->mutation
   [tx-fn]
@@ -95,8 +94,12 @@
                                        (meta mutation))))))
 
 (d/listen! conn
+           dbrx/tx-listen-fn)
+
+#_(d/listen! conn
            (-> (fn [{:keys [db-after tx-data tx-meta tempids] :as tx-report}]
                  (js/window.setTimeout #(h/save-tx-report! tx-report) 0)
+                 
                  (doseq [e (dedupe (map first tx-data))]
                    (when-let [cs (aget *et-index* e)]
                      (doseq [c cs]
@@ -114,14 +117,15 @@
 (register-sub ::scroll-into-view
               (fn [[_]]
                 (let [sel (d/entid @conn  [:form/highlight true])]
-                  (when-let [cs (aget *et-index* sel)]
+                  (when-let [cs (->> sel
+                                     (aget dbrx/ereactive-components-by-eid))]
                     (doseq [c cs]
                      (some-> (.-refs c)
                              (aget "selected")
                              (doto (js/console.log "Element") )
                              (.scrollIntoView)))))))
 
-(def ereactive
+#_(def ereactive
   {:init
    (fn [state props]
      (let [eid (some-> props (aget :rum/initial-state) :rum/args first :db/id)]
@@ -201,7 +205,7 @@
        (rum/with-key (fcc x my-indent) (:db/id x)))
      (case (:coll/type e) :list ")" :vec "]" :map "}"))))
 
-(rum/defc fcc < ereactive #_(scroll-ref-into-view-after-render "selected")
+(rum/defc fcc < dbrx/ereactive #_(scroll-ref-into-view-after-render "selected")
   [e indent-prop]
   #_(println "Fcc" indent-prop)
   (or (when (:form/editing e)
@@ -217,7 +221,6 @@
         (token-component "k" (:db/id e) (str s) (:form/highlight e)))
       (when-let [s (:string/value e)]
         (token-component "l" (:db/id e) s (:form/highlight e)))
-      
       (when-let [s (:number/value e)]
         (token-component "n" (:db/id e) (str s) (:form/highlight e)))
       
@@ -226,7 +229,7 @@
           [:span.selected {:ref "selected"} (coll-fragment e (+ 2 indent-prop))]
           (coll-fragment e (+ 2 indent-prop))))
       
-      (println "Cannot render form component")))
+      (comment "Probably a retracted entity, do nothing")))
 
 (defn get-selected-form
   [db]
@@ -577,10 +580,25 @@
 
 ;; edit box
 
+(defn parse-token-tx
+  [text-value eid]
+  (try
+    (-> text-value
+        (edn/read-string)
+        (e/->tx)
+        (assoc :db/id eid))
+    (catch js/Error e
+      (println "No edn" text-value)
+      (js/console.log e))))
+
 (defn accept-edit-tx
   [form-eid value]
   [{:db/id :db/current-tx}
-   [:db/add form-eid :symbol/value value]
+   [:db/retract form-eid :symbol/value]
+   [:db/retract form-eid :keyword/value]
+   [:db/retract form-eid :string/value]
+   [:db/retract form-eid :number/value]
+   (parse-token-tx value form-eid)
    [:db/add form-eid :form/edited-tx :db/current-tx]
    [:db/retract form-eid :form/editing true]
    [:db/retract form-eid :form/edit-initial]])
@@ -627,6 +645,8 @@
                             (insert-editing-tx db "")))
     nil))
 
+
+(def editbox-ednparse-state (atom nil))
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
   [{::keys [text]} form-eid init]
@@ -638,7 +658,14 @@
       :ref         "the-input"
       :value       value
       :style       {:width (str (max 4 (inc (count value))) "ch")}
-      :on-change   #(reset! text (string/trim (.-value (.-target %))))
+      :on-change   #(let [new-text (string/trim (.-value (.-target %)))
+                          token (parse-token-tx new-text form-eid)]
+                      (reset! text new-text)
+                      (reset! editbox-ednparse-state
+                              {:form-eid form-eid
+                               :text new-text
+                               :valid (some? token)
+                               :type (some-> token first val)}))
       :on-key-down (fn [ev]
                      (when-let [tx (editbox-keydown-tx @conn form-eid value (.-key ev))]
                        (.preventDefault ev)
@@ -665,7 +692,7 @@
   [sel top-level-eid]
   (let [rpa (reverse-parents-array sel)]
     [:ul.parent-path
-     ;; hack to not show the wrong display on top of all forms
+     ;; hack to only show for the active toplevel
      (when (= top-level-eid (:db/id (first rpa)))
        (for [i (range (count rpa))]
          (let [parent (nth rpa i)]
@@ -718,8 +745,8 @@
 (def special-key-map
   (merge
    {" "         [::edit-new-node-after-selected]
-    "\""        [::edit-new-node-after-selected]
-    ":"         [::edit-new-node-after-selected ":"]
+    "S-\""      [::edit-new-node-after-selected]
+    "S-:"       [::edit-new-node-after-selected ":"]
     "Escape"    [::move :move/most-upward]
     "'"         [::edit-new-node-after-selected "'"]
     "("         [::edit-new-wrapped :list]
@@ -773,20 +800,40 @@
 
 
 
-(rum/defc what < rum/reactive
+#_(rum/defc what < rum/reactive
   [top-level-eid]
   (some-> (rum/react conn)
           (get-selected-form)
           (breadcrumbs top-level-eid)))
 
-(rum/defc top-level-form-component < ereactive
+(rum/defc what < (dbrx/areactive :form/highlight)
+  [db toplevel]
+  (breadcrumbs (get-selected-form db) toplevel))
+
+(rum/defc toplevel-modeline < rum/reactive (dbrx/areactive :form/editing)
+  [db top-eid]
+  (let [edit (d/entity db [:form/editing  true])
+        rpa (reverse-parents-array edit)
+        {:keys [text valid]} (rum/react editbox-ednparse-state)]
+    (println "Top-eid" top-eid "First rpa" (first rpa) )
+    (when (= top-eid (:db/id (first rpa)))
+      [:span {:class (str "modeline code-font"
+                          (when edit " editing")
+                          (when (and (not (empty? text)) (not valid)) " invalid"))}
+       [:span.modeline-content
+        #_(pr-str (rum/react editbox-ednparse-state))
+        (if edit
+          (str "Editing " (:db/id edit))
+          "No edit?")]])))
+
+(rum/defc top-level-form-component < dbrx/ereactive
   [e]
   [:div.form-card
    [:span.form-title.code-font (str "#" (:db/id e))]
-   (what (:db/id e))
+   (what (d/entity-db e) (:db/id e))
    [:div.top-level-form.code-font
-    (fcc e 0)
-    #_(form-component e 0)]])
+    (fcc e 0)]
+   (toplevel-modeline (d/entity-db e) (:db/id e))])
 
 
 
@@ -804,7 +851,7 @@
                 " (Selected)"))
          )])]))
 
-(rum/defc root-component < ereactive
+(rum/defc root-component < dbrx/ereactive
   [state]
   (let [db @conn]
     [:div.root-cols
@@ -856,3 +903,18 @@
   #_(make-subs!)
   (rum/mount (root-component (d/entity @conn ::state)) (.getElementById js/document "root"))
   #_(pub! [::select-form (:db/id (:state/display-form (d/entity @conn ::state)))]))
+
+
+;; insert over empty coll should insert into that coll
+;; symbol search
+;; query/transaction editor
+;; top-level implicit do
+;; Inline documentation / eval result
+;; Marginalia
+;; Bug with exchanges!
+;; keybinds in database
+;; insert string, have the cursor start in between the quotes
+;; import formatted code with rewrite clj
+;; Player piano mode
+;; Random mutation testing
+;; Teleports!

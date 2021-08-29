@@ -40,7 +40,8 @@ span.tk:hover {
 /* syntax coloring */
 span.tk.s { color: #81a2be; }
 span.tk.k { color: #70c0b1; }
-span.tk.p { color: #a6a6a0; }
+span.tk.p { color: #70c0b1; }
+span.tk.n { color: #f0c674; }
 span.tk.l { color: #b5bd68; }
 
 span.selected {
@@ -70,6 +71,10 @@ span.indented {
     margin-right: 1ch;
     border: 0;
     padding: 0;
+}
+input.edit-box {
+    background-color: #000;
+    color: #fff;
 }
 
 .form-card {
@@ -131,4 +136,17 @@ ul.parent-path li:not(:last-child):after {
 }
 span.indent-chars {
     white-space: pre;
+}
+span.modeline {
+    height: 3ex;
+    width: 100%;
+}
+span.modeline.editing {
+    background-color: #ae81ff;
+}
+span.modeline.editing.invalid {
+    background-color: red;
+}
+span.modeline-content {
+    float: right;
 }
