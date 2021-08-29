@@ -4,6 +4,7 @@
    [embed :as e]
    [debug :as debug]
    [tx-history :as h]
+   [goog.string :as gstring]
    [datascript.core :as d]
    [clojure.string :as string]
    [rum.core :as rum]
@@ -148,42 +149,6 @@
              
              :else (recur (inc i)))))))})
 
-(declare form-component)
-
-(rum/defc form-component*
-  [e indent-prop]
-  (let [eid (:db/id e)
-        leaf (or (:symbol/value e)
-                 (:keyword/value e)
-                 (:string/value e)
-                 (:number/value e))
-        leaf-class (cond
-                     (:symbol/value e) "s"
-                     (:keyword/value e) "k"
-                     (:string/value e) "l"
-                     :else "")]
-    #_(println (:db/id e) "Indent-Prop " indent-prop)
-    (cond
-      leaf
-      [:span {:key eid
-              :data-eid eid
-              :class ["tk" leaf-class]
-              :on-click (fn [ev]
-                          (pub! [::select-form  (-> (.-target ev ) (.-dataset) (aget "eid") (js/parseInt))])
-                          (.stopPropagation ev))}
-       (-> (str leaf)
-           ;; replace with non-breaking hyphen, lmao
-           (.replaceAll "-" "‑"))]
-
-      (:coll/type e)
-      (rum/fragment 
-       (case (:coll/type e) :list "(" :vec "[" :map "{")
-       (let [my-indent (-> (:form/indent e)
-                           (or 0))]
-        (for [x (e/seq->vec e)]
-          (rum/with-key (form-component x (+ indent-prop my-indent)) (:db/id x))))
-       (case (:coll/type e) :list ")" :vec "]" :map "}")))))
-
 (defn focus-ref-on-mount
   [ref-name]
   {:did-mount (fn [state]
@@ -207,26 +172,6 @@
 
 (declare edit-box)
 
-(rum/defc form-component < ereactive #_(scroll-ref-into-view-after-render "selected")
-  [e indent-prop]
-  (if (:form/editing e)
-    (edit-box (:db/id e) (or (:form/edit-initial e)
-                             (some-> (:symbol/value e) str)
-                             (some-> (:keyword/value e) str)
-                             (:string/value e)
-                             (some-> (:number/value e) str)))
-    
-    [:span {:class (when (:form/highlight e) "selected")
-            :ref (when (:form/highlight e) "selected")}
-     (rum/fragment
-      (when (:form/linebreak e)
-        [:span.indent-chars 
-         (str "\n"
-              (.repeat " "
-                       (+ (:form/indent e)
-                          indent-prop)))])
-      (form-component* e (+ 2 indent-prop)))]))
-
 (rum/defc token-component < rum/static
   [leaf-class eid ^String text highlight?]
   [:span {:key eid
@@ -239,8 +184,7 @@
                       (.stopPropagation ev))}
    (-> text 
        ;; replace with non-breaking hyphen, lmao
-       (.replaceAll "-" "‑"))]
-  )
+       (gstring/replaceAll "-" "‑"))])
 
 (declare fcc)
 
@@ -740,7 +684,6 @@
     (when-let [sel (get-selected-form db)]
       [:div 
        [:div (str "#" (:db/id sel)) ]
-       #_(breadcrumbs sel)
        
        "EAVT"
        [:pre (with-out-str
@@ -753,6 +696,22 @@
                   :when (= :db.type/ref (:db/valueType as) )]
             (doseq [[e a v t] (d/datoms db :avet k (:db/id sel))]
               (println e a v))))]
+       "Symbols"
+       [:pre
+        (with-out-str
+          (run! println
+                (dedupe
+                 (for [[e a v t] (d/datoms db :avet :symbol/value)]
+                   v))))]
+
+       "Keywords"
+       [:pre
+        (with-out-str
+          (run! println
+                (dedupe
+                 (for [[e a v t] (d/datoms db :avet :keyword/value)]
+                   v))))]
+       
        #_[:pre 
           (with-out-str (cljs.pprint/pprint (e/->form sel)))]])))
 
