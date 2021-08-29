@@ -38,14 +38,14 @@
               (cond-> {:db/id id :coll/type coll-type}
                 (seq xs) (merge (seq-tx (for [x xs]
                                           (assoc (->tx x) :coll/_contains id)))))))]
-   (cond 
-     (symbol? e)    {:symbol/value (str e)}
-     (keyword? e)   {:keyword/value e}
-     (string? e)    {:string/value e}
-     (number? e)    {:number/value e}
-     (list? e)      (coll-tx :list e)
-     (vector? e)    (coll-tx :vec e)
-     (map? e)       (coll-tx :map (flatten-map e)))))
+    (cond 
+      (symbol? e)    {:symbol/value (str e)}
+      (keyword? e)   {:keyword/value e}
+      (string? e)    {:string/value e}
+      (number? e)    {:number/value e}
+      (list? e)      (coll-tx :list e)
+      (vector? e)    (coll-tx :vec e)
+      (map? e)       (coll-tx :map (flatten-map e)))))
 
 (defn seq->vec
   ([e]
@@ -94,8 +94,7 @@
             (d/with @(d/create-conn form-schema)
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
-        (= data (->form (d/entity db-after (get tempids (:db/id tx-entity))))))))
-)
+        (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
 
 
 

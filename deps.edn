@@ -4,5 +4,6 @@
   thheller/shadow-cljs {:mvn/version "2.12.2"}
   datascript/datascript {:mvn/version "1.1.0"}
   rum/rum {:mvn/version "0.12.6"}
+  djblue/portal {:mvn/version "0.6.1"}
   nrepl/nrepl {:mvn/version "0.8.3"}
   rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}}}

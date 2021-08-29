@@ -51,7 +51,6 @@
     [:div
      [:a {:href "#"
           :on-click #(do (.preventDefault %)
-                         (println "Swtf" toggle)
                          (swap! toggle update ::self not))}
       (if (get @toggle ::self)
         "Hide history"
@@ -70,6 +69,9 @@
                [:code (pr-str (:mutation tx-meta))]
                (when (get @toggle t)
                  [:div
+                  "key"
+                  [:code (pr-str (:jj tx-meta))]
+                  
                   "input"
                   [:pre (with-out-str
                           (cljs.pprint/pprint (:input-tx-data tx-meta)))]

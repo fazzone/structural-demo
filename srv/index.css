@@ -8,6 +8,12 @@ body {
     background-color: #000;
     color: #fff;
 }
+
+a {
+    color: #2c32ff;
+    font-weight: bolder;
+    text-decoration: none;
+}
 .code-font {
     font-family: "Iosevka Term SS03", monospace;
     font-size: 20px;
@@ -15,12 +21,10 @@ body {
 
 .top-level-form {
     border: 1px solid #ae81ff;
+    /* white-space: nowrap; */
 }
-span.symbol:not(:first-of-type) {
-    padding-left: 4px;
-}
-span.number:not(:first-of-type) {
-    padding-left: 4px;
+.top-level-form.code-font {
+    color: #a6a6a0;
 }
 
 span.flex {
@@ -41,6 +45,7 @@ span.tk.l { color: #b5bd68; }
 
 span.selected {
     background-color: #2a4a2a;
+    color: #fff;
 }
 /* spacing between tokens */
 /* span.tk + span.tk { margin-left: 1ch; } */
@@ -101,4 +106,29 @@ span.indented {
     display: flex;
     flex-direction: column;
     margin-left: 20%;
+}
+
+ul.parent-path li {
+    display: inline;
+}
+ul.parent-path {
+    padding: 0;
+    height: 25px;
+    white-space: nowrap;
+}
+ul.parent-path li:not(:last-child):after {
+    content: " > ";
+    color: #444;
+    font-family: monospace;
+    vertical-align: text-bottom;
+    font-size: 16px;
+}
+.parent-index {
+    position: relative;
+    font-size: 12px;
+    color: #ae81ff;
+    top: -2ex;
+}
+span.indent-chars {
+    white-space: pre;
 }
