@@ -24,29 +24,27 @@
     :form/highlight {:db/unique :db.unique/identity}
     :form/indent {}
     :form/linebreak {}
-    :form/edited-tx {:db/valueType :db.type/ref}
-
-    }))
+    :form/edited-tx {:db/valueType :db.type/ref}}))
 
 (def test-form-data
   '[
-   (defn other-thing ;; ^{:tempid "init-selection"}
-     [something a b c d] blah)
-   (defn ->tx
-     [e]
-     (letfn [(coll-tx [coll-type xs]
-               (let [id (new-tempid)]
-                 (cond-> {:db/id id :coll/type coll-type}
-                   (seq xs) (merge (seq-tx (for [x xs]
-                                             (assoc (->tx x) :coll/_contains id)))))))]
-       (cond 
-         (symbol? e)    {:symbol/value (str e)}
-         (keyword? e)   {:keyword/value e}
-         (string? e)    {:string/value e}
-         (number? e)    {:number/value e}
-         (list? e)      (coll-tx :list e)
-         (vector? e)    (coll-tx :vec e)
-         (map? e)       (coll-tx :map (flatten-map e)))))])
+    (defn other-thing ;; ^{:tempid "init-selection"}
+      [something a b c d] blah)
+    (defn ->tx
+        [e]
+        (letfn [(coll-tx [coll-type xs]
+                  (let [id (new-tempid)]
+                    (cond-> {:db/id id :coll/type coll-type}
+                      (seq xs) (merge (seq-tx (for [x xs]
+                                                (assoc (->tx x) :coll/_contains id)))))))]
+          (cond 
+            (symbol? e)    {:symbol/value (str e)}
+            (keyword? e)   {:keyword/value e}
+            (string? e)    {:string/value e}
+            (number? e)    {:number/value e}
+            (list? e)      (coll-tx :list e)
+            (vector? e)    (coll-tx :vec e)
+            (map? e)       (coll-tx :map (flatten-map e)))))])
 #_(def test-form-data '[f :fo  cb ])
 
 (def conn
@@ -82,8 +80,6 @@
 (defn pub! [e]
   (async/put! bus e))
 
-#_(def ^:dynamic *et-index* (js/Array. 1024))
-
 (defn ->mutation
   [tx-fn]
   (fn [[_ & args :as mutation]]
@@ -94,64 +90,24 @@
                                        (meta mutation))))))
 
 (d/listen! conn
-           dbrx/tx-listen-fn)
-
-#_(d/listen! conn
-           (-> (fn [{:keys [db-after tx-data tx-meta tempids] :as tx-report}]
-                 (js/window.setTimeout #(h/save-tx-report! tx-report) 0)
-                 
-                 (doseq [e (dedupe (map first tx-data))]
-                   (when-let [cs (aget *et-index* e)]
-                     (doseq [c cs]
-                       #_(js/console.log "Refs=" (.-refs c ))
-                       #_(.forceUpdate c)
-                       (.setState c
-                                  (fn [state props]
-                                    #_(println "Setstate " state props)
-                                    (let [rst (aget state :rum/state)]
-                                      (vswap! rst assoc :rum/args (cons (d/entity db-after e)
-                                                                        (next (:rum/args @rst)))))
-                                    state))))))))
+           (fn [tx-report]
+             (doto tx-report
+               (dbrx/tx-listen-fn)
+               (h/tx-listen-fn))))
 
 ;; hacks
 (register-sub ::scroll-into-view
               (fn [[_]]
                 (let [sel (d/entid @conn  [:form/highlight true])]
+                  (println "Scroll into view " sel)
                   (when-let [cs (->> sel
                                      (aget dbrx/ereactive-components-by-eid))]
                     (doseq [c cs]
-                     (some-> (.-refs c)
-                             (aget "selected")
-                             (doto (js/console.log "Element") )
-                             (.scrollIntoView)))))))
-
-#_(def ereactive
-  {:init
-   (fn [state props]
-     (let [eid (some-> props (aget :rum/initial-state) :rum/args first :db/id)]
-       (if-not eid
-         (do (println "No db/id! Did you mess up deletion?" props)
-             state)
-         (do (aset *et-index* eid
-                   (doto (or (aget *et-index* eid) (js/Array.))
-                     (.push (:rum/react-component state))))
-             (assoc state ::eid eid)))))
-   :will-unmount
-   (fn [state]
-     (let [c (:rum/react-component state)
-           cs (some->> state ::eid (aget *et-index*))]
-       (if-not cs
-         state
-         (loop [i 0]
-           (cond
-             (= i (.-length cs))
-             state
-
-             (js/Object.is c (aget cs i))
-             (do (.splice cs i 1)
-                 state)
-             
-             :else (recur (inc i)))))))})
+                      (println "Refs")
+                      (some-> (.-refs c)
+                              (aget "selected")
+                              (doto (js/console.log "Element") )
+                              (.scrollIntoView)))))))
 
 (defn focus-ref-on-mount
   [ref-name]
@@ -227,7 +183,10 @@
       (when (:coll/type e)
         (if (:form/highlight e)
           [:span.selected {:ref "selected"} (coll-fragment e (+ 2 indent-prop))]
-          (coll-fragment e (+ 2 indent-prop))))
+          ;; should each collection node get a span?  or use fragments to put them all directly under the top-level?
+          ;; no span means fewer dom elements and less nesting.  (works well in chrome)
+          ;; yes span means that moving around the selection can't re-flow the document (works well in firefox)
+          [:span (coll-fragment e (+ 2 indent-prop))]))
       
       (comment "Probably a retracted entity, do nothing")))
 
@@ -300,7 +259,8 @@
 
 (defn raise-selected-form-tx
   [db]
-  (form-raise-tx (get-selected-form db)))
+  (let [sel (get-selected-form db)]
+    (form-raise-tx (get-selected-form db))))
 
 (register-sub ::raise-selected-form (->mutation raise-selected-form-tx))
 
@@ -538,6 +498,12 @@
                            :state/display-form (:db/id new-node)}]
                          (move-selection-tx (:db/id sel) (:db/id new-node)))))))
 
+#_(register-sub ::toggle-passthru
+              (->mutation
+               (fn [db]
+                 (let [sel      (get-selected-form db)]
+                   [[:db/add (:db/id sel) :form/render-passthru (not (:form/render-passthru sel )) ]]))))
+
 
 ;; history
 
@@ -588,8 +554,9 @@
         (e/->tx)
         (assoc :db/id eid))
     (catch js/Error e
-      (println "No edn" text-value)
-      (js/console.log e))))
+      #_(println "No edn" text-value)
+      #_(js/console.log e)
+      nil)))
 
 (defn accept-edit-tx
   [form-eid value]
@@ -627,7 +594,41 @@
     (reject-edit-tx db eid)
     (accept-edit-tx eid text)))
 
-(defn editbox-keydown-tx
+(register-sub :edit/finish (->mutation finish-edit-tx))
+(register-sub :edit/reject (->mutation reject-edit-tx))
+(register-sub :edit/wrap (->mutation wrap-edit-tx))
+(register-sub :edit/finish-and-move-up
+              (->mutation (fn [db eid text]
+                            (concat (movement-tx db :move/up)
+                                    (if (empty? text)
+                                      (reject-edit-tx db eid)
+                                      (accept-edit-tx eid text))))))
+(register-sub :edit/finish-and-edit-next-node
+              (->mutation (fn [db eid text]
+                            (into (accept-edit-tx eid text)
+                                  (insert-editing-tx db "")))))
+
+(defn editbox-keydown-mutation
+  [db eid text key]
+  (case key
+    "Escape"      [:edit/reject eid]
+    "Backspace"   (when (empty? text)
+                    [:edit/reject eid])
+    "Enter"       [:edit/finish eid text]
+    (")" "]" "}") [:edit/finish-and-move-up eid text]
+    ("[" "(" "{") [:edit/wrap eid (case key "(" :list "[" :vec "{" :map) text]
+    " "           (cond
+                    (empty? text)
+                    [:edit/reject eid]
+                    
+                    (= "\"" (first text))
+                    (println "Quotedstring")
+                    
+                    :else
+                    [:edit/finish-and-edit-next-node eid text])
+    nil))
+
+#_(defn editbox-keydown-tx
   [db eid text key]
   (case key
     "Escape"      (reject-edit-tx db eid)
@@ -638,9 +639,15 @@
                           (if (empty? text)
                             (reject-edit-tx db eid)
                             (accept-edit-tx eid text)))
-    ("[" "(" "{") (wrap-edit-tx db eid (case key "(" :list "[" :vec "}" :map) text)
-    " "           (if (empty? text)
+    ("[" "(" "{") (wrap-edit-tx db eid (case key "(" :list "[" :vec "{" :map) text)
+    " "           (cond
+                    (empty? text)
                     (reject-edit-tx db eid)
+                    
+                    (= "\""  (first text))
+                    (println "Quotedstring")
+                    
+                    :else
                     (concat (accept-edit-tx eid text)
                             (insert-editing-tx db "")))
     nil))
@@ -658,7 +665,7 @@
       :ref         "the-input"
       :value       value
       :style       {:width (str (max 4 (inc (count value))) "ch")}
-      :on-change   #(let [new-text (string/trim (.-value (.-target %)))
+      :on-change   #(let [new-text (string/triml (.-value (.-target %)))
                           token (parse-token-tx new-text form-eid)]
                       (reset! text new-text)
                       (reset! editbox-ednparse-state
@@ -667,11 +674,17 @@
                                :valid (some? token)
                                :type (some-> token first val)}))
       :on-key-down (fn [ev]
-                     (when-let [tx (editbox-keydown-tx @conn form-eid value (.-key ev))]
+                     #_(when-let [tx (editbox-keydown-tx @conn form-eid value (.-key ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
                        (d/transact! conn tx {:mutation [:editbox/keydown (.-key ev)]
-                                             :input-tx-data tx})))
+                                             :input-tx-data tx}))
+                     (when-let [mut (editbox-keydown-mutation @conn form-eid value (.-key ev))]
+                       (.preventDefault ev)
+                       (.stopPropagation ev)
+                       (pub! mut)
+                       #_(d/transact! conn tx {:mutation [:editbox/keydown (.-key ev)]
+                                               :input-tx-data tx})))
       ;; :on-blur     #(do (.preventDefault %)
       ;;                   (let [tx (finish-edit-tx @conn form-eid value )]
       ;;                     (d/transact! conn tx {:mutation [:editbox/blur]
@@ -705,24 +718,24 @@
                                    (or (some-> parent :seq/first :symbol/value) "()")
                                    (case (:coll/type parent) :vec "[]" :map "{}"))])])))]))
 
-(rum/defc focus-info < rum/reactive
-  []
-  (let [db (rum/react conn)] 
-    (when-let [sel (get-selected-form db)]
-      [:div 
-       [:div (str "#" (:db/id sel)) ]
+(rum/defc focus-info < (dbrx/areactive :form/highlight)
+  [db]
+  (when-let [sel (get-selected-form db)]
+    [:div 
+     [:div (str "#" (:db/id sel)) ]
        
-       "EAVT"
-       [:pre (with-out-str
-               (doseq [[e a v t] (d/datoms db :eavt (:db/id sel))]
-                 (println e a (pr-str v))))]
-       "AVET"
-       [:pre 
-        (with-out-str
-          (doseq [[k as] schema
-                  :when (= :db.type/ref (:db/valueType as) )]
-            (doseq [[e a v t] (d/datoms db :avet k (:db/id sel))]
-              (println e a v))))]
+     "EAVT"
+     [:pre (with-out-str
+             (doseq [[e a v t] (d/datoms db :eavt (:db/id sel))]
+               (println e a (pr-str v))))]
+     "AVET"
+     [:pre 
+      (with-out-str
+        (doseq [[k as] schema
+                :when (= :db.type/ref (:db/valueType as) )]
+          (doseq [[e a v t] (d/datoms db :avet k (:db/id sel))]
+            (println e a v))))]
+     (comment
        "Symbols"
        [:pre
         (with-out-str
@@ -739,8 +752,8 @@
                  (for [[e a v t] (d/datoms db :avet :keyword/value)]
                    v))))]
        
-       #_[:pre 
-          (with-out-str (cljs.pprint/pprint (e/->form sel)))]])))
+       #_ [:pre 
+           (with-out-str (cljs.pprint/pprint (e/->form sel)))])]))
 
 (def special-key-map
   (merge
@@ -752,7 +765,7 @@
     "("         [::edit-new-wrapped :list]
     "9"         [::edit-new-wrapped :list]
     "["         [::edit-new-wrapped :vec ]
-    "{"         [::edit-new-wrapped :map ]
+    "S-{"       [::edit-new-wrapped :map ]
     "u"         [::move :move/up]
     "r"         [::raise-selected-form]
     "S-X"       [::extract-to-new-top-level]
@@ -775,7 +788,8 @@
     "Tab"       ["Placeholder for the real tab handler which is special because it is stateful"]
     "S-Tab"     ["Same as Tab"]
     "S-M"       [::recursively-set-indent true]
-    "S-O"       [::recursively-set-indent false]}
+    "S-O"       [::recursively-set-indent false]
+    }
    (into {}
          (for [i (range 9)]
       [(str (inc i)) [::select-1based-nth-reverse-parent-of-selected (inc i)]]))))
@@ -815,7 +829,6 @@
   (let [edit (d/entity db [:form/editing  true])
         rpa (reverse-parents-array edit)
         {:keys [text valid]} (rum/react editbox-ednparse-state)]
-    (println "Top-eid" top-eid "First rpa" (first rpa) )
     (when (= top-eid (:db/id (first rpa)))
       [:span {:class (str "modeline code-font"
                           (when edit " editing")
@@ -837,10 +850,10 @@
 
 
 
-(rum/defc edit-history < rum/reactive
-  []
-  (let [db (rum/react conn)
-        sel-eid (d/entid db  [:form/highlight true])]
+(rum/defc edit-history < (dbrx/areactive :form/edited-tx)
+  [db]
+  (println "Render-EH")
+  (let [sel-eid (d/entid db  [:form/highlight true])]
     [:ul
      (for [e (form-eids-by-edit-tx-desc db)]
        [:li {:key e}
@@ -853,11 +866,11 @@
 
 (rum/defc root-component < dbrx/ereactive
   [state]
-  (let [db @conn]
+  (let [db (d/entity-db state)]
     [:div.root-cols
      [:div.sidebar-left
-      (focus-info)
-      (edit-history)
+      (focus-info db)
+      (edit-history db)
       (h/history-view conn)]
      [:div.main-content
       (for [df (:state/display-form state)]
@@ -867,10 +880,9 @@
 (defn event->kbd
   [^KeyboardEvent ev]
   (str (when (.-altKey ev) "M-")
-                         (when (.-ctrlKey ev ) "C-")
-                         (when (.-shiftKey ev) "S-")
-                         (.-key ev))
-  )
+       (when (.-ctrlKey ev ) "C-")
+       (when (.-shiftKey ev) "S-")
+       (.-key ev)))
 
 (defn global-keydown*
   [ev]
@@ -918,3 +930,4 @@
 ;; Player piano mode
 ;; Random mutation testing
 ;; Teleports!
+;; reify editor in db to have multiple selections going?

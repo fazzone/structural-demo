@@ -4,7 +4,7 @@
    [rum.core :as rum]))
 
 
-(def log2size 3)
+(def log2size 8)
 (def history-index (atom 0))
 (def history-size (bit-shift-left 1 log2size))
 (def history-buffer (js/Array. history-size))
@@ -57,7 +57,7 @@
         "Show history")]
      (when (get @toggle ::self)
        [:ul
-        (for [e (backwards-index-seq)]
+        (for [e (take 32 (backwards-index-seq))]
           (when-let [{:keys [tempids tx-data tx-meta] :as tx-report} (aget history-buffer e)]
             (let [t (:db/current-tx tempids)]
               [:li {:key (str e " " t)}
@@ -89,3 +89,7 @@
 
 
 
+
+(defn tx-listen-fn
+  [tx-report]
+  (js/window.setTimeout (save-tx-report! tx-report) 0))

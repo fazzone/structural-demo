@@ -44,7 +44,7 @@ span.tk.p { color: #70c0b1; }
 span.tk.n { color: #f0c674; }
 span.tk.l { color: #b5bd68; }
 
-span.selected {
+.selected {
     background-color: #2a4a2a;
     color: #fff;
 }
