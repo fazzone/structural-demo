@@ -628,31 +628,6 @@
                     [:edit/finish-and-edit-next-node eid text])
     nil))
 
-#_(defn editbox-keydown-tx
-  [db eid text key]
-  (case key
-    "Escape"      (reject-edit-tx db eid)
-    "Backspace"   (when (empty? text)
-                    (reject-edit-tx db eid))
-    "Enter"       (finish-edit-tx db eid text)
-    (")" "]" "}") (concat (movement-tx db :move/up)
-                          (if (empty? text)
-                            (reject-edit-tx db eid)
-                            (accept-edit-tx eid text)))
-    ("[" "(" "{") (wrap-edit-tx db eid (case key "(" :list "[" :vec "{" :map) text)
-    " "           (cond
-                    (empty? text)
-                    (reject-edit-tx db eid)
-                    
-                    (= "\""  (first text))
-                    (println "Quotedstring")
-                    
-                    :else
-                    (concat (accept-edit-tx eid text)
-                            (insert-editing-tx db "")))
-    nil))
-
-
 (def editbox-ednparse-state (atom nil))
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
@@ -674,11 +649,6 @@
                                :valid (some? token)
                                :type (some-> token first val)}))
       :on-key-down (fn [ev]
-                     #_(when-let [tx (editbox-keydown-tx @conn form-eid value (.-key ev))]
-                       (.preventDefault ev)
-                       (.stopPropagation ev)
-                       (d/transact! conn tx {:mutation [:editbox/keydown (.-key ev)]
-                                             :input-tx-data tx}))
                      (when-let [mut (editbox-keydown-mutation @conn form-eid value (.-key ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
