@@ -14,7 +14,7 @@
      [:td {:style {:width "20em"}} "A"]
      [:td {:style {:width "20em"}} "V"]
      [:td {:style {:width "10em"}} "T"]
-     [:td "added?"]]]
+     #_[:td "added?"]]]
    [:tbody
     {} 
     (->> ds
@@ -25,7 +25,42 @@
              [:td [:code (str a)]]
              [:td [:code (str v)]]
              [:td [:code (str t)]]
-             [:td [:code (str r)]]])))]])
+             #_[:td [:code (str r)]]])))]])
+
+(rum/defc datoms-table-ave [ds ah vh eh]
+  [:div.datoms-table.ave
+   [:div (or ah "A")]
+   [:div (or vh "V")]
+   [:div (or eh "E")]
+   (->> ds
+        (map-indexed
+         (fn [i [e a v t r]]
+           (rum/fragment {:key i}
+                         [:code {:key (+ (* 3 i) 1)} (str a)]
+                         [:code {:key (+ (* 3 i) 2)} (str v)]
+                         [:code {:key (+ (* 3 i) 3)} (str e)]))))])
+
+(rum/defc datoms-table-eav [ds eh ah vh]
+  [:div.datoms-table.eav
+   [:div (or eh "E")]
+   [:div (or ah "A")]
+   [:div (or vh "V")]
+   (->> ds
+        (map-indexed
+         (fn [i [e a v t r]]
+           (rum/fragment
+            {:key i}
+            [:code {:key (+ (* 3 i) 3)} (str e)]
+            [:code {:key (+ (* 3 i) 1)}
+             (let [s (str a)
+                   n 20]
+               (if (> n (count s) )
+                 s
+                 [:abbr {:title s} (subs s 0 n) ])
+               )]
+            [:code {:key (+ (* 3 i) 2)} (str v)]))))])
+
+
 
 
 

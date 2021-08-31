@@ -5,66 +5,78 @@
 
 (def ereactive-components-by-eid (js/Array. 1024))
 
+(defn add-ereactive-component!
+  [tag eid rc]
+  (when tag (println "Start listening" tag eid))
+  (aset ereactive-components-by-eid  eid
+        (doto (or (aget ereactive-components-by-eid eid)
+                  (js/Array.))
+          (.push rc))))
+
+(defn remove-ereactive-component!
+  [tag eid rc]
+  (when-let [cs (aget ereactive-components-by-eid eid)]
+    (loop [i 0]
+      (cond
+        (= i (.-length cs))
+        nil
+
+        (js/Object.is rc (aget cs i))
+        (do (.splice cs i 1)
+            (when tag (println "Stopped listening" tag eid)))
+        :else (recur (inc i))))))
+
 ;; mixin for components which take datascript entity as their first argument
 ;; forces re-render with updated state when entity is touched by a transaction
-(def ereactive
-  {:init
-   (fn [state props]
-     (let [eid (some-> props (aget :rum/initial-state) :rum/args first :db/id)]
-       (if-not eid
-         (do (println "No db/id! Did you mess up deletion?" props)
-             state)
-         (do (aset ereactive-components-by-eid  eid
-                   (doto (or (aget ereactive-components-by-eid eid)
-                             (js/Array.))
-                     (.push (:rum/react-component state))))
-             (assoc state ::eid eid)))))
-   :will-unmount
-   (fn [state]
-     (let [c (:rum/react-component state)
-           cs (some->> state ::eid (aget ereactive-components-by-eid))]
-       (if-not cs
-         state
-         (loop [i 0]
-           (cond
-             (= i (.-length cs))
-             state
+(defn ereactive-with-debug-print
+  [tag]
+  {:init (fn [{:rum/keys [args] :as state}]
+           (let [eid (some-> state :rum/args first :db/id)]
+             (if-not eid
+               state
+               (do (add-ereactive-component! tag eid (:rum/react-component state))
+                   (assoc state ::eid eid)))))
+   :will-remount (fn [old-state new-state]
+                   (let [old-eid (-> old-state :rum/args first :db/id)
+                         new-eid (-> new-state :rum/args first :db/id )]
+                     (when-not (= old-eid new-eid)
+                       (remove-ereactive-component! tag old-eid (:rum/react-component new-state))
+                       (add-ereactive-component! tag new-eid (:rum/react-component new-state))))
+                   new-state)
+   :will-unmount (fn [{:rum/keys [args] ::keys [eid] :as state}]
+                   (remove-ereactive-component! tag eid (:rum/react-component state)))})
 
-             (js/Object.is c (aget cs i))
-             (do (.splice cs i 1)
-                 state)
-             
-             :else (recur (inc i)))))))})
+(def ereactive (ereactive-with-debug-print nil))
 
 (def areactive-components (atom {}))
-
-
 ;; mixin to react to all transactions which touch a specific attribute
 (defn areactive
-  [a]
+  [& as]
   {:init
    (fn [state props]
-     (swap! areactive-components assoc a
-            (doto (or (get @areactive-components a)
-                      (js/Array.))
-              (.push (:rum/react-component state))))
+     (doseq [a as]
+      (swap! areactive-components assoc a
+             (doto (or (get @areactive-components a)
+                       (js/Array.))
+               (.push (:rum/react-component state)))))
      state)
    :will-unmount
    (fn [state]
-     (let [c (:rum/react-component state)
-           cs (get @areactive-components a )]
-       (if-not cs
-         state
-         (loop [i 0]
-           (cond
-             (= i (.-length cs))
+     (let [c (:rum/react-component state)]
+       (doseq [a as]
+         (let [cs (get @areactive-components a )]
+           (if-not cs
              state
+             (loop [i 0]
+               (cond
+                 (= i (.-length cs))
+                 state
 
-             (js/Object.is c (aget cs i))
-             (do (.splice cs i 1)
-                 state)
+                 (js/Object.is c (aget cs i))
+                 (do (.splice cs i 1)
+                     state)
              
-             :else (recur (inc i)))))))})
+                 :else (recur (inc i)))))))))})
 
 (defn tx-listen-fn
   [{:keys [db-after tx-data tx-meta tempids] :as tx-report}]
@@ -86,5 +98,8 @@
                      state))))))
 
 
-
-
+(defn reset-for-reload!
+  []
+  (reset! areactive-components {})
+  (dotimes [i (count ereactive-components-by-eid)]
+    (aset ereactive-components-by-eid i nil)))

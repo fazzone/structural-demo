@@ -16,7 +16,7 @@ a {
 }
 .code-font {
     font-family: "Iosevka Term SS03", monospace;
-    font-size: 20px;
+    font-size: 14px;
 }
 
 .top-level-form {
@@ -33,7 +33,9 @@ span.flex {
                    
 }
 span.tk:hover {
-    background-color: #ae81ff;
+    background-color: #4504b982;
+    /* background-color: radial-gradient(#000, #ae81ff); */
+    /* border: 1px solid #ae81ff; */
     cursor: pointer;
 }
 
@@ -45,7 +47,7 @@ span.tk.n { color: #f0c674; }
 span.tk.l { color: #b5bd68; }
 
 .selected {
-    background-color: #2a4a2a;
+    background-color: #062606;
     color: #fff;
 }
 /* spacing between tokens */
@@ -101,7 +103,7 @@ input.edit-box {
     display: flex;
     flex-direction: column;
     position: fixed;
-    width: 20%;
+    width: 15%;
     /* overflow: auto; */
     justify-content: space-between;
     height: 100vh;
@@ -110,7 +112,7 @@ input.edit-box {
 .main-content {
     display: flex;
     flex-direction: column;
-    margin-left: 20%;
+    margin-left: 17%;
 }
 
 ul.parent-path li {
@@ -118,35 +120,121 @@ ul.parent-path li {
 }
 ul.parent-path {
     padding: 0;
-    height: 25px;
+    /* height: 25px; */
     white-space: nowrap;
 }
 ul.parent-path li:not(:last-child):after {
-    content: " > ";
-    color: #444;
-    font-family: monospace;
-    vertical-align: text-bottom;
-    font-size: 16px;
+    content: ">";
+    color: #777;
+    padding-left: 1ex;
+    padding-right: 0.3ex;
 }
 .parent-index {
     position: relative;
-    font-size: 12px;
+    font-size: 70%;
     color: #ae81ff;
     top: -2ex;
 }
+
+ul.parent-path:not(empty) {
+    min-height: 3ex;
+}
+ul.parent-path:empty {
+    height: 3ex;
+}
+
 span.indent-chars {
     white-space: pre;
+    background-color: #000;
+}
+span.indenter {
+    transition: margin-left 0.08s;
+    /* transition-timing-function: linear; */
 }
 span.modeline {
     height: 3ex;
     width: 100%;
+    color: #000;
+    background-color: #ae81ff;
+}
+.modeline-size {
+    height: 3ex;
+    line-height: 3ex;
 }
 span.modeline.editing {
-    background-color: #ae81ff;
+    background-color: #2a4a2a;
 }
 span.modeline.editing.invalid {
     background-color: red;
 }
 span.modeline-content {
+    float: left;
+}
+span.modeline-echo {
     float: right;
+}
+span.key-compose-echo {
+    padding-left: 1ex;
+}
+
+
+.datoms-table {
+    display: grid;
+    padding-top: 2ex;
+    /* padding-right: 10ex; */
+    text-align: center;
+    grid-template-rows: 1fr;
+}
+.datoms-table.ave {
+    grid-template-columns: 2fr 2fr minmax(3em, 1fr);
+}
+.datoms-table code:nth-child(3n) { text-align: right; }
+.datoms-table code:nth-child(3n-1) { text-align: right;}
+.datoms-table code:nth-child(3n-2) { text-align: left;}
+
+.datoms-table.eav {
+    grid-template-columns: minmax(3em, 1fr) minmax(10em, 2fr) 2fr;
+}
+.keyboard-container {
+    /* width: 50em; */
+    transition: width 0.08s;
+}
+.keyboard-container > div  {
+    margin-top: 2px;
+    display: grid;
+    grid-gap: 0 2px;
+}
+.number-row { grid-template-columns: repeat(13, 1fr) 2fr; }
+.qwer-row   { grid-template-columns: 1.5fr repeat(12, 1fr) 1.5fr; }
+.asdf-row   { grid-template-columns: 2fr repeat(11, 1fr) 2.5fr; }
+.zxcv-row   { grid-template-columns: 3fr repeat(10, 1fr) 3fr; }
+.space-row  { grid-template-columns: repeat(3, 1fr) 4.5fr repeat(4, 1fr); }
+
+div.keyboard-container .key {
+    border: 1px solid #777;
+    border-radius: 0.8ex;
+    /* text-align: center; */
+    padding-left: 0.5ex;
+    height: 5ex;
+}
+div.keyboard-container .key.single-width {
+    min-width: 5ex;
+}
+div.keyboard-container .numberrow {
+    grid-row: 1;
+}
+div.keyboard-container .lettersrow {
+    grid-row: 2;
+}
+div.keyboard-container .key-legend  {
+    font-family: monospace;
+    font-size: 85%;
+    text-align: center;
+    color: #ae81ff;
+}
+div.keyboard-container .keycap {
+    color: #777;
+}
+.backspace {
+    background-color: tomato;
 }
