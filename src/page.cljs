@@ -3,6 +3,7 @@
    [clojure.edn :as edn]
    [embed :as e]
    [debug :as debug]
+   [svg-helpers :as s]
    [tx-history :as h]
    [goog.string :as gstring]
    [comp.keyboard :as ck]
@@ -29,16 +30,21 @@
 
 (def test-form-data-original
   '[
+    #_(defn other-thing
+      [a b c d])
+    #_(defn other-thing
+      [a [b c] d])
     (defn other-thing ;; ^{:tempid "init-selection"}
-      [something a b c [:page/repeat-move :move/flow 9] d] blah)
-    (defn form-overwrite-tx
+      [a b c [d e f] d] blah)
+    #_(defn form-overwrite-tx
       [e replacement-eid]
-      (let [spine (first (:seq/_first e))
-            coll (first (:coll/_contains e))]
-        (when ^{:dingugu "juani"} (and spine coll)
-          [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
-           [:db/add (:db/id coll) :coll/contains replacement-eid]
-           [:db/add (:db/id spine) :seq/first replacement-eid]])))
+  (let [spine (first (:seq/_first e))
+        coll (first (:coll/_contains e))]
+    (when (and spine coll)
+      [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
+       [:db/add (:db/id coll) :coll/contains replacement-eid]
+       [:db/add (:db/id spine) :seq/first replacement-eid]])))
+    
     ])
 
 (def test-form-data (vec (apply concat (repeat 1 test-form-data-original))))
@@ -154,17 +160,13 @@
 
 (declare fcc)
 
-(defn make-indenter
-  [indent-level]
-  [:span.indent-chars "\n"
-   [:span.indenter {:style {:margin-left (str indent-level "ch")}}]])
-
 (defn do-indent
   [child linebreak? indent-level]
   (if-not linebreak?
     child
     (rum/fragment
-     (make-indenter indent-level)
+     [:span.indent-chars "\n"
+      [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
      child)))
 
 (defn do-highlight
@@ -173,16 +175,19 @@
     child
     [:span.selected {:ref "selected"} child]))
 
+(defn computed-indent
+  [e indent-prop]
+  (-> (:form/indent e)
+      (or 0)
+      (+ indent-prop)))
+
 (defn coll-fragment
   [e indent-prop]
-  (let [my-indent (-> (:form/indent e)
-                      (or 0)
-                      (+ indent-prop))]
-    (rum/fragment
-     (case (:coll/type e) :list "(" :vec "[" :map "{")
-     (for [x (e/seq->vec e)]
-       (rum/with-key (fcc x my-indent) (:db/id x)))
-     (case (:coll/type e) :list ")" :vec "]" :map "}"))))
+  (rum/fragment
+   (case (:coll/type e) :list "(" :vec "[" :map "{")
+   (for [x (e/seq->vec e)]
+     (rum/with-key (fcc x (computed-indent e indent-prop)) (:db/id x)))
+   (case (:coll/type e) :list ")" :vec "]" :map "}")))
 
 (rum/defc fcc < dbrx/ereactive (scroll-ref-into-view-after-render "selected")
   [e indent-prop]
@@ -215,9 +220,7 @@
             (comment "Probably a retracted entity, do nothing"))
         (do-highlight (:form/highlight e))
         (do-indent (:form/linebreak e)
-                   (-> (:form/indent e)
-                       (or 0)
-                       (+ indent-prop))))))
+                   (computed-indent e indent-prop)))))
 
 (defn get-selected-form
   [db]
@@ -968,6 +971,98 @@
         (str "#" (:db/id sel) )
         (command-compose-feedback)]])))
 
+
+(defn textcell
+  [t size]
+  [:text {:x 0 #_(* 0.5 size )
+          :y (* 0.5 size)
+          :font-size "80%"} t])
+
+(defn conscell-layout
+  [root]
+  (let [id->pos (volatile! {})
+        go (fn go [node row col]
+             (vswap! id->pos assoc (:db/id node) [row col])
+             (some-> (:seq/next node)
+                     (go row (inc col)))
+             (some-> (:seq/first node)
+                     (go (inc row) col)))]
+    (go root 0 0)
+    @id->pos))
+
+(declare onecell)
+
+(defn onecell*
+  [node size row col]
+  (let [half (* 0.5 size)
+        double (* 2 size)
+        width (* 7 half)
+        height (* 5 half)
+        x (* width col)
+        y (* height row)
+        label (str "#" (:db/id node) " " row  "," col)]
+    (rum/fragment
+     [:circle {:cx (- x 1) :cy (- y 1) :r 1 :stroke "tomato" :fill "tomato" }]
+     (if-let [sv (or (:symbol/value node)
+                     (:keyword/value node)
+                     (:number/value node))]
+       (rum/fragment
+        [:text {:x x :y y} (str sv)]
+        [:text {:x x :y (+ y half)} label])
+       (rum/fragment
+        [:text {:x (+ x (* 3 half)) :y (- y 4)} label]
+        [:rect {:x x :y y :fill :none :width size :height size}]
+        [:rect {:x (+ x size) :y y :fill :none :width size :height size}]))
+     
+     (when-let [cdr (:seq/next node)]
+       (let [arrowleft (+ x (* 3 half))
+             arrowright (+ x (- width 5))
+             control (+ arrowleft (/ (- arrowright arrowleft) 2))]
+         (rum/fragment
+          (onecell cdr size row (inc col))
+          [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
+                  :d (str "M" (str arrowleft) "," (str (+ y half))
+                          " Q" (str control) "," (str y)
+                          " " (str arrowright) "," (str (+ y half)))}])))
+     (when-let [car (:seq/first node)]
+       (rum/fragment
+        (onecell car size (inc row ) col)
+        [:path {:marker-end "url(#head)" 
+                :d (str "M" (str (+ x half)) "," (str (+ y half))
+                        " V" (str (+ y double  )))}]))))
+  )
+
+(rum/defc onecell < dbrx/ereactive
+  [node size row col]
+  (if-not (:form/highlight node)
+    (onecell* node size row col)
+    [:g {:stroke "tomato" :fill "tomato"} (onecell* node size row col)])
+  )
+
+
+
+
+(rum/defc conscell-svg < dbrx/ereactive
+  [root]
+  [:svg  {:viewBox #_"0 0 700 500"
+          "0 0 900 400"
+          :style {:border "1px solid"
+                  :background "transparent"}}
+   [:defs
+    [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 2}
+     [:path {:fill "#fff" :d "M0,0 V4 L4,2 Z"}]
+     #_[:path {:fill "tomato" :d "M0,0 V4 L2,2 Z"}]]]
+   (let [size 32
+         layout (conscell-layout root)]
+     (prn layout)
+     (s/translate size size
+                  [:g {:stroke "#fff"
+                       :fill "#fff"
+                       :stroke-width 1}
+                   (onecell root size 0 0)
+                   ]))])
+
+
 (rum/defc top-level-form-component < dbrx/ereactive
   [e]
   [:div.form-card
@@ -976,6 +1071,7 @@
    [:div.top-level-form.code-font
     (fcc e 0)]
    (modeline-next (d/entity-db e) (:db/id e))
+   (conscell-svg e)
    #_(toplevel-modeline (d/entity-db e) (:db/id e))])
 
 
@@ -995,6 +1091,8 @@
 
 
 
+
+
 (rum/defc root-component < dbrx/ereactive
   [state]
   (let [db (d/entity-db state)]
@@ -1006,8 +1104,12 @@
      [:div.main-content
       (for [df (:state/display-form state)]
         (rum/with-key (top-level-form-component df) (:db/id df)))
+      
+      [:div {:style {:margin-top "1vh"}} " oka"]
+      
       #_(all-datoms-table)]
-     (ck/keyboard-diagram)]))
+     #_[:div {:style {:display :flex :flex-direction :column}}
+      (ck/keyboard-diagram)]]))
 
 (defn event->kbd
   [^KeyboardEvent ev]

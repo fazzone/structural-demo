@@ -111,3 +111,8 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
+
+
+
