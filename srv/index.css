@@ -14,9 +14,26 @@ a {
     font-weight: bolder;
     text-decoration: none;
 }
+
+@font-face {
+    font-family: iosevka-aile-light;
+    src: url(iosevka-aile-light.woff2);
+}
+
+@font-face {
+    font-family: iosevka-term-ss03-light;
+    src: url(iosevka-term-ss03-light.woff2);
+}
+
+
+body {
+    font-family: iosevka-aile-light;
+}
+
 .code-font {
-    font-family: "Iosevka Term SS03", monospace;
-    font-size: 14px;
+    /* font-family: "Iosevka Term SS03", monospace; */
+    font-family: iosevka-term-ss03-light;
+    font-size: 14pt;
 }
 
 .top-level-form {
@@ -40,15 +57,19 @@ span.tk:hover {
 }
 
 /* syntax coloring */
-span.tk.s { color: #81a2be; }
-span.tk.k { color: #70c0b1; }
-span.tk.p { color: #70c0b1; }
-span.tk.n { color: #f0c674; }
-span.tk.l { color: #b5bd68; }
+span.tk.s  { color: #81a2be; }
+span.tk.k  { color: #70c0b1; }
+span.kn    { color: #e7c547; }
+span.tk.m  { color: #c397d8; }
+span.tk.v  { color: #eee; }
+/* span.tk.p  { color: #70c0b1; } */
+span.tk.n  { color: #f0c674; }
+span.tk.l  { color: #b5bd68; }
 
 .selected {
     background-color: #062606;
     color: #fff;
+    border-radius: 1ex;
 }
 /* spacing between tokens */
 /* span.tk + span.tk { margin-left: 1ch; } */
@@ -197,6 +218,7 @@ span.key-compose-echo {
 }
 .keyboard-container {
     /* width: 50em; */
+    font-size: 20px;
     transition: width 0.08s;
 }
 .keyboard-container > div  {
@@ -215,25 +237,38 @@ div.keyboard-container .key {
     border-radius: 0.8ex;
     /* text-align: center; */
     padding-left: 0.5ex;
-    height: 5ex;
+    height: 6ex;
 }
 div.keyboard-container .key.single-width {
-    min-width: 5ex;
+    min-width: 6ex;
 }
-div.keyboard-container .numberrow {
-    grid-row: 1;
-}
-div.keyboard-container .lettersrow {
-    grid-row: 2;
-}
-div.keyboard-container .key-legend  {
+div.keyboard-container .key-label  {
     font-family: monospace;
     font-size: 85%;
     text-align: center;
+    margin-top: 3ex;
     color: #ae81ff;
 }
+
+.keyboard-container .key-symbol {
+    position: absolute;
+    margin-left: 2ex;
+}
+
+
+div.keyboard-container .key-legend.symbol1 {
+    font-size: 250%;
+    margin-top: 0;
+    transform: scale(-1, -1);
+}
+div.keyboard-container .key-legend.symbol2 {
+    font-size: 200%;
+    margin-top: 0;
+}
+
 div.keyboard-container .keycap {
     color: #777;
+    position: absolute;
 }
 .backspace {
     background-color: tomato;

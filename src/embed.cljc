@@ -31,7 +31,9 @@
    []
    m))
 
-(defn ->tx
+(declare ->tx)
+
+(defn ->tx*
   [e]
   (letfn [(coll-tx [coll-type xs]
             (let [id (new-tempid)]
@@ -47,6 +49,10 @@
       (list? e)    (coll-tx :list e)
       (vector? e)  (coll-tx :vec e)
       (map? e)     (coll-tx :map (flatten-map e)))))
+
+(defn ->tx
+  [e]
+  (merge (meta e) (->tx* e)))
 
 (defn seq->vec
   ([e]
@@ -83,6 +89,15 @@
   [data]
   (= data (roundtrip data)))
 
+
+;; => {:db/id -3, :coll/type :map, :seq/first {:keyword/value :ok, :coll/_contains -3}, :seq/next #:seq{:first {:number/value 4, :coll/_contains -3}}}
+
+
+
+
+
+
+
 (comment
   (test-roundtrip '( :a :b {:keys [db-after tempids]}))
   (test-roundtrip
@@ -96,10 +111,3 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
-
-
-
-
-
-
-
