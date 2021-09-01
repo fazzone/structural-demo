@@ -981,20 +981,41 @@
 (defn conscell-layout
   [root]
   (let [id->pos (volatile! {})
+        order (volatile! -1)
         go (fn go [node row col]
-             (vswap! id->pos assoc (:db/id node) [row col])
+             (vswap! id->pos assoc (:db/id node) [row col (vswap! order inc)])
              (some-> (:seq/next node)
                      (go row (inc col)))
+             #_(some-> (:seq/first node)
+                     (go (inc row) col))
              (some-> (:seq/first node)
-                     (go (inc row) col)))]
+                     (go (if (:seq/first (:seq/first node))
+                           (+ 2 row)
+                           (inc row)) col)))]
     (go root 0 0)
     @id->pos))
+
+(defn conscell-layout-bfs
+  [top]
+  (loop [[e & front] [top]
+         out         []]
+    #_(prn "E" (:db/id e) "Front" (mapv :db/id front))
+    (cond
+      (nil? e)                    out
+      (not (:coll/type e)) (recur front out)
+      :else
+      (recur
+       (into front (e/seq->vec e))
+       (conj out e)))))
+
+
 
 (declare onecell)
 
 (defn onecell*
-  [node size row col]
-  (let [half (* 0.5 size)
+  [node size layout]
+  (let [[row col] (get layout (:db/id node))
+        half (* 0.5 size)
         double (* 2 size)
         width (* 7 half)
         height (* 5 half)
@@ -1019,48 +1040,58 @@
              arrowright (+ x (- width 5))
              control (+ arrowleft (/ (- arrowright arrowleft) 2))]
          (rum/fragment
-          (onecell cdr size row (inc col))
+          (onecell cdr size layout)
           [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
                   :d (str "M" (str arrowleft) "," (str (+ y half))
                           " Q" (str control) "," (str y)
                           " " (str arrowright) "," (str (+ y half)))}])))
      (when-let [car (:seq/first node)]
-       (rum/fragment
-        (onecell car size (inc row ) col)
-        [:path {:marker-end "url(#head)" 
-                :d (str "M" (str (+ x half)) "," (str (+ y half))
-                        " V" (str (+ y double  )))}]))))
+       (let [[r _] (get layout (:db/id car))]
+         (rum/fragment
+          (onecell car size layout)
+          [:path {:marker-end "url(#head)" 
+                  :d (str "M" (str (+ x half)) "," (str (+ y half))
+                          " V" (str (- (* height r) half)))}])))))
   )
 
 (rum/defc onecell < dbrx/ereactive
-  [node size row col]
+  [node size layout]
   (if-not (:form/highlight node)
-    (onecell* node size row col)
-    [:g {:stroke "tomato" :fill "tomato"} (onecell* node size row col)])
-  )
+    (onecell* node size layout)
+    [:g {:stroke "tomato" :fill "tomato"} (onecell* node size layout )]))
 
 
 
 
 (rum/defc conscell-svg < dbrx/ereactive
   [root]
-  [:svg  {:viewBox #_"0 0 700 500"
-          "0 0 900 400"
-          :style {:border "1px solid"
-                  :background "transparent"}}
-   [:defs
-    [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 2}
-     [:path {:fill "#fff" :d "M0,0 V4 L4,2 Z"}]
-     #_[:path {:fill "tomato" :d "M0,0 V4 L2,2 Z"}]]]
-   (let [size 32
-         layout (conscell-layout root)]
+  (let [size 32
+        layout (conscell-layout root)
+        rmax (volatile! 0)
+        cmax (volatile! 0)]
+    (doseq [[id [r c]] layout ]
+       (vswap! rmax max r)
+       (vswap! cmax max c))
+    (prn 'Rmax @rmax 'Cmax @cmax)
+    [:svg  {:viewBox #_"0 0 700 500"
+            (str "0 0 " (* 4 size @cmax) " " (* 4 size @rmax))
+            :style {:border "1px solid"
+                    :background "transparent"}}
+     [:defs
+      [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 2}
+       [:path {:fill "#fff" :d "M0,0 V4 L4,2 Z"}]
+       #_[:path {:fill "tomato" :d "M0,0 V4 L2,2 Z"}]]]
+     
+     
      (prn layout)
+     
+     #_(conscell-layout-bfs root)
+     #_(prn (reflow-conscell-layout layout))
      (s/translate size size
                   [:g {:stroke "#fff"
                        :fill "#fff"
                        :stroke-width 1}
-                   (onecell root size 0 0)
-                   ]))])
+                   (onecell root size layout)])]))
 
 
 (rum/defc top-level-form-component < dbrx/ereactive
