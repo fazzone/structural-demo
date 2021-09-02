@@ -21,6 +21,7 @@
    e/form-schema
    {:state/display-form {:db/valueType :db.type/ref
                          :db/cardinality :db.cardinality/many}
+    :state/bar {:db/valueType :db.type/ref}
     
     
     ;; :state/selected-form {:db/valueType :db.type/ref}
@@ -31,32 +32,30 @@
     :form/linebreak {}
     :form/edited-tx {:db/valueType :db.type/ref}}))
 
-(def test-form-data-original
+(def test-form-data-bar
   '[
-    (defn other-thing
-      [a b c
-       [d e ^{:meta-thing "Thningy"}  X]
-       p
-       #_[l e l]
-       [O] d] blah)
+    ^Chain ["Chain 1"
+     (defn thing
+       [a b c [l e l] [O] d] blah)]
+    ^Chain ["Chain 2"
+     (defn other-thing
+       [a b c
+        [d e ^{:meta-thing "Thningy"}  X]
+        p
+        #_[l e l]
+        [O] d] blah)]
     
     
     ])
 
-(def test-form-data (vec (apply concat (repeat 1 test-form-data-original))))
-
-
-#_(def test-form-data '[f :fo  cb ])
-
 (def conn
   (doto (d/create-conn schema)
-    (d/transact! (apply concat
-                        (for [f test-form-data]
-                          (let [txe (e/->tx f)]
-                            [{:db/ident ::state
-                              :state/display-form (:db/id txe)}
-                             txe
-                             ]))))
+    (d/transact! (let [txe (e/->tx test-form-data-bar)]
+                   [{:db/ident ::state
+                     :state/display-form (:db/id txe)
+                     :state/bar (:db/id txe)}
+                    txe
+                    ]))
     #_(d/transact! [[:db/add 53 :form/highlight true]])))
 
 
@@ -480,7 +479,12 @@
       (move :move/up e)))
 
 (defmethod move :move/up [_ e]
-  (some-> (:coll/_contains e) first))
+  #_(some-> (:coll/_contains e) first)
+  (when-let [cs (:coll/_contains e)]
+    (let [up (first cs)]
+      (if (= 'Chain (:tag up))
+        nil
+        up))))
 
 (defmethod move :move/forward-up [_ e]
   (or (move :move/next-sibling e)
@@ -606,7 +610,6 @@
        (take-while some?)
        (clj->js)
        (.reverse)))
-
 
 (defn select-1based-nth-reverse-parent-of-selected-tx
   [db n]
@@ -797,13 +800,14 @@
 (def breadcrumbs-max-numeric-label 8)
 (rum/defc breadcrumbs
   [sel top-level-eid]
-  (let [rpa (reverse-parents-array sel)]
+  (when-let [rpa (some-> sel (reverse-parents-array))]
     [:ul.parent-path
      ;; hack to only show for the active toplevel
      (cond
        (= (:db/id sel) top-level-eid)
        (pr-str (for [ebfs (el-bfs sel 9)]
                  (some-> ebfs :seq/first :symbol/value)))
+       
        (not (= top-level-eid (:db/id (first rpa))))
        nil
        
@@ -947,10 +951,6 @@
 (rum/defc all-datoms-table < rum/reactive []
   (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
 
-#_(rum/defc breadcrumbs-outer < (dbrx/areactive :form/highlight)
-  [db toplevel]
-  )
-
 (rum/defc what < (dbrx/areactive :form/highlight)
   [db toplevel]
   (breadcrumbs (get-selected-form db) toplevel))
@@ -1017,23 +1017,45 @@
 
 
 
+
+(rum/defc chain-component < dbrx/ereactive
+  [chain]
+  [:div.chain
+   {:key (:db/id chain)}
+   (for [f (e/seq->vec chain)]
+     (-> (top-level-form-component f)
+         (rum/with-key (:db/id f))))])
+
+(rum/defc bar-component < dbrx/ereactive
+  [bar]
+  [:div.root-cols
+   (for [chain-head (e/seq->vec bar)]
+     (-> (chain-component chain-head)
+         (rum/with-key
+           (:db/id chain-head))))])
+
 (rum/defc root-component < dbrx/ereactive
   [state]
   (let [db (d/entity-db state)]
-    [:div.root-cols
-     [:div.sidebar-left
-      (focus-info db)
-      (edit-history db)
-      (h/history-view conn bus)]
-     [:div.main-content
-      (for [df (:state/display-form state)]
-        (rum/with-key (top-level-form-component df) (:db/id df)))
-      
-      #_[:div {:style {:margin-top "1vh"}} " okay whatever !!"]
-      ;; wait for build output
-      #_(all-datoms-table)]
-     #_[:div {:style {:display :flex :flex-direction :column}}
-      (ck/keyboard-diagram)]]))
+    (bar-component (:state/bar state))
+    #_[:div.root-cols
+       #_[:div.sidebar-left
+          (focus-info db)
+          (edit-history db)
+          (h/history-view conn bus)]
+       #_(top-level-form-component (:state/bar state))
+       (for [chain-head (e/seq->vec (:state/bar state))]
+         (do (println "Chain-head" (:db/id chain-head))
+             [:div.chain
+              {:key (:db/id chain-head)}
+              (for [f (e/seq->vec chain-head)]
+                (do (println "F" (:db/id f))
+                    (-> (top-level-form-component f)
+                        (rum/with-key (:db/id f)))))]))
+       (h/history-view conn bus)
+     
+       #_[:div {:style {:display :flex :flex-direction :column}}
+          (ck/keyboard-diagram)]]))
 
 (defn event->kbd
   [^KeyboardEvent ev]

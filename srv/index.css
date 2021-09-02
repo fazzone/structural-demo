@@ -38,6 +38,8 @@ body {
 
 .top-level-form {
     border: 1px solid #ae81ff;
+    width: 100%;
+    box-sizing: border-box;
     /* white-space: nowrap; */
 }
 .top-level-form.code-font {
@@ -104,7 +106,8 @@ input.edit-box {
     display: flex;
     flex-direction: column;
     margin-bottom: 5ex;
-    width: 800px;
+    width: 100%;
+    /* width: 800px; */
     /* overflow: auto; */
     resize: both;
     flex-shrink: 0;
@@ -117,7 +120,14 @@ input.edit-box {
     height: 100%;
     display: flex;
     flex-direction: row;
-    justify-content: flex-state;
+    justify-content: flex-start;
+}
+
+.bar {
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
 }
 
 .sidebar-left {
@@ -133,8 +143,15 @@ input.edit-box {
 
 .main-content {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: nowrap;
     /* margin-left: 17%; */
+}
+
+.chain {
+    display: flex;
+    flex-direction: column;
+    margin-right: 1em;
 }
 
 ul.parent-path li {
@@ -142,7 +159,7 @@ ul.parent-path li {
 }
 ul.parent-path {
     padding: 0;
-    /* height: 25px; */
+    height: 25px;
     white-space: nowrap;
 }
 ul.parent-path li:not(:last-child):after {
@@ -162,7 +179,8 @@ ul.parent-path:not(empty) {
     min-height: 3ex;
 }
 ul.parent-path:empty {
-    height: 3ex;
+    display: none;
+    /* height: 3ex; */
 }
 
 span.indent-chars {
@@ -173,7 +191,8 @@ span.indenter {
     transition: margin-left 0.08s;
     /* transition-timing-function: linear; */
 }
-span.modeline {
+.modeline {
+    display: block;
     height: 3ex;
     width: 100%;
     color: #000;
