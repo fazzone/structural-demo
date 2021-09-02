@@ -21,6 +21,8 @@
    e/form-schema
    {:state/display-form {:db/valueType :db.type/ref
                          :db/cardinality :db.cardinality/many}
+    
+    
     ;; :state/selected-form {:db/valueType :db.type/ref}
     :form/editing {:db/unique :db.unique/identity} 
     :form/edit-initial {}
@@ -31,30 +33,13 @@
 
 (def test-form-data-original
   '[
-    (defn other-thing ;; ^{:tempid "init-selection"}
+    (defn other-thing
       [a b c
-       [d e X]
+       [d e ^{:meta-thing "Thningy"}  X]
        p
        #_[l e l]
        [O] d] blah)
     
-    #_(defn other-thing
-        [a [b]
-         g
-         [c d]
-         [X Y]
-         f
-         [c d]])
-    #_(defn other-thing
-        [a [b c] d])
-    #_(defn form-overwrite-tx
-        [e replacement-eid]
-        (let [spine (first (:seq/_first e))
-              coll (first (:coll/_contains e))]
-          (when (and spine coll)
-            [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
-             [:db/add (:db/id coll) :coll/contains replacement-eid]
-             [:db/add (:db/id spine) :seq/first replacement-eid]])))
     
     ])
 
@@ -218,10 +203,10 @@
                (:db/id e) (str s)))
             (when-let [k (:keyword/value e)]
               (token-component "k" (:db/id e)
-                               (let [k (:keyword/value e)
-                                     kns (namespace k)
-                                     kn (name k)]
-                                 (rum/fragment ":" [:span.kn kns] "/" kn))))
+                               (let [kns (namespace k)]
+                                 (if-not kns
+                                   (str k)
+                                   (rum/fragment ":" [:span.kn kns] "/" (name k))))))
             (when-let [s (:string/value e)]
               (token-component "l" (:db/id e) s))
             (when-let [n (:number/value e)]
@@ -586,14 +571,31 @@
                                 (pub! m)))
                             nil)))
 
-(register-sub ::import-data-toplevel
-              (->mutation (fn [db data]
-                            (let [txe (update (e/->tx data) :db/id #(or % "import-data"))]
-                              (into
-                               [txe
-                                {:db/ident ::state
-                                 :state/display-form (:db/id txe)}]
-                               (select-form-tx db (:db/id txe)))))))
+(defn import-formdata-tx
+  [db data]
+  (let [txe (update (e/->tx data) :db/id #(or % "import-data"))]
+    (into [txe
+           {:db/ident ::state
+            :state/display-form (:db/id txe)}]
+     (select-form-tx db (:db/id txe)))))
+
+(register-sub ::import-data-toplevel (->mutation import-formdata-tx))
+
+(register-sub ::reify-extract-selected
+              (->mutation (fn [db]
+                            (import-formdata-tx
+                             db (into {} (d/touch (get-selected-form db)))))))
+
+(register-sub ::reify-last-mutation
+              (->mutation (fn [db]
+                            (let [r @h/last-tx-report]
+                             (import-formdata-tx
+                              db
+                              {:tx-data (mapv vec (:tx-data (:tx-data r) ) )
+                               :tx-meta (:tx-meta r)
+                               :tempids (:tempids r)}
+                              #_(-> @h/last-tx-report
+                                    (select-keys [:tx-data :tx-meta :tempids])))))))
 
 
 (defn reverse-parents-array
@@ -917,7 +919,10 @@
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     "M-x"       [::execute-selected-as-mutation]
-    "S-A"       {"a" [::linebreak-form]}}
+    "S-A"       {"a" [::linebreak-form]}
+    "S-R" {"f" [::reify-extract-selected]
+           "m" [::reify-last-mutation]}
+    }
    (into {}
          (for [i (range  breadcrumbs-max-numeric-label)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
@@ -991,9 +996,7 @@
    [:div.top-level-form.code-font
     (fcc e 0)]
    (modeline-next (d/entity-db e) (:db/id e))
-   #_(conscell-svg e)
- (cc/svg-viewbox e)   
-   #_(toplevel-modeline (d/entity-db e) (:db/id e))])
+   #_(cc/svg-viewbox e)])
 
 
 
@@ -1026,8 +1029,8 @@
       (for [df (:state/display-form state)]
         (rum/with-key (top-level-form-component df) (:db/id df)))
       
-      [:div {:style {:margin-top "1vh"}} " oka"]
-      
+      #_[:div {:style {:margin-top "1vh"}} " okay whatever !!"]
+      ;; wait for build output
       #_(all-datoms-table)]
      #_[:div {:style {:display :flex :flex-direction :column}}
       (ck/keyboard-diagram)]]))

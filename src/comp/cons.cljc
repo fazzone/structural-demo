@@ -22,10 +22,9 @@
          (:seq/first e) (conj (:seq/first e))
          )
        (conj out e))
-      
-      
-      
       )))
+
+
 (defn conscell-layout-bfs
   [top]
   (loop [front [top]
@@ -33,20 +32,13 @@
     (prn (map :db/id out))
     (if (empty? front)
       out
-      
       (let [e (peek front)]
-       (recur
-        (cond-> (pop front)
-          (:seq/next e) (conj (:seq/next e))
-          (:seq/first e) (conj (:seq/first e))
-          )
-        (conj out e)))
-      
-      
-      
-      )))
-
-
+        (recur
+         (cond-> (pop front)
+           (:seq/next e) (conj (:seq/next e))
+           (:seq/first e) (conj (:seq/first e))
+           )
+         (conj out e))))))
 
 (defn compute-conscell-extents
   [root]
@@ -167,7 +159,11 @@
   (when (< (:db/id node) 1111119 )
    (if-not (:form/highlight node)
      (onecell* node size row col taken)
-     [:g {:stroke "#ae81ff" :fill "#ae81ff"} (onecell* node size row col taken)])))
+     ;; do random typing on the keyboarding
+     ;; dont try to type very quietly
+     ;; i can definitely overwheldm my own voice with the noise gate
+     [:g {:stroke "#ae81ff" :fill "#ae81ff"} (onecell* node size row col taken)]
+     #_[:g {:stroke "tomato" :fill "tomato"} (onecell* node size row col taken)])))
 
 
 
