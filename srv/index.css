@@ -37,7 +37,7 @@ body {
 }
 
 .top-level-form {
-    border: 1px solid #ae81ff;
+    /* border: 1px solid #ae81ff; */
     width: 100%;
     box-sizing: border-box;
     /* white-space: nowrap; */
@@ -114,14 +114,11 @@ input.edit-box {
 }
 
 #root {
-    height: 100%;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
 }
-.root-cols {
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-}
+
 
 .bar {
     height: 100%;
@@ -152,6 +149,7 @@ input.edit-box {
     display: flex;
     flex-direction: column;
     margin-right: 1em;
+    min-width: 24em;
 }
 
 ul.parent-path li {
@@ -159,8 +157,8 @@ ul.parent-path li {
 }
 ul.parent-path {
     padding: 0;
-    height: 25px;
-    white-space: nowrap;
+    /* height: 25px; */
+    /* white-space: nowrap; */
 }
 ul.parent-path li:not(:last-child):after {
     content: ">";
@@ -187,17 +185,24 @@ span.indent-chars {
     white-space: pre;
     background-color: #000;
 }
+.selected > .chain .indent-chars {
+    background-color: transparent;
+}
 span.indenter {
     transition: margin-left 0.08s;
     /* transition-timing-function: linear; */
 }
 .modeline {
+    /* position: fixed; */
+    /* left: 0; */
+    /* bottom: 0; */
     display: block;
     height: 3ex;
     width: 100%;
     color: #000;
     background-color: #ae81ff;
 }
+
 .modeline-size {
     height: 3ex;
     line-height: 3ex;
@@ -210,6 +215,7 @@ span.modeline.editing.invalid {
 }
 span.modeline-content {
     float: left;
+    margin-right: 0.5em;
 }
 span.modeline-echo {
     float: right;
