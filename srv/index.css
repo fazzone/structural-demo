@@ -145,11 +145,16 @@ input.edit-box {
     /* margin-left: 17%; */
 }
 
+.bar > .selected  {
+    width: 100%;
+}
 .chain {
     display: flex;
     flex-direction: column;
     margin-right: 1em;
     min-width: 24em;
+    width: 100%;
+    overflow-y: auto;
 }
 
 ul.parent-path li {
@@ -157,7 +162,7 @@ ul.parent-path li {
 }
 ul.parent-path {
     padding: 0;
-    max-width: min-content;
+    /* max-width: min-content; */
     line-height: 2;
     /* height: 25px; */
     /* white-space: nowrap; */

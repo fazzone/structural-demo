@@ -405,6 +405,7 @@
 
 ;; editing
 
+
 (register-sub :edit/finish (->mutation (fn [db text] (eb/finish-edit-tx db (d/entid db [:form/editing true]) text))))
 (register-sub :edit/reject (->mutation (fn [db] (eb/reject-edit-tx db (d/entid db [:form/editing true])))))
 (register-sub :edit/wrap   (->mutation (fn [db ct value] (eb/wrap-edit-tx db (d/entid db [:form/editing true]) ct value))))
@@ -551,6 +552,20 @@
                                         :else
                                         [a v]))))))))
 
+(register-sub
+ ::reify-parse-selected
+ (->mutation
+  (fn [db]
+    (let [sel (get-selected-form db)]
+     (when-let [sv (:string/value sel)]
+       (let [txe (e/string->tx sv)]
+         (into [txe]
+               (concat
+                (move-selection-tx (:db/id sel) (:db/id txe))
+                (edit/form-replace-tx sel txe)))))))))
+
+
+
 (register-sub ::reify-last-mutation
               (->mutation (fn [db]
                             (let [r @h/last-tx-report]
@@ -572,8 +587,6 @@
                             (let [top-level (first (reverse-parents-array (get-selected-form db)))
                                   chain (some-> top-level :coll/_contains first)]
                               (select-form-tx db (:db/id chain))))))
-
-
 
 
 (defn select-1based-nth-reverse-parent-of-selected-tx
@@ -599,13 +612,6 @@
                          (concat (edit/insert-before-tx top-level new-node)
                                  (move-selection-tx (:db/id sel) (:db/id new-node))))))))
 
-#_(register-sub ::toggle-passthru
-              (->mutation
-               (fn [db]
-                 (let [sel      (get-selected-form db)]
-                   [[:db/add (:db/id sel) :form/render-passthru (not (:form/render-passthru sel )) ]]))))
-
-
 ;; history
 
 (defn form-eids-by-edit-tx-desc
@@ -630,22 +636,6 @@
        :on-click #(do (.preventDefault %)
                       (pub! [::select-form eid]))}
    children])
-
-
-#_(defn el-bfs
-  [top limit]
-  (loop [[e & front] [top]
-         out         []]
-    (cond
-      (nil? e)                    out
-      (= limit (count out))       out
-      (not (:coll/type e)) (recur front out)
-      :else
-      (recur
-       (into front (e/seq->vec e))
-       (if-not (= :list (:coll/type e))
-         out
-         (conj out e))))))
 
 (defn el-bfs
   [top limit]
@@ -693,23 +683,21 @@
 
 (def special-key-map
   (merge
-   {" "     [::insert-editing :after]
-    "S-\""  [::insert-editing :after "\""]
-    "S-:"   [::insert-editing :after ":"]
-    "S- "   [::insert-editing :before]
-    "'"     [::insert-editing :before "'"]
-    "S-("   [::edit-new-wrapped :list]
-    "M-S-(" [::wrap-and-edit-first :list]
-    "9"     [::wrap-selected-form :list]
-    
-    "["      [::edit-new-wrapped :vec ]
-    "S-{"    [::edit-new-wrapped :map ]
-    "r"      [::raise-selected-form]
-    "S-X"    [::extract-to-new-top-level]
-    "Escape" [::select-chain]
-    "m"      [::edit-selected]
-    "]"      [::move :move/up]
-
+   {" "         [::insert-editing :after]
+    "S-\""      [::insert-editing :after "\""]
+    "S-:"       [::insert-editing :after ":"]
+    "S- "       [::insert-editing :before]
+    "'"         [::insert-editing :before "'"]
+    "S-("       [::edit-new-wrapped :list]
+    "M-S-("     [::wrap-and-edit-first :list]
+    "9"         [::wrap-selected-form :list]
+    "["         [::edit-new-wrapped :vec ]
+    "S-{"       [::edit-new-wrapped :map ]
+    "r"         [::raise-selected-form]
+    "S-X"       [::extract-to-new-top-level]
+    "Escape"    [::select-chain]
+    "m"         [::edit-selected]
+    "]"         [::move :move/up]
     "w"         [::exchange-with-previous]
     "s"         [::exchange-with-next]
     "0"         [::move :move/up]
@@ -722,7 +710,7 @@
     "a"         [::move :move/back-flow]
     "n"         [::move :move/most-nested]
     "d"         [::delete-with-movement :move/forward-up]
-    "e" [::eval]
+    "e"         [::eval]
     "Backspace" [::delete-with-movement :move/backward-up]
     "c"         [::duplicate-selected-form]
     ;; "i"         [::indent-form 1]
@@ -733,14 +721,13 @@
     "Enter"     [::linebreak-form]
     "M-p"       ["placeholder"]
     "M-n"       ["placeholder"]
-    ;; "Tab"       ["Placeholder for the real tab handler which is special because it is stateful"]
-    ;; "S-Tab"     ["Same as Tab"]
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     "M-x"       [::execute-selected-as-mutation]
     "S-A"       {"a" [::linebreak-form]}
     "S-R"       {"f" [::reify-extract-selected]
-                 "m" [::reify-last-mutation]}
+                 "m" [::reify-last-mutation]
+                 "p" [::reify-parse-selected]}
     }
    (into {}
          (for [i (range  breadcrumbs-max-numeric-label)]
@@ -782,7 +769,6 @@
                (str " " kbd))
              " "
              (:db/current-tx (:tempids r))
-
              " ("
              (count (:tx-data r))
              ")")))]
@@ -807,33 +793,6 @@
              (rum/react eb/editbox-ednparse-state)))
           (rum/portal nn)))))
 
-(rum/defc modeline-next-always < rum/reactive (dbrx/areactive :form/highlight :form/editing)
-  [db]
-  (let [sel (d/entity db [:form/highlight true])
-        {:keys [text valid]} (when (:form/editing sel)
-                               (rum/react eb/editbox-ednparse-state))]
-    [:span {:class (str "modeline modeline-size code-font"
-                        (when text " editing")
-                        (when (and (not (empty? text)) (not valid)) " invalid"))}
-     [:span.modeline-echo.modeline-size
-      (if text
-        text
-        (let [r (rum/react h/last-tx-report)]
-          (str (pr-str (:mutation (:tx-meta r)))
-               (when-let [kbd (:kbd (:tx-meta r))]
-                 (str " " kbd))
-               " "
-               (:db/current-tx (:tempids r))
-
-               " ("
-               (count (:tx-data r))
-               ")")))]
-     [:span.modeline-content
-      (if-not sel
-        "(no selection)"
-        (str "#" (:db/id sel) ))
-      (command-compose-feedback)]]))
-
 (rum/defc edit-history < (dbrx/areactive :form/edited-tx)
   [db]
   (let [sel-eid (d/entid db  [:form/highlight true])]
@@ -847,13 +806,14 @@
                 " (Selected)")))])]))
 
 
+
 (rum/defc root-component < dbrx/ereactive
   [state]
   (let [db (d/entity-db state)]
     [:div
      #_(str " T+" (- (js/Date.now) load-time) "ms")
      (breadcrumbs-always db)
-     #_(h/history-view conn bus)
+     (h/history-view conn bus)
      (fcc (:state/bar state) 0)
      #_(modeline-portal db)]))
 
@@ -869,7 +829,7 @@
 
 (defn global-keydown*
   [ev]
-  (prn eb/global-editing-flag)
+  #_(prn eb/global-editing-flag)
   (when-not @eb/global-editing-flag
     (let [kbd (event->kbd ev)
           {:keys [bindings compose]} @key-compose-state
@@ -910,6 +870,8 @@
        (pr-str compose)
        " "
        (pr-str bindings)])))
+
+
 
 ;; last/previous edit position switcher
 (register-sub ::global-keydown

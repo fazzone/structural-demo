@@ -45,6 +45,8 @@
    []
    m))"))
 
+
+
 (comment
   (run! prn
         (->form
@@ -62,9 +64,9 @@
   (letfn [(coll-tx [coll-type xs]
             (let [id (new-tempid)]
               (cond-> {:db/id id :coll/type coll-type}
-                (seq xs) (merge (seq-tx (for [x xs
+                (seq xs) (merge (seq-tx (for [x     xs
                                               :when (case (n/tag x)
-                                                      (:whitespace :newline)
+                                                      (:whitespace :newline :comma)
                                                       (do
                                                         (prn "Linebreak?" (n/linebreak? x))
                                                         false)
@@ -83,14 +85,29 @@
       :map    (coll-tx :map (n/children n))
       :set    (coll-tx :set (n/children n))
       :forms  (coll-tx :vec (n/children n))
+      :comma  nil
+      :meta   (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
+                    mta                (n/sexpr n)]
+                (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
+              (cond
+                (symbol? mta)
+                (assoc (n->tx val) :tag {:symbol/value mta})
+                
+                (map? mta)
+                (merge (n->tx val) mta)
+
+                :else (throw (ex-info "What meta is this" {:mta mta}))))
       
       :namespaced-map (coll-tx :map (n/children n))
       (:uneval :fn :quote)
       (coll-tx :list (n/children n))
       
-      (prn "Cannot decode"  (n/tag n) n)
-      ))
-  )
+      (throw (ex-info  "Cannot decode" {:tag (n/tag n)})))))
+
+(defn string->tx
+  [s]
+  (n->tx (p/parse-string s )))
+
 
 (declare ->tx)
 

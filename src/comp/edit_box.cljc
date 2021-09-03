@@ -20,16 +20,27 @@
 
 
 (defn parse-token-tx
-  [text-value eid]
-  (try
-    (-> text-value
-        (edn/read-string)
-        (e/->tx)
-        (assoc :db/id eid))
-    (catch js/Error e
-      #_(println "No edn" text-value)
-      #_(js/console.log e)
-      nil)))
+  [s eid]
+  (let [quote-start (string/starts-with? s "\"" )]
+    ;; cannot be a valid leaf, must be a string
+    (if (or quote-start (string/includes? s " "))
+      {:db/id eid
+       :string/value
+       (subs s
+             (if-not quote-start 0 1)
+             (- (count s)
+                (if-not (string/ends-with? s "\"" )
+                  0
+                  1)))}
+      (try
+        (-> s
+            (edn/read-string)
+            (e/->tx)
+            (assoc :db/id eid))
+        (catch js/Error e
+          #_(println "No edn" text-value)
+          #_(js/console.log e)
+          nil)))))
 
 (defn accept-edit-tx
   [form-eid value]
@@ -135,7 +146,9 @@
                               {:form-eid form-eid
                                :text new-text
                                :valid (some? token)
-                               :type (some-> token first val)}))
+                               :type (some-> token first val)})
+                      (prn "PTT" token )
+                      )
       :on-key-down (fn [ev]
                      (when-let [mut (editbox-keydown-mutation value (.-key ev))]
                        (.preventDefault ev)
@@ -143,3 +156,4 @@
                        (async/put! bus mut)))
       ;; :on-blur #(pub! [:edit/finish @text])
       }]))
+
