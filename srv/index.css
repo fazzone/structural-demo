@@ -157,6 +157,8 @@ ul.parent-path li {
 }
 ul.parent-path {
     padding: 0;
+    max-width: min-content;
+    line-height: 2;
     /* height: 25px; */
     /* white-space: nowrap; */
 }
@@ -173,9 +175,6 @@ ul.parent-path li:not(:last-child):after {
     top: -2ex;
 }
 
-ul.parent-path:not(empty) {
-    min-height: 3ex;
-}
 ul.parent-path:empty {
     display: none;
     /* height: 3ex; */

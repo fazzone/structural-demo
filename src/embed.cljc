@@ -1,5 +1,9 @@
 (ns embed
   (:require
+   [rewrite-clj.parser :as p]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]
+   [rewrite-clj.node.protocols :as np]
    [datascript.core :as d]))
 
 (def form-schema
@@ -30,6 +34,63 @@
      (-> a (conj k) (conj v)))
    []
    m))
+
+(comment
+  (p/parse-string
+   "(defn flatten-map
+  [m]
+  (reduce-kv
+   (fn [a k v]
+     (-> a (conj k) (conj v)))
+   []
+   m))"))
+
+(comment
+  (run! prn
+        (->form
+         (d/entity
+          (:db-after (d/transact!
+                      (d/create-conn form-schema)
+                      [(n->tx (p/parse-string-all (slurp "src/embed.cljc")))]
+                      #_[(n->tx (p/parse-string "[ok :foo \"bar\"]"))]))
+          1))))
+
+
+
+(defn n->tx
+  [n]
+  (letfn [(coll-tx [coll-type xs]
+            (let [id (new-tempid)]
+              (cond-> {:db/id id :coll/type coll-type}
+                (seq xs) (merge (seq-tx (for [x xs
+                                              :when (case (n/tag x)
+                                                      (:whitespace :newline)
+                                                      (do
+                                                        (prn "Linebreak?" (n/linebreak? x))
+                                                        false)
+                                                      true)]
+                                          (assoc (n->tx x) :coll/_contains id)))))))]
+    (case (n/tag n)
+      (:token :multi-line)
+      (case (np/node-type n)
+        :symbol  {:symbol/value (n/string n)}
+        :keyword {:keyword/value (n/sexpr n)}
+        :string  {:string/value (n/string n)}
+        {:number/value (n/string n)})
+      
+      :list   (coll-tx :list (n/children n))
+      :vector (coll-tx :vec (n/children n))
+      :map    (coll-tx :map (n/children n))
+      :set    (coll-tx :set (n/children n))
+      :forms  (coll-tx :vec (n/children n))
+      
+      :namespaced-map (coll-tx :map (n/children n))
+      (:uneval :fn :quote)
+      (coll-tx :list (n/children n))
+      
+      (prn "Cannot decode"  (n/tag n) n)
+      ))
+  )
 
 (declare ->tx)
 
@@ -89,12 +150,6 @@
 (defn test-roundtrip
   [data]
   (= data (roundtrip data)))
-
-
-;; => {:db/id -3, :coll/type :map, :seq/first {:keyword/value :ok, :coll/_contains -3}, :seq/next #:seq{:first {:number/value 4, :coll/_contains -3}}}
-
-
-
 
 
 
