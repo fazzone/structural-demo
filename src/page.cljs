@@ -182,7 +182,22 @@
          ;; replace with non-breaking hyphen, lmao
          (gstring/replaceAll "-" "‑"))])
 
+
+
 (declare fcc)
+
+(defn breadcrumbs-portal-id [eid] (str eid "bp"))
+(defn modeline-portal-id [eid] (str eid "mp"))
+
+(rum/defc top-level-form-component < dbrx/ereactive
+  [e]
+  [:div.form-card
+   #_[:span.form-title.code-font (str "#" (:db/id e)
+                                      " T+" (- (js/Date.now) load-time) "ms")]
+   [:div {:id (breadcrumbs-portal-id (:db/id e))}]
+   [:div.top-level-form.code-font (fcc e 0)]
+   [:div {:id (modeline-portal-id (:db/id e))}]
+   #_(cc/svg-viewbox e)])
 
 (defn do-indent
   [child linebreak? indent-level]
@@ -230,8 +245,28 @@
 (defmethod display-coll :list [c i] (delimited-coll c i "(" ")"))
 (defmethod display-coll :vec  [c i] (delimited-coll c i "[" "]"))
 (defmethod display-coll :map  [c i] (delimited-coll c i "{" "}"))
+(defmethod display-coll :set  [c i] (delimited-coll c i "#{" "}"))
 
+(defmethod display-coll :chain [chain i]
+  [:div.chain
+   {:key (:db/id chain)}
+   (for [f (e/seq->vec chain)]
+     (-> (top-level-form-component f)
+         (rum/with-key (:db/id f))))])
 
+(defmethod display-coll :bar [bar i]
+  [:div.bar
+    (for [chain-head (e/seq->vec bar)]
+      (-> (fcc chain-head i)
+          (rum/with-key (:db/id chain-head))))])
+
+#_(defmethod display-coll :tabular [c i]
+  (let [cols (:tabular/columns c)]
+    [:div.tabluar {:style {:display "grid"
+                           :grid-template-columns (str "repeat(" cols ", 1fr)")}}
+    (for [e (e/seq->vec c)]
+      (-> (fcc e i)
+          (rum/with-key (:db/id e))))]))
 
 (rum/defc fcc < dbrx/ereactive (scroll-ref-into-view-after-render "selected")
   [e indent-prop]
@@ -260,7 +295,7 @@
             (when-let [n (:number/value e)]
               (token-component "n" (:db/id e) (str n)))
             (when (:coll/type e)
-             (display-coll e (+ 2 indent-prop)))
+              (display-coll e (+ 2 indent-prop)))
             (comment "Probably a retracted entity, do nothing"))
         (do-highlight (:form/highlight e))
         (do-indent (:form/linebreak e)
@@ -620,16 +655,16 @@
                                 (pub! m)))
                             nil)))
 
-
-
-(defn reverse-parents-array
+(defn parents-array
   [e]
   (->> e
        (iterate (partial move :move/up))
-       #_(next)
        (take-while some?)
-       (clj->js)
-       (.reverse)))
+       (clj->js)))
+
+(defn reverse-parents-array
+  [e]
+  (.reverse (parents-array e)))
 
 (defn import-formdata-tx
   [db data]
@@ -638,21 +673,29 @@
         chain (some-> top-level :coll/_contains first)
         new-node (-> (e/->tx data)
                      (update :db/id #(or % "import-formdata-tx")))]
+
     (into [new-node]
           (concat (insert-before-tx top-level new-node)
-                  (move-selection-tx (:db/id sel) (:db/id new-node)))))
-  #_(let [txe (update (e/->tx data) :db/id #(or % "import-data"))]
-      (into [txe
-             {:db/ident ::state
-              :state/display-form (:db/id txe)}]
-            (select-form-tx db (:db/id txe)))))
+                  (move-selection-tx (:db/id sel) (:db/id new-node))))))
 
 (register-sub ::import-data-toplevel (->mutation import-formdata-tx))
 
 (register-sub ::reify-extract-selected
               (->mutation (fn [db]
-                            (import-formdata-tx
-                             db (into {} (d/touch (get-selected-form db)))))))
+                            (let [sel (get-selected-form db)]
+                             (import-formdata-tx
+                              db
+                              (into {:db/id (:db/id sel)}
+                                    (for [[a v] (d/touch sel)]
+                                      (cond
+                                        (= :db.cardinality/many (:db/cardinality (get schema a)))
+                                        [a (into #{} (map :db/id) v)]
+                                       
+                                        (= :form/highlight a)
+                                        nil
+                                       
+                                        :else
+                                        [a v]))))))))
 
 (register-sub ::reify-last-mutation
               (->mutation (fn [db]
@@ -663,6 +706,13 @@
                                 :tx-meta (:tx-meta r)
                                 :tempids (:tempids r)})))))
 
+(register-sub ::eval
+              (->mutation (fn [db]
+                            (let [pa (some-> (get-selected-form db) (parents-array))
+                                  [mut & args] (first (keep :form/eval-action pa))]
+                              (prn 'mut mut 'args args)
+                              
+                              ))))
 (register-sub ::select-chain
               (->mutation (fn [db]
                             (let [top-level (first (reverse-parents-array (get-selected-form db)))
@@ -862,17 +912,18 @@
          (conj out e))))))
 
 (defn el-bfs
-  [top]
-  (loop [front [top]
-         out         []]
-    (if (empty? front)
-      out
-      (let [e (peek front)]
-        (recur
-         (cond-> (pop front)
-           (:seq/next e) (conj (:seq/next e))
-           (:seq/first e) (conj (:seq/first e)))
-         (conj out e))))))
+  [top limit]
+  (loop [out   []
+         front [top]]
+    (cond
+      (empty? front) out
+      (= limit (count out)) out
+      :else (let [e (first front)]
+              (recur (cond-> out
+                       (:coll/type e) (conj e))
+                     (cond-> (subvec front 1)
+                       (:seq/next e) (conj (:seq/next e))
+                       (:seq/first e) (conj (:seq/first e))))))))
 
 (def breadcrumbs-max-numeric-label 8)
 (rum/defc parent-path
@@ -887,19 +938,21 @@
                                [:span.parent-index (str (inc i))])
                              (if (= :list (:coll/type parent))
                                (or (some-> parent :seq/first :symbol/value) "()")
-                               (case (:coll/type parent) :vec "[]" :map "{}"))])]))])
-
-(defn breadcrumbs-portal-id [eid] (str eid "bp"))
-(defn modeline-portal-id [eid] (str eid "mp"))
+                               (case (:coll/type parent) :vec "[]" :map "{}" "??"))])]))])
 
 (rum/defc breadcrumbs-always < (dbrx/areactive :form/highlight :form/edited-tx)
   [db]
-  (when-let [rpa (some-> (get-selected-form db)
-                         (reverse-parents-array))]
-    (let [top-level (first rpa)
-          node-id (breadcrumbs-portal-id (:db/id top-level))]
-      (when-let [n (.getElementById js/document node-id)]
-        (rum/portal (parent-path rpa) n)))))
+  (when-let [sel (get-selected-form db)]
+    (let [rpa (some-> sel (reverse-parents-array))
+          top-level (first rpa)]
+     (let [node-id (breadcrumbs-portal-id (:db/id top-level))]
+       (when-let [n (.getElementById js/document node-id)]
+         (rum/portal
+          (parent-path
+           (if-not (= (:db/id sel) (:db/id top-level))
+             rpa
+             (el-bfs sel 9)))
+          n))))))
 
 
 (def special-key-map
@@ -933,6 +986,7 @@
     "a"         [::move :move/back-flow]
     "n"         [::move :move/most-nested]
     "d"         [::delete-with-movement :move/forward-up]
+    "e" [::eval]
     "Backspace" [::delete-with-movement :move/backward-up]
     "c"         [::duplicate-selected-form]
     ;; "i"         [::indent-form 1]
@@ -1052,15 +1106,7 @@
 
 
 
-(rum/defc top-level-form-component < dbrx/ereactive
-  [e]
-  [:div.form-card
-   #_[:span.form-title.code-font (str "#" (:db/id e)
-                                    " T+" (- (js/Date.now) load-time) "ms")]
-   [:div {:id (breadcrumbs-portal-id (:db/id e))}]
-   [:div.top-level-form.code-font (fcc e 0)]
-   [:div {:id (modeline-portal-id (:db/id e))}]
-   #_(cc/svg-viewbox e)])
+
 
 
 
@@ -1076,18 +1122,6 @@
               (when (= e sel-eid)
                 " (Selected)")))])]))
 
-(defmethod display-coll :chain [chain i]
-  [:div.chain
-   {:key (:db/id chain)}
-   (for [f (e/seq->vec chain)]
-     (-> (top-level-form-component f)
-         (rum/with-key (:db/id f))))])
-
-(defmethod display-coll :bar [bar i]
-  [:div.bar
-    (for [chain-head (e/seq->vec bar)]
-      (-> (fcc chain-head i)
-          (rum/with-key (:db/id chain-head))))])
 
 (rum/defc root-component < dbrx/ereactive
   [state]

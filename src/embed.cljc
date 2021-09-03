@@ -48,7 +48,8 @@
       (boolean? e) {:symbol/value (str e)}
       (list? e)    (coll-tx :list e)
       (vector? e)  (coll-tx :vec e)
-      (map? e)     (coll-tx :map (flatten-map e)))))
+      (map? e)     (coll-tx :map (flatten-map e))
+      (set? e)     (coll-tx :set e))))
 
 (defn ->tx
   [e]
