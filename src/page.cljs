@@ -87,14 +87,15 @@ I       (let [ch (async/chan)]
        (assoc (e/->tx ch)
               :coll/type :chain
               :coll/_contains "bar"))
-     [{:db/ident ::fakechain
+     [{:db/ident ::meta-chain
        :coll/type :chain
        :coll/_contains "bar"
-       :coll/contains #{"dingu" "baba"}
-       :seq/first {:db/id "dingu"
-                   :coll/type :keyboard}
-       :seq/next {:seq/first {:db/id "baba"
-                              :string/value "Baba"} }}]))
+       :coll/contains #{"label" "keyboard"}
+       :seq/first {:db/id "label"
+                   :string/value "Keyboard"}
+       :seq/next {:seq/first
+                  {:db/id "keyboard"
+                   :coll/type :keyboard}}}]))
    :db/id "bar"
    :coll/type :bar))
 
