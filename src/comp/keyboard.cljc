@@ -4,7 +4,8 @@
 (rum/defc keyboard-key-component
   [k->l keycap]
   [:div {:class ["key"
-                 (when (= 1 (count keycap)) " single-width")]} 
+                 (when (= 1 (count keycap))
+                     " single-width")]} 
    [:div.keycap keycap]
    (when-let [legend (k->l keycap)]
      (if-not (string? legend)
@@ -14,18 +15,16 @@
 (rum/defc kkc
   [lookup keycap]
   [:div {:class ["key"
-                 (when (= 1 (count keycap)) " single-width")]} 
+                 (when (= 1 (count keycap))
+                   " single-width")]} 
+
    [:div.keycap keycap]
    
    (when-let [symbol (:symbol (lookup keycap )) ]
      [:div.key-symbol symbol])
+
    (when-let [label (:label (lookup keycap )) ]
-     [:div.key-label label])
-   
-   #_(when-let [legend (k->l keycap)]
-       (if-not (string? legend)
-         legend
-         [:div.key-legend legend]))])
+     [:div.key-label label])])
 
 (defn thread-first
   [sel]
@@ -39,21 +38,17 @@
                                  (cons acc)))
       :else       (list* '-> arg func acc))))
 
-(run! (comp prn (juxt identity meta))
-      (tree-seq
-       seq? identity
-       (thread-first '(a ^BC (b c) ^DE (d e)))))
-;; => (-> c b (a (d e)))
-
-
 (def defaultkl
-  { ;; "f" "flow→"
-   ;; "a" "←flow"
-   "f" {:label "flow→" :symbol "↫" }
-   "a" {:label "←flow" :symbol "↬"}
-   "r" {:label "raise"}
-   "w" {:label "float"}
-   "s" {:label "sink"}
+  {
+   "f" {:label "flow->" :symbol [:span.symbol1 "==>"] }
+   "a"{:label "<-flow" :symbol [:span.symbol1 "<=="] }
+
+   "r" {:label "raise"
+        :symbol [:div.symbol3 {:style {:transform "rotate(225deg)"}} "=>>"]}
+   "w" {:label "float"
+        :symbol [:div.symbol3 {:style {:transform "rotate(-90deg)"}} "=>>"]}
+   "s" {:label "sink"
+        :symbol [:div.symbol3 {:style {:transform "rotate(90deg)"}} "=>>"]}
    "e" {:label [:span {:style {:color "tomato"}} "eval"]}
    "y" {:label [:span {:style {:color "tomato"}} "paste"]}
    "u" {:label [:span {:style {:color "tomato"}} "undo"]}
@@ -79,31 +74,31 @@
    
    "g" {:label [:span {:style {:color "tomato"}} "goto"]}
    ";" {:label [:span {:style {:color "tomato"}} "doc"]}
-   "1" {:label [ :span {:style {:font-size "120%"}} "⤣1"]}
+
 
    " " {:label "insert"}
-   "0" {:label "up"}
+   "0" {:label "parent"}
    "9" {:label "(wrap)"}
    "[" {:label "new []"}
-   ;; "q" {:label "(wrap‸)"}
-   ;; "p" {:label "push)→"}
-   "]" {:label "up"}
+   "]" {:label "parent"}
 
-   "d" {:label "delete"}
+   "d" {:label "delete"
+        :symbol [:div {:style {:font-size "120%" :margin-left "0.3ex"}} "×"]}
    "v" {:label "view"}
    
-   ;; "h" "parent"
-   ;; "j" "next"
-   ;; "k" "prev"
-   ;; "l" "tail"
-   "h" {:label "parent" :symbol "🡬"}
-   "j" {:label "next" :symbol "🡫"}
-   "k" {:label "prev" :symbol "🡩"}
-   "l" { :label "tail" :symbol "🡮"}
+   "h" {:label "parent"
+        :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
+   "j" {:label "next"
+        :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
+   "k" {:label "prev"
+        :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"] }
+   "l" { :label "tail"
+        :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
+
    
    
-   "i"         {:label "indent" :symbol "⭾"}
-   "c"         {:label "clone"}
+   "i"         {:label "indent"}
+   "c"         {:label "clone" :symbol [:div.symbol3 "++"]}
    "Enter"     {:label "linebreak"}
    "Backspace" {:label "←delete"}})
 
@@ -111,32 +106,32 @@
   [ ]
   (let [k->l defaultkl
         key (partial kkc k->l)]
-    [:div.whatever
-     [:div.keyboard-container
-      [:div.number-row
-       (for [ch (vec "`1234567890-=")]
-         (rum/with-key (key ch) ch))
-       (key "Backspace")]
-      [:div.qwer-row
-       (key "Tab")
-       (for [ch "qwertyuiop[]\\"]
-         (rum/with-key (key ch) ch))]
-      [:div.asdf-row
-       (key "Caps")
-       (for [ch "asdfghjkl;'"]
-         (rum/with-key (key ch) ch))
-       (key "Enter")]
-      [:div.zxcv-row
-       (key "Shift")
-       (for [ch "zxcvbnm,./"]
-         (rum/with-key (key ch) ch))
-       (key "Shift")]
-      [:div.space-row
-       (key "Ctrl")
-       (key "Mod")
-       (key "Alt")
-       (key " ")
-       (key "Alt")
-       (key "Mod")
-       (key "Menu")
-       (key "Ctrl")]]]))
+    [:div.keyboard-container
+     [:div.number-row
+      (key "Esc")
+      (for [ch (vec "1234567890-=")]
+        (rum/with-key (key ch) ch))
+      (key "Backspace")]
+     [:div.qwer-row
+      (key "Tab")
+      (for [ch "qwertyuiop[]\\"]
+        (rum/with-key (key ch) ch))]
+     [:div.asdf-row
+      (key "Caps")
+      (for [ch "asdfghjkl;'"]
+        (rum/with-key (key ch) ch))
+      (key "Enter")]
+     [:div.zxcv-row
+      (key "Shift")
+      (for [ch "zxcvbnm,./"]
+        (rum/with-key (key ch) ch))
+      (key "Shift")]
+     [:div.space-row
+      (key "Ctrl")
+      (key "Mod")
+      (key "Alt")
+      (key " ")
+      (key "Alt")
+      (key "Mod")
+      (key "Menu")
+      (key "Ctrl")]]))

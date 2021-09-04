@@ -46,11 +46,11 @@ body {
     color: #a6a6a0;
 }
 
-span.flex {
-    display: flex;
-    flex-wrap: wrap;
-                   
-}
+/* span.flex { */
+/*     display: flex; */
+/*     flex-wrap: wrap; */
+/* } */
+
 span.tk:hover {
     background-color: #4504b982;
     /* background-color: radial-gradient(#000, #ae81ff); */
@@ -73,9 +73,13 @@ span.tk.l  { color: #b5bd68; }
     color: #fff;
     border-radius: 1ex;
 }
-/* spacing between tokens */
-/* span.tk + span.tk { margin-left: 1ch; } */
-/* span.tk + span.tk::before { content: "_"; } */
+.selected > .display-keyboard {
+    /* this is a hack because the selection has to be display: inline */
+    background-color: #062606;
+}
+span.form-title {
+    font-size: 150%;
+}
 
 
 span.tk {
@@ -145,16 +149,14 @@ input.edit-box {
     /* margin-left: 17%; */
 }
 
-.bar > .selected  {
-    width: 100%;
-}
+/* .bar > .selected  { width: 100%; } */
+
 .chain {
     display: flex;
     flex-direction: column;
     margin-right: 1em;
-    min-width: 24em;
-    width: 100%;
-    overflow-y: auto;
+    /* min-width: 24em; */
+    /* width: 100%; */
 }
 
 ul.parent-path li {
@@ -248,8 +250,9 @@ span.key-compose-echo {
 }
 .keyboard-container {
     /* width: 50em; */
-    font-size: 20px;
-    transition: width 0.08s;
+    max-width: 65em;
+    font-size: 10pt;
+    /* transition: width 0.08s; */
 }
 .keyboard-container > div  {
     margin-top: 2px;
@@ -266,37 +269,50 @@ div.keyboard-container .key {
     border: 1px solid #777;
     border-radius: 0.8ex;
     /* text-align: center; */
-    padding-left: 0.5ex;
+    padding: 1px;
     height: 6ex;
+    box-sizing: border-box;
 }
+div.keyboard-container .key:hover {
+    border: 2px solid #fff;
+    padding: 0px;
+}
+
 div.keyboard-container .key.single-width {
     min-width: 6ex;
 }
 div.keyboard-container .key-label  {
-    font-family: monospace;
     font-size: 85%;
     text-align: center;
-    margin-top: 3ex;
+    margin-top: 4ex;
     color: #ae81ff;
 }
 
 .keyboard-container .key-symbol {
     position: absolute;
     margin-left: 2ex;
+    color: #fff;
 }
 
 
-div.keyboard-container .key-legend.symbol1 {
-    font-size: 250%;
+div.keyboard-container .symbol1 {
+    /* font-size: 150%; */
     margin-top: 0;
+    /* margin-left: -0.5ex; */
     transform: scale(-1, -1);
 }
-div.keyboard-container .key-legend.symbol2 {
-    font-size: 200%;
+
+div.keyboard-container .symbol2 {
+    /* font-size: 150%; */
     margin-top: 0;
+}
+div.keyboard-container .symbol3 {
+    font-size: 100%;
+    margin-top: 0.5ex;
 }
 
 div.keyboard-container .keycap {
+    padding-left: 0.5ex;
     color: #777;
     position: absolute;
 }

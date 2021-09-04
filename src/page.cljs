@@ -52,17 +52,17 @@
     ["Chain 1"
             (defn thing
               [a b c [l e l] [O] d] blah)]
-    ["Chain 2"
+    #_["Chain 2"
             (defn other-thing
               [a b c
                [d e ^{:meta-thing "Thningy"}  X]
                p
                #_[l e l]
                [O] d] blah)]
-    ["Chain 3"
+    #_["Chain 3"
      (defn register-sub
        [topic action]
-       (let [ch (async/chan)]
+I       (let [ch (async/chan)]
          (async/sub the-pub topic ch)
          (go-loop []
            #_(action (async/<! ch))
@@ -81,10 +81,20 @@
 (defn test-form-data-tx
   [chains]
   (assoc
-   (e/seq-tx (for [ch chains]
-               (assoc (e/->tx ch)
-                      :coll/type :chain
-                      :coll/_contains "bar")))
+   (e/seq-tx
+    (concat
+     (for [ch chains]
+       (assoc (e/->tx ch)
+              :coll/type :chain
+              :coll/_contains "bar"))
+     [{:db/ident ::fakechain
+       :coll/type :chain
+       :coll/_contains "bar"
+       :coll/contains #{"dingu" "baba"}
+       :seq/first {:db/id "dingu"
+                   :coll/type :keyboard}
+       :seq/next {:seq/first {:db/id "baba"
+                              :string/value "Baba"} }}]))
    :db/id "bar"
    :coll/type :bar))
 
@@ -229,7 +239,8 @@
 (defmulti display-coll (fn [c indent]
                          (:coll/type c)))
 
-(defmethod display-coll :default [_ _] nil)
+(defmethod display-coll :default [c _]
+  [:code (pr-str c)])
 
 (defn delimited-coll
   [e indent open close]
@@ -257,6 +268,11 @@
     (for [chain-head (e/seq->vec bar)]
       (-> (fcc chain-head i)
           (rum/with-key (:db/id chain-head))))])
+
+(defmethod display-coll :keyboard [k i]
+  [:div.display-keyboard
+   {:on-click #(pub! [::select-form (:db/id k)])}
+   (ck/keyboard-diagram)])
 
 #_(defmethod display-coll :tabular [c i]
   (let [cols (:tabular/columns c)]
@@ -340,6 +356,7 @@
                       [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))))
 
 (defn form-duplicate-tx
+  {:this-ms-masdf "Okay"}
   [e]
   (letfn [(dup-spine [parent head]
             (if-let [x (:seq/first head)]
