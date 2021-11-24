@@ -9,16 +9,24 @@
    [clojure.string :as string])
   )
 
-(def shadow-server (future (server/start!)))
-(def shadow-watch (future
+(defonce shadow-server (future (server/start!)))
+(defonce shadow-watch (future
                     @shadow-server
                     (Thread/sleep 200)
                     (println "Starting watch")
                     (shadow/watch :br)))
-(def nrepl-server
+(defonce nrepl-server
   (let [port-file (io/file ".nrepl-port")
         {:keys [port]} (nrepl-server/start-server #_ #_:handler cnr/cider-nrepl-handler)]
     (spit ".nrepl-port" port)))
+
+
+(vec
+   (for [i (range 6)]
+     (+ 30 (* 60 i ))))
+
+(vec (range 6))
+#_(server/start!)
 
 (defn release-cljs-and-exit
   []

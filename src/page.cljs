@@ -15,6 +15,7 @@
    [comp.cons :as cc]
    [comp.edit-box :as eb]
    [comp.keyboard :as ck]
+   [comp.hex :as chex]
 
    [cmd.move :as move]
    [cmd.edit :as edit]
@@ -93,9 +94,10 @@ I       (let [ch (async/chan)]
        :coll/contains #{"label" "keyboard"}
        :seq/first {:db/id "label"
                    :string/value "Keyboard"}
-       :seq/next {:seq/first
-                  {:db/id "keyboard"
-                   :coll/type :keyboard}}}]))
+       :seq/next {:seq/first {:db/id "keyboard"
+                              :coll/type :keyboard}
+                  :seq/next {:seq/first {:db/id "hexes"
+                                         :coll/type :hexes}}}}]))
    :db/id "bar"
    :coll/type :bar))
 
@@ -274,6 +276,10 @@ I       (let [ch (async/chan)]
   [:div.display-keyboard
    {:on-click #(pub! [::select-form (:db/id k)])}
    (ck/keyboard-diagram)])
+
+(defmethod display-coll :hexes [k i]
+  [:div
+   (chex/main)])
 
 #_(defmethod display-coll :tabular [c i]
   (let [cols (:tabular/columns c)]

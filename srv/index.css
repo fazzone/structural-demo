@@ -26,6 +26,13 @@ a {
 }
 
 
+@font-face {
+    font-family: bravura;
+    src: url(Bravura.woff2);
+}
+
+
+
 body {
     font-family: iosevka-aile-light;
 }
