@@ -89,10 +89,21 @@ span.form-title {
 }
 
 
-span.tk {
-    padding-left: 1ch;
-    padding-right: 1ch;
-}
+/* span.tk { */
+/*     padding-left: 1ch; */
+/*     padding-right: 1ch; */
+/* } */
+
+/* span.tk + span.tk { margin-left: 1ch; } */
+/* span.tk + span.cs { margin-left: 1ch; } */
+/* span.ce + span.cs { margin-left: 1ch; } */
+/* span.ce + span.tk { margin-left: 1ch; } */
+
+span.tk + span.tk { margin-left: 1ch; }
+span.tk + span.c  { margin-left: 1ch; }
+span.c + span.c   { margin-left: 1ch; }
+span.c + span.tk  { margin-left: 1ch; }
+span.tk + .edit-box {margin-left: 1ch; }
 
 span.indented {
     margin-left: 2ch;

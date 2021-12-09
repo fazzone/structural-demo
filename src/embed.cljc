@@ -45,33 +45,24 @@
    []
    m))"))
 
-
-
-(comment
-  (run! prn
-        (->form
-         (d/entity
-          (:db-after (d/transact!
-                      (d/create-conn form-schema)
-                      [(n->tx (p/parse-string-all (slurp "src/embed.cljc")))]
-                      #_[(n->tx (p/parse-string "[ok :foo \"bar\"]"))]))
-          1))))
-
-
-
 (defn n->tx
   [n]
   (letfn [(coll-tx [coll-type xs]
-            (let [id (new-tempid)]
+            (let [id (new-tempid)
+                  linebreak? (atom nil)]
               (cond-> {:db/id id :coll/type coll-type}
                 (seq xs) (merge (seq-tx (for [x     xs
                                               :when (case (n/tag x)
-                                                      (:whitespace :newline :comma)
-                                                      (do
-                                                        (prn "Linebreak?" (n/linebreak? x))
-                                                        false)
+                                                      (:comma :whitespace :newline)
+                                                      (do (when (n/linebreak? x)
+                                                            (reset! linebreak? true))
+                                                          false)
                                                       true)]
-                                          (assoc (n->tx x) :coll/_contains id)))))))]
+                                          (cond-> (n->tx x)
+                                              true (assoc :coll/_contains id)
+                                              (deref linebreak?) (assoc :form/linebreak
+                                                                        (do (reset! linebreak? nil)
+                                                                            true)))))))))]
     (case (n/tag n)
       (:token :multi-line)
       (case (np/node-type n)
@@ -104,9 +95,24 @@
       
       (throw (ex-info  "Cannot decode" {:tag (n/tag n)})))))
 
+
+
+(comment
+  (run! prn
+        (->form
+         (d/entity
+          (time (:db-after (d/transact!
+                       (d/create-conn form-schema)
+                       [(time (n->tx (time (p/parse-string-all (slurp "src/embed.cljc")))))])))
+          1))))
+
 (defn string->tx
   [s]
   (n->tx (p/parse-string s )))
+
+(defn string->tx-all
+  [s]
+  (n->tx (p/parse-string-all s )))
 
 
 (declare ->tx)
@@ -149,7 +155,8 @@
           (or (case ct
                 :list elems
                 :vec  (vec elems)
-                :map  (apply array-map elems))
+                :map  (apply array-map elems)
+                :set  (set elems))
               (case ct :list () :vec [] :map {}))))
       (:keyword/value e)
       (:string/value e)
@@ -160,7 +167,7 @@
   (let [tx-entity (update (->tx data)
                           :db/id #(or % "top"))
         {:keys [db-after tempids]}
-        (d/with @(d/create-conn form-schema)
+        (d/with (deref (d/create-conn form-schema))
                 [tx-entity])]
     (->form (d/entity db-after (get tempids (:db/id tx-entity))))))
 
@@ -180,7 +187,7 @@
       (let [tx-entity (update (->tx data)
                               :db/id #(or % "top"))
             {:keys [db-after tempids]}
-            (d/with @(d/create-conn form-schema)
+            (d/with (deref (d/create-conn form-schema))
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))

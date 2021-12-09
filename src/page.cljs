@@ -24,7 +24,8 @@
                  move-selection-tx] ]
    )
   (:require-macros
-   [cljs.core.async.macros :refer [go go-loop]]))
+   [cljs.core.async.macros :refer [go go-loop]]
+   [macros :refer [macro-slurp]]))
 
 (def load-time (js/Date.now))
 
@@ -80,12 +81,12 @@ I       (let [ch (async/chan)]
     ])
 
 (defn test-form-data-tx
-  [chains]
+  [chain-txdatas]
   (assoc
    (e/seq-tx
     (concat
-     (for [ch chains]
-       (assoc (e/->tx ch)
+     (for [ch chain-txdatas]
+       (assoc ch
               :coll/type :chain
               :coll/_contains "bar"))
      [{:db/ident ::meta-chain
@@ -103,11 +104,15 @@ I       (let [ch (async/chan)]
 
 (def conn
   (doto (d/create-conn schema)
-    (d/transact! (let [txe (test-form-data-tx test-form-data-bar)]
+    (d/transact! (let [txe (test-form-data-tx (concat
+                                               (map e/->tx test-form-data-bar)
+                                               [(e/string->tx-all (macro-slurp "src/embed.cljc"))]))]
                    [{:db/ident ::state
                      ;; :state/display-form (:db/id txe)
                      :state/bar (:db/id txe)}
-                    txe]))))
+                    txe
+                    
+                    ]))))
 
 
 
@@ -173,7 +178,7 @@ I       (let [ch (async/chan)]
   [ref-name]
   {:after-render (fn [state]
                    #_(some-> state :rum/react-component (.-refs) (aget ref-name) (.scrollIntoView false))
-                   (some-> state :rum/react-component (.-refs) (aget ref-name)
+                   #_(some-> state :rum/react-component (.-refs) (aget ref-name)
                            (scroll-element-to-window-center!))
                    state)})
 
@@ -181,10 +186,22 @@ I       (let [ch (async/chan)]
 
 #_(declare edit-box)
 
-(rum/defc token-component < rum/static
+#_(rum/defc token-component < rum/static
   [leaf-class eid child]
   [:span {:key eid
           :class ["tk" leaf-class]
+          :on-click (fn [ev]
+                      (.stopPropagation ev)
+                      (pub! [::select-form eid]))}
+   child
+   #_(-> text 
+         ;; replace with non-breaking hyphen, lmao
+         (gstring/replaceAll "-" "‑"))])
+
+(rum/defc token-component < rum/static
+  [classes eid child]
+  [:span {:key eid
+          :class (str "tk " classes)
           :on-click (fn [ev]
                       (.stopPropagation ev)
                       (pub! [::select-form eid]))}
@@ -215,7 +232,7 @@ I       (let [ch (async/chan)]
   (if-not linebreak?
     child
     (rum/fragment
-     [:span.indent-chars "\n"
+      [:span.indent-chars "\n"
       [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
      child)))
 
@@ -227,9 +244,9 @@ I       (let [ch (async/chan)]
 
 (defn computed-indent
   [e indent-prop]
-  (-> (:form/indent e)
-      (or 0)
-      (+ indent-prop)))
+  (+ indent-prop
+     (or (:form/indent e)
+         0)))
 
 (defn coll-fragment
   [e indent-prop]
@@ -246,18 +263,18 @@ I       (let [ch (async/chan)]
   [:code (pr-str c)])
 
 (defn delimited-coll
-  [e indent open close]
-  (rum/fragment
+  [e indent classes open close]
+  [:span {:class (str "c " classes)}
    open
    (for [x (e/seq->vec e)]
      (rum/with-key (fcc x (computed-indent e indent))
        (:db/id x)))
-   close))
+   close])
 
-(defmethod display-coll :list [c i] (delimited-coll c i "(" ")"))
-(defmethod display-coll :vec  [c i] (delimited-coll c i "[" "]"))
-(defmethod display-coll :map  [c i] (delimited-coll c i "{" "}"))
-(defmethod display-coll :set  [c i] (delimited-coll c i "#{" "}"))
+(defmethod display-coll :list [c i cs] (delimited-coll c i cs "(" ")"))
+(defmethod display-coll :vec  [c i cs] (delimited-coll c i cs "[" "]"))
+(defmethod display-coll :map  [c i cs] (delimited-coll c i cs "{" "}"))
+(defmethod display-coll :set  [c i cs] (delimited-coll c i cs "#{" "}"))
 
 (defmethod display-coll :chain [chain i]
   [:div.chain
@@ -281,15 +298,7 @@ I       (let [ch (async/chan)]
   [:div
    (chex/main)])
 
-#_(defmethod display-coll :tabular [c i]
-  (let [cols (:tabular/columns c)]
-    [:div.tabluar {:style {:display "grid"
-                           :grid-template-columns (str "repeat(" cols ", 1fr)")}}
-    (for [e (e/seq->vec c)]
-      (-> (fcc e i)
-          (rum/with-key (:db/id e))))]))
-
-(rum/defc fcc < dbrx/ereactive (scroll-ref-into-view-after-render "selected")
+(rum/defc fcc < dbrx/ereactive #_(scroll-ref-into-view-after-render "selected")
   [e indent-prop]
   (-> (or (and (:form/editing e)
                (eb/edit-box bus
@@ -301,25 +310,35 @@ I       (let [ch (async/chan)]
                                 (some-> (:number/value e) str))))
           (when-let [s (:symbol/value e)]
             (token-component
-             (case (:symbol/value e)
-               ("defn" "let" "when" "and") "m"
-               ("first") "s"
-               "v")
+             (cond-> (case (:symbol/value e)
+                       ("defn" "let" "when" "and") "m"
+                       ("first") "s"
+                       "v")
+               (:form/highlight e) (str " selected"))
              (:db/id e) (str s)))
           (when-let [k (:keyword/value e)]
-            (token-component "k" (:db/id e)
+            (token-component (cond-> "k" (:form/highlight e) (str " selected"))
+                             (:db/id e)
                              (let [kns (namespace k)]
                                (if-not kns
                                  (str k)
                                  (rum/fragment ":" [:span.kn kns] "/" (name k))))))
           (when-let [s (:string/value e)]
-            (token-component "l" (:db/id e) s))
+            (token-component (cond-> "l" (:form/highlight e) (str " selected"))
+                             (:db/id e)
+                             s))
           (when-let [n (:number/value e)]
-            (token-component "n" (:db/id e) (str n)))
+            (token-component (cond-> "n" (:form/highlight e) (str " selected"))
+                             (:db/id e)
+                             (str n)))
           (when (:coll/type e)
-            (display-coll e (+ 2 indent-prop)))
+            (display-coll e
+                          (+ 2 indent-prop)
+                          (if-not (:form/highlight e)
+                            ""
+                            "selected")))
           (comment "Probably a retracted entity, do nothing"))
-      (do-highlight (:form/highlight e))
+      #_(do-highlight (:form/highlight e))
       (do-indent (:form/linebreak e)
                  (computed-indent e indent-prop))))
 
