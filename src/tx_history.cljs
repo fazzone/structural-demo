@@ -37,6 +37,11 @@
   (->> (iterate prev-index @history-index)
        (take history-size)))
 
+(defn revert-txdata
+  [tx-data]
+  (for [[e a v t a?] (reverse tx-data)]
+    [(if a? :db/retract :db/add) e a v]))
+
 (rum/defcs history-view < (rum/local {} ::toggle) rum/reactive
   [{::keys [toggle]} the-conn the-bus]
   (let [i (rum/react history-index)]
@@ -93,11 +98,20 @@
                         "Edit mutation"])
                    [:button
                     {:on-click (fn [ev]
+                                 #_(reset! the-conn (d/conn-from-db (:db-after tx-data)))
+                                 #_(d/transact! the-conn
+                                                [{:db/ident ::state
+                                                  :state/undowhat (str "Undo " i " " t)}]
+                                                {:mutation [::revert t]})
                                  (d/transact! the-conn
-                                              (for [[e a v t a?] (reverse tx-data)]
-                                                [(if a? :db/retract :db/add) e a v])
-                                              {:mutation [::revert (:db/current-tx tempids)]}))}
+                                                (revert-txdata tx-data)
+                                                {:mutation [::revert (:db/current-tx tempids)]}))}
                     "Revert"]])])))]])]))
+
+(defn undo-last-tx!
+  []
+  (revert-txdata
+   (:tx-data (aget history-buffer (first (backwards-index-seq))))))
 
 
 

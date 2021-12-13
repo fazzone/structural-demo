@@ -128,12 +128,45 @@
                    state)})
 
 (def editbox-ednparse-state (atom nil))
-(rum/defcs edit-box
+#_(rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
   [{::keys [text]} bus form-eid init]
   (let [value (if (= [] @text)
                 init
                 @text)]
+    [:input.edit-box.code-font
+     {:type        :text
+      :ref         "the-input"
+      :value       (or value "")
+      :style       {:width (str (max 1 (inc (count value))) "ch")}
+      :on-change   #(let [new-text (string/triml (.-value (.-target %)))
+                          token (parse-token-tx new-text form-eid)]
+                      (reset! text new-text)
+                      (reset! editbox-ednparse-state
+                              {:form-eid form-eid
+                               :text new-text
+                               :valid (some? token)
+                               :type (some-> token first val)})
+                      (prn "PTT" token )
+                      )
+      :on-key-down (fn [ev]
+                     (when-let [mut (editbox-keydown-mutation value (.-key ev))]
+                       (.preventDefault ev)
+                       (.stopPropagation ev)
+                       (async/put! bus mut)))
+      ;; :on-blur #(pub! [:edit/finish @text])
+      }]))
+(rum/defcs edit-box
+  < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
+  [{::keys [text]} bus e]
+  (let [value (if (= [] @text)
+                (or (:form/edit-initial e)
+                    (some-> (:symbol/value e) str)
+                    (some-> (:keyword/value e) str)
+                    (some-> (:string/value e) pr-str)
+                    (some-> (:number/value e) str))
+                @text)
+        form-eid (:db/id e)]
     [:input.edit-box.code-font
      {:type        :text
       :ref         "the-input"

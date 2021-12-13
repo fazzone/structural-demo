@@ -45,6 +45,11 @@
    []
    m))"))
 
+(take-while (comp not neg?) (iterate dec 9))
+(range 9 0 -1)
+(comment
+  (clojure.pprint/pprint (->tx [:a :b :c])))
+
 (defn n->tx
   [n]
   (letfn [(coll-tx [coll-type xs]
@@ -59,10 +64,10 @@
                                                           false)
                                                       true)]
                                           (cond-> (n->tx x)
-                                              true (assoc :coll/_contains id)
-                                              (deref linebreak?) (assoc :form/linebreak
-                                                                        (do (reset! linebreak? nil)
-                                                                            true)))))))))]
+                                            true (assoc :coll/_contains id)
+                                            (deref linebreak?) (assoc :form/linebreak
+                                                                      (do (reset! linebreak? nil)
+                                                                          true)))))))))]
     (case (n/tag n)
       (:token :multi-line)
       (case (np/node-type n)
@@ -77,17 +82,18 @@
       :set    (coll-tx :set (n/children n))
       :forms  (coll-tx :vec (n/children n))
       :comma  nil
+      :comment {:string/value (n/string n)}
       :meta   (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                     mta                (n/sexpr n)]
                 (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-              (cond
-                (symbol? mta)
-                (assoc (n->tx val) :tag {:symbol/value mta})
+                (cond
+                  (symbol? mta)
+                  (assoc (n->tx val) :tag {:symbol/value mta})
                 
-                (map? mta)
-                (merge (n->tx val) mta)
+                  (map? mta)
+                  (merge (n->tx val) mta)
 
-                :else (throw (ex-info "What meta is this" {:mta mta}))))
+                  :else (throw (ex-info "What meta is this" {:mta mta}))))
       
       :namespaced-map (coll-tx :map (n/children n))
       (:uneval :fn :quote)

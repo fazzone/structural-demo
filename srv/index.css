@@ -36,6 +36,11 @@ a {
 body {
     font-family: iosevka-aile-light;
 }
+.prose-font {
+    font-family: iosevka-aile-light;
+    color: #fff;
+    font-size: 18pt;
+}
 
 .code-font {
     /* font-family: "Iosevka Term SS03", monospace; */
@@ -80,6 +85,9 @@ span.tk.l  { color: #b5bd68; }
     color: #fff;
     border-radius: 1ex;
 }
+.selected .d { color: #a6a6a0; }
+.selected > .d { color: #fff; }
+
 .selected > .display-keyboard {
     /* this is a hack because the selection has to be display: inline */
     background-color: #062606;
@@ -127,7 +135,7 @@ input.edit-box {
 .form-card {
     display: flex;
     flex-direction: column;
-    margin-bottom: 5ex;
+    /* margin-bottom: 5ex; */
     width: 100%;
     /* width: 800px; */
     /* overflow: auto; */
@@ -143,7 +151,7 @@ input.edit-box {
 
 
 .bar {
-    height: 100%;
+    height: 90vh;
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
@@ -173,9 +181,19 @@ input.edit-box {
     display: flex;
     flex-direction: column;
     margin-right: 1em;
+    overflow-y: scroll;
     /* min-width: 24em; */
     /* width: 100%; */
 }
+
+.chain {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.chain::-webkit-scrollbar { 
+    display: none;
+}
+
 
 ul.parent-path li {
     display: inline;
@@ -205,13 +223,19 @@ ul.parent-path:empty {
     /* height: 3ex; */
 }
 
+div.bp {
+    height: 6ex;
+    /* margin-top: -1ex; */
+}
+
+
 span.indent-chars {
     white-space: pre;
     background-color: #000;
 }
-.selected > .chain .indent-chars {
-    background-color: transparent;
-}
+
+.chain.selected .indent-chars { background-color: transparent; }
+
 span.indenter {
     transition: margin-left 0.08s;
     /* transition-timing-function: linear; */
@@ -300,11 +324,13 @@ div.keyboard-container .key.single-width {
     min-width: 6ex;
 }
 div.keyboard-container .key-label  {
-    font-size: 85%;
+    font-size: 95%;
     text-align: center;
-    margin-top: 4ex;
+    margin-top: 3ex;
     color: #ae81ff;
 }
+
+.keyboard-container .key-symbol-parent { position: relative; }
 
 .keyboard-container .key-symbol {
     position: absolute;
@@ -328,6 +354,8 @@ div.keyboard-container .symbol3 {
     font-size: 100%;
     margin-top: 0.5ex;
 }
+
+div.keyboard-container .keycap-parent { position: relative; }
 
 div.keyboard-container .keycap {
     padding-left: 0.5ex;

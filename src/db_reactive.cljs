@@ -4,6 +4,8 @@
    [rum.core :as rum]))
 
 (def ereactive-components-by-eid (js/Array. 1024))
+(def ereactive-maxt (js/Array. 1024))
+(def ereactive-render-t (js/Array. 1024))
 
 (defn add-ereactive-component!
   [tag eid rc]
@@ -36,6 +38,14 @@
                state
                (do (add-ereactive-component! tag eid (:rum/react-component state))
                    (assoc state ::eid eid)))))
+   :should-update (fn [old-state new-state]
+                    (let [new-eid (-> new-state :rum/args first :db/id)]
+                      #_(println "SU"
+                                 (aget ereactive-maxt new-eid)
+                                 (aget ereactive-components-by-eid new-eid))
+                      ;; WRONG - save it!
+                      #_(some? (aget ereactive-maxt new-eid))
+                      true))
    :will-remount (fn [old-state new-state]
                    (let [old-eid (-> old-state :rum/args first :db/id)
                          new-eid (-> new-state :rum/args first :db/id )]
@@ -83,15 +93,18 @@
   (doseq [attr (distinct (map second tx-data))]
     (when-let [cs (get @areactive-components attr)]
       (doseq [^js/React.Component c cs]
-        (.setState c (fn [state props]
+        (.setState c (fn setstate-areactive [state props]
                        (let [rst (aget state :rum/state)]
                          (vswap! rst assoc :rum/args (cons db-after (next (:rum/args @rst)))))
                        state)))))
+  (doseq [[e a v t] tx-data]
+    (when (aget ereactive-components-by-eid e )
+      (aset ereactive-maxt e t)))
   (doseq [eid (dedupe (map first tx-data))]
     (when-let [cs (aget ereactive-components-by-eid eid)]
       (doseq [^js/React.Component c cs]
         (.setState c
-                   (fn [state props]
+                   (fn setstate-ereactive [state props]
                      (let [rst (aget state :rum/state)]
                        (vswap! rst assoc :rum/args (cons (d/entity db-after eid)
                                                          (next (:rum/args @rst)))))
@@ -102,4 +115,8 @@
   []
   (reset! areactive-components {})
   (dotimes [i (count ereactive-components-by-eid)]
-    (aset ereactive-components-by-eid i nil)))
+    (aset ereactive-components-by-eid i nil))
+  (dotimes [i (count ereactive-maxt)]
+    (aset ereactive-maxt i nil))
+  (dotimes [i (count ereactive-render-t)]
+    (aset ereactive-render-t i nil)))

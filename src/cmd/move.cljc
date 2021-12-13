@@ -25,11 +25,22 @@
 (defn flow*
   [e]
   (when e
-    (or (move :move/next-sibling e)
-        (recur (move :move/up e)))))
+    
+    #_(or (move :move/next-sibling e)
+        (recur (move :move/up e)))
+    (if-let [m (move :move/next-sibling e)]
+      (do (println "Flow*move" e m) m)
+      (do (println "Flow*recurup" e)
+          (recur (move :move/up e))))))
 
 (defmethod move :move/flow [_ e]
-  (or (:seq/first e)
+  (if-let [f (:seq/first e)]
+    (do (println "Flowfirst" e)
+        f)
+    (do (println "Flow* " e)
+        (flow* e)))
+  
+  #_(or (:seq/first e)
       (flow* e)))
 
 (defmethod move :move/back-flow [_ e]

@@ -18,10 +18,10 @@
                  (when (= 1 (count keycap))
                    " single-width")]} 
 
-   [:div.keycap keycap]
+   [:div.keycap-parent [:div.keycap keycap]]
    
    (when-let [symbol (:symbol (lookup keycap )) ]
-     [:div.key-symbol symbol])
+     [:div.key-symbol-parent [:div.key-symbol symbol]])
 
    (when-let [label (:label (lookup keycap )) ]
      [:div.key-label label])])
@@ -44,14 +44,33 @@
    "a"{:label "<-flow" :symbol [:span.symbol1 "<=="] }
 
    "r" {:label "raise"
-        :symbol [:div.symbol3 {:style {:transform "rotate(225deg)"}} "=>>"]}
+        :symbol [:div {:style {:transform "rotate(225deg)"
+                               :margin-top "0.5ex"
+                               :margin-left "-0.5ex"
+                               }} "=>>"]}
    "w" {:label "float"
-        :symbol [:div.symbol3 {:style {:transform "rotate(-90deg)"}} "=>>"]}
+        :symbol [:div {:style {:margin-top "0.5ex"
+                               :margin-left "-0.5ex"
+                               :transform "rotate(-90deg)"}}
+                 "=>>"]}
    "s" {:label "sink"
-        :symbol [:div.symbol3 {:style {:transform "rotate(90deg)"}} "=>>"]}
-   "e" {:label [:span {:style {:color "tomato"}} "eval"]}
+        :symbol [:div {:style {:margin-top "0.5ex"
+                               :margin-left "-0.5ex"
+                               :transform "rotate(90deg)"}} "=>>"]}
+   "e" {:label [:span {:style {:color "tomato"}} "eval"]
+        :symbol [:div {:style {:font-size "220%"
+                               :margin-top "-1.175ex"
+                               :margin-left "0ex"
+                               }}
+                 "\u2026"]}
    "y" {:label [:span {:style {:color "tomato"}} "paste"]}
-   "u" {:label [:span {:style {:color "tomato"}} "undo"]}
+   "u" {:label [:span {:style {:color "tomato"}} "undo"]
+        :symbol [:div {:style {:font-size "160%"
+                               :margin-top "-0.4ex"
+                               :margin-left "-0.0ex"
+                               }}
+                 "\u238c"]
+        }
    ;; append is "n Space"? - kinda, last vs. tail pos
    ;; "o" {:label [:span {:style {:color "tomato"}} "append"]}
    "t" {:label [:span {:style {:color "tomato"}} "thread"]}
@@ -60,12 +79,21 @@
    
    ;; chainable, call more functions on it
    ;; needs to specify movement/up after  edit complete
-   "q" {:label [:span {:style {:color "tomato"}} "comp"]}
+   "q" {:label [:span {:style {:color "tomato"}} "comp"]
+        :symbol [:div {:style {:font-size "120%"
+                               :margin-left "0.2ex"
+                               }}
+                 "\u25ef"]}
    
    "m" {:label [:span {:style {:color "tomato"}} "modify"]}
    "n" {:label [:span {:style {:color "tomato"}} "next"]}
-   "b" {:label [:span {:style {:color "tomato"}} "bind"]}
+   "b" {:label [:span {:style {:color "tomato"}} "bind"]
+        :symbol [:div {:style {:font-size "140%" :margin-left "0.3ex"}} "λ"]}
    "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
+   
+   
+   "z" {:label [:span {:style {:color "tomato"}} "<-hop"]}
+   "x" {:label [:span {:style {:color "tomato"}} "hop->"]}
    
    
    "/" {:label [:span {:style {:color "tomato"}} "search"]}
@@ -83,7 +111,14 @@
    "]" {:label "parent"}
 
    "d" {:label "delete"
-        :symbol [:div {:style {:font-size "120%" :margin-left "0.3ex"}} "×"]}
+        :symbol [:div {:style {:font-size "120%"
+                               ;; :font-size "210%"
+                               :margin-left "0.0ex"
+                               :margin-top "-0.2ex"
+                               }}
+                 "\u2326"
+                 #_
+                 "×"]}
    "v" {:label "view"}
    
    "h" {:label "parent"

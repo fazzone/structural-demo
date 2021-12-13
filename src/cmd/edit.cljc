@@ -1,5 +1,6 @@
 (ns cmd.edit
   (:require
+   [datascript.core :as d]
    [embed :as e]
    [core :refer [get-selected-form
                  move-selection-tx]]))
@@ -9,11 +10,16 @@
   (let [spine (first (:seq/_first e))
         next  (some-> spine :seq/next)
         prev  (some-> spine :seq/_next first)]
-    [[:db/retractEntity (:db/id e)]
+    (into [[:db/retractEntity (:db/id e)]]
      (cond
-       (and prev next) [:db/add (:db/id prev) :seq/next (:db/id next)]
-       prev            [:db/retract (:db/id prev) :seq/next (:db/id spine) ]
-       next            [:db/add (:db/id spine) :seq/first (:db/id next)])]))
+       (and prev next) [[:db/add (:db/id prev) :seq/next (:db/id next)]]
+       prev            [[:db/retract (:db/id prev) :seq/next (:db/id spine)]]
+       next            [(when-let [f (:seq/first next)]
+                          [:db/add (:db/id spine) :seq/first (:db/id f)])
+                        (if-let [n (:seq/next next)]
+                          [:db/add (:db/id spine) :seq/next (:db/id n)]
+                          (when (:seq/next spine)
+                            [:db/retract (:db/id spine) :seq/next (:db/id next)]))]))))
 
 ;; overwrite with something that has not existed before
 ;; if you have a tempid, you want this one
@@ -22,6 +28,7 @@
   [e replacement-eid]
   (let [spine (first (:seq/_first e))
         coll (first (:coll/_contains e))]
+    (println "Overwrite" spine coll)
     (when (and spine coll)
       [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
        [:db/add (:db/id coll) :coll/contains replacement-eid]
@@ -68,6 +75,7 @@
   (let [spine (first (:seq/_first target))
         coll (first (:coll/_contains target))]
     (prn 'spine (:db/id spine) 'cloll (:db/id coll))
+    (println  )
     (when (and spine coll)
       [{:db/id (:db/id spine)
         :seq/first (:db/id new-node)
@@ -75,7 +83,9 @@
                    :seq/first (:db/id target)}}
        [:db/add (:db/id coll) :coll/contains (:db/id new-node)]
        (when-let [next (:seq/next spine)]
-         [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
+         [:db/add "insert-before-cons" :seq/next (:db/id next) ])
+       
+       ])))
 
 
 

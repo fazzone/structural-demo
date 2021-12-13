@@ -6,27 +6,6 @@
    [rum.core :as rum]))
 
 
-(rum/defc datoms-table-eavt* [ds]
-  [:table
-   [:thead
-    [:tr
-     [:td {:style {:width "3em"}} "E"]
-     [:td {:style {:width "20em"}} "A"]
-     [:td {:style {:width "20em"}} "V"]
-     [:td {:style {:width "10em"}} "T"]
-     #_[:td "added?"]]]
-   [:tbody
-    {} 
-    (->> ds
-         (map-indexed
-          (fn [i [e a v t r]]
-            [:tr {:key i}
-             [:td [:code (str e)]]
-             [:td [:code (str a)]]
-             [:td [:code (str v)]]
-             [:td [:code (str t)]]
-             #_[:td [:code (str r)]]])))]])
-
 (rum/defc datoms-table-ave [ds ah vh eh]
   [:div.datoms-table.ave
    [:div (or ah "A")]
@@ -60,9 +39,54 @@
                )]
             [:code {:key (+ (* 3 i) 2)} (str v)]))))])
 
+(rum/defc datoms-table-eavt* [ds]
+  [:table
+   [:thead
+    [:tr
+     [:td {:style {:width "3em"}} "E"]
+     [:td {:style {:width "20em"}} "A"]
+     [:td {:style {:width "20em"}} "V"]
+     [:td {:style {:width "10em"}} "T"]
+     #_[:td "added?"]]]
+   [:tbody
+    {} 
+    (->> ds
+         (map-indexed
+          (fn [i [e a v t r]]
+            [:tr {:key i}
+             [:td [:code (str e)]]
+             [:td [:code (str a)]]
+             [:td [:code (str v)]]
+             [:td [:code (str t)]]
+             #_[:td [:code (str r)]]])))]])
 
+(defn datoms-table* [datoms pr]
+  [:table
+   [:thead
+    [:tr
+     [:td {:style {:width "3em"}} "E"]
+     [:td {:style {:width "20em"}} "A"]
+     [:td {:style {:width "20em"}} "V"]
+     [:td {:style {:width "10em"}} "T"]
+     #_[:td "added?"]]]
+   [:tbody
+    {} 
+    (->> datoms
+         (map-indexed
+          (fn [i [e a v t r]]
+            [:tr {:key i}
+             [:td [:code [:a {:on-click (fn [ev] (pr :e e))} (str e)]]]
+             [:td [:code [:a {:on-click (fn [ev] (pr :a a))} (str a)]]]
+             [:td [:code (str v)]]
+             [:td [:code [:a {:on-click (fn [ev] (pr :t t))} (str t)]]]
+             #_[:td [:code (str r)]]])))]])
 
-
+(rum/defcs db-viewer < (rum/local "" ::state )
+  [{::keys [state]} db]
+  [:div.db-viewer
+   (datoms-table* (d/datoms db :eavt)
+                  (fn [w n]
+                    (prn w n)))])
 
 (rum/defcs transaction-edit-area < (rum/local "" ::text) < (rum/local nil ::tx-result)
   [{::keys [text tx-result]} conn]
