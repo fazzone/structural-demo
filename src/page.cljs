@@ -206,10 +206,7 @@ I       (let [ch (async/chan)]
                                    [:db/add "mcons" :seq/next (:db/id nn)])])
                       (merge {:mutation mutation
                               :input-tx-data tx-data}
-                             (meta mutation))))
-       ))))
-
-
+                             (meta mutation))))))))
 
 ;; hacks
 (def auto-scroll-hysteresis-px 400)
@@ -601,7 +598,7 @@ I       (let [ch (async/chan)]
       (into [new-node]
             (concat
              (edit/form-overwrite-tx sel "first")
-             (move-selection-tx (:db/id sel) "funcname")))))))
+             (move-selection-tx (:db/id sel) "first")))))))
 
 
 ;; editing
@@ -1188,6 +1185,6 @@ I       (let [ch (async/chan)]
   (dbrx/reset-for-reload!)
   (let [se (d/entity @conn ::state)] 
     (rum/mount
-     (debug-component @conn)
-     #_(root-component (d/entity @conn ::state))
+     #_(debug-component @conn)
+     (root-component (d/entity @conn ::state))
      (.getElementById js/document "root"))))

@@ -63,7 +63,8 @@
                                :margin-left "0ex"
                                }}
                  "\u2026"]}
-   "y" {:label [:span {:style {:color "tomato"}} "paste"]}
+   "y" {:label [:span {:style {:color "tomato"}} ""]
+        :symbol [:div {:style {:font-size "140%" :margin-left "0.3ex"}} "λ"]}
    "u" {:label [:span {:style {:color "tomato"}} "undo"]
         :symbol [:div {:style {:font-size "160%"
                                :margin-top "-0.4ex"
@@ -87,13 +88,12 @@
    
    "m" {:label [:span {:style {:color "tomato"}} "modify"]}
    "n" {:label [:span {:style {:color "tomato"}} "next"]}
-   "b" {:label [:span {:style {:color "tomato"}} "bind"]
-        :symbol [:div {:style {:font-size "140%" :margin-left "0.3ex"}} "λ"]}
+   "b" {:label [:span {:style {:color "tomato"}} "bind"]}
    "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
    
    
-   "z" {:label [:span {:style {:color "tomato"}} "<-hop"]}
-   "x" {:label [:span {:style {:color "tomato"}} "hop->"]}
+   "z" {:label "<-hop"}
+   "x" {:label "hop->"}
    
    
    "/" {:label [:span {:style {:color "tomato"}} "search"]}

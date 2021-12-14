@@ -88,6 +88,17 @@ span.tk.l  { color: #b5bd68; }
 .selected .d { color: #a6a6a0; }
 .selected > .d { color: #fff; }
 
+.cursor_blink {
+  animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+    0%   { background-color: #000; }
+    50%  { background-color: tomato;}
+    100% { background-color: #000; }
+
+}
+
 .selected > .display-keyboard {
     /* this is a hack because the selection has to be display: inline */
     background-color: #062606;
