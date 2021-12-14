@@ -509,34 +509,16 @@ I       (let [ch (async/chan)]
 (register-sub ::select-form (->mutation select-form-tx ))
 
 ;; list modifications
+;; [m args] -> db -> txdata
+;; 
+
 
 (register-sub ::raise-selected-form (->mutation edit/raise-selected-form-tx))
 
-(register-sub ::exchange-with-previous
-              (->mutation
-               (fn [db]
-                 (let [sel    (get-selected-form db)
-                       spine  (first (:seq/_first sel))
-                       prev   (some-> spine :seq/_next first)
-                       next   (some-> spine :seq/next)
-                       parent (first (:coll/_contains sel))]
-                   (println "Prev" prev 'PArent parent )
-                   (when (and prev parent)
-                     [[:db/add (:db/id prev) :seq/first (:db/id sel)]
-                      [:db/add (:db/id spine) :seq/first (:db/id (:seq/first prev))]
-                      [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))))
-
 (register-sub ::exchange-with-next
-              (->mutation
-               (fn [db]
-                 (let [sel    (get-selected-form db)
-                       spine  (first (:seq/_first sel))
-                       next   (some-> spine :seq/next)
-                       parent (first (:coll/_contains sel))]
-                   (when (and next parent)
-                     [[:db/add (:db/id next) :seq/first (:db/id sel)]
-                      [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
-                      [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))))
+              (->mutation (fn [db] (edit/exchange-with-next-tx (get-selected-form db)))))
+(register-sub ::exchange-with-previous
+              (->mutation (fn [db] (edit/exchange-with-previous-tx (get-selected-form db)))))
 
 (defn form-duplicate-tx
   {:this-ms-masdf "Okay"}

@@ -75,7 +75,6 @@
   (let [spine (first (:seq/_first target))
         coll (first (:coll/_contains target))]
     (prn 'spine (:db/id spine) 'cloll (:db/id coll))
-    (println  )
     (when (and spine coll)
       [{:db/id (:db/id spine)
         :seq/first (:db/id new-node)
@@ -83,11 +82,7 @@
                    :seq/first (:db/id target)}}
        [:db/add (:db/id coll) :coll/contains (:db/id new-node)]
        (when-let [next (:seq/next spine)]
-         [:db/add "insert-before-cons" :seq/next (:db/id next) ])
-       
-       ])))
-
-
+         [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
 
 (defn insert-editing-tx
   [db before-or-after edit-initial]
@@ -100,3 +95,24 @@
               :after (insert-after-tx sel new-node))]
     (into [new-node]
           (concat itx (move-selection-tx (:db/id sel) "newnode")))))
+
+(defn exchange-with-previous-tx
+  [sel]
+  (let [spine  (first (:seq/_first sel))
+        prev   (some-> spine :seq/_next first)
+        next   (some-> spine :seq/next)
+        parent (first (:coll/_contains sel))]
+    (when (and prev parent)
+      [[:db/add (:db/id prev) :seq/first (:db/id sel)]
+       [:db/add (:db/id spine) :seq/first (:db/id (:seq/first prev))]
+       [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))
+
+(defn exchange-with-next-tx
+  [sel]
+  (let [spine  (first (:seq/_first sel))
+        next   (some-> spine :seq/next)
+        parent (first (:coll/_contains sel))]
+    (when (and next parent)
+      [[:db/add (:db/id next) :seq/first (:db/id sel)]
+       [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
+       [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))
