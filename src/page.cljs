@@ -23,11 +23,10 @@
    [cmd.invar :as invar]
    
    [core :refer [get-selected-form
-                 move-selection-tx] ]
-   
-   )
+                 move-selection-tx]])
   (:require-macros
-   [cljs.core.async.macros :refer [go go-loop]]
+   [cljs.core.async.macros :refer [go
+                                   go-loop]]
    [macros :refer [macro-slurp]]))
 
 (def load-time (js/Date.now))
@@ -53,39 +52,12 @@
 
     :edit/of {:db/valueType :db.type/ref}
     
-    :chain/selection {:db/valueType :db.type/ref}
-    }))
+    :chain/selection {:db/valueType :db.type/ref}}))
 
 (def test-form-data-bar
-  '[
-    ["Chain 1"
+  '[["Chain 1"
             (defn thing
-              [a b c ^{:form/highlight true} [l e l] [O] d] blah)]
-    #_["Chain 2"
-            (defn other-thing
-              [a b c
-               [d e ^{:meta-thing "Thningy"}  X]
-               p
-               #_[l e l]
-               [O] d] blah)]
-    #_["Chain 3"
-     (defn register-sub
-       [topic action]
-I       (let [ch (async/chan)]
-         (async/sub the-pub topic ch)
-         (go-loop []
-           #_(action (async/<! ch))
-           (try
-             (action (async/<! ch))  
-             (catch js/Error e
-               (println "Error in " topic)
-               (prn e)
-               (js/console.log e)))
-           (recur))))]
-    
-    
-    
-    ])
+              [a b c ^{:form/highlight true} [l e l] [O] d] blah)]])
 
 (defn test-form-data-tx
   [chain-txdatas]
@@ -120,62 +92,64 @@ I       (let [ch (async/chan)]
    :coll/type :bar))
 
 
-(def conn
-  (doto (d/create-conn schema)
-    (d/transact! (let [txe (test-form-data-tx (concat
-                                               (map e/->tx test-form-data-bar)
-                                               #_[(e/string->tx-all (macro-slurp "src/embed.cljc"))]
-                                               
-                                               #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
-                       timetravel-placeholders (e/->tx (vec (range 9)))]
-                   [{:db/ident ::state
-                     :state/bar (:db/id txe)}
-                    {:db/ident ::history
-                     :db/id "history"
-                     :coll/type :vec
-                     :seq/first {:string/value "Eod of history" :coll/_contains "history"}
-                     :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
-                    {:db/ident ::inspect
-                     :db/id "inspect"
-                     :coll/type :inspect
-                     :seq/first {:string/value "No inspect" :coll/_contains "history"}}
-                    {:db/ident ::timetravel
-                     :db/id "timetravel"
-                     :coll/type :timetravel
-                     :seq/first (:db/id timetravel-placeholders)}
-                    timetravel-placeholders
-                    txe
-                    
-                    ]))
-    (d/listen!
-     (fn [tx-report]
-       (doto tx-report
-         (dbrx/tx-listen-fn)
-         (h/tx-listen-fn)
-         (invar/tx-listen-fn))))))
+(defn create-conn
+  []
+  (let [txe (test-form-data-tx (concat
+                                (map e/->tx test-form-data-bar)
+                                #_[(e/string->tx-all (macro-slurp "src/embed.cljc"))]
+                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
+                        timetravel-placeholders (e/->tx (vec (range 9)))]
+   (doto (d/create-conn schema)
+     (d/transact!
+      [{:db/ident ::state
+        :state/bar (:db/id txe)}
+       {:db/ident ::history
+        :db/id "history"
+        :coll/type :vec
+        :seq/first {:string/value "Eod of history" :coll/_contains "history"}
+        :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
+       {:db/ident ::inspect
+        :db/id "inspect"
+        :coll/type :inspect
+        :seq/first {:string/value "No inspect" :coll/_contains "history"}}
+       {:db/ident ::timetravel
+        :db/id "timetravel"
+        :coll/type :timetravel
+        :seq/first (:db/id timetravel-placeholders)}
+       timetravel-placeholders
+       txe])
+     (d/listen!
+      (fn [tx-report]
+        (doto tx-report
+          (dbrx/tx-listen-fn)
+          (h/tx-listen-fn)
+          (invar/tx-listen-fn)))))))
 
+(def conn (create-conn))
 
-
-
-(def bus (async/chan))
-(def the-pub (async/pub bus first))
+(def -secret-bus (async/chan))
+(def the-pub (async/pub -secret-bus first))
 
 (defn register-sub
   [topic action]
+  #_(let [ch (async/chan 1
+                       (keep action)
+                       (fn [ex]
+                         (prn "Ex handler")
+                         (js/console.log ex)))]
+    (go-loop [] (async/<! ch) (recur))
+    (async/sub the-pub topic ch))
   (let [ch (async/chan)]
-    (async/sub the-pub topic ch)
-    (go-loop []
-      #_(action (async/<! ch))
-      (try
-        (action (async/<! ch))  
-        (catch js/Error e
-          (println "Error in " topic)
-          (prn e)
-          (js/console.log e)))
-      (recur))))
+    (go (async/<!
+         (async/reduce
+          (fn [a m]
+            (or (action m) a))
+          :ok
+          ch)))
+    (async/sub the-pub topic ch)))
 
-(defn pub! [e]
-  (async/put! bus e))
+(defmulti mut* (fn [[m & args] db zz-bus]
+                 m))
 
 (defn ->mutation
   [tx-fn]
@@ -288,11 +262,7 @@ I       (let [ch (async/chan)]
 (def scroll-within-chain!
   (gf/throttle scroll-within-chain* 222))
 
-(register-sub ::scroll-into-view
-              (fn [[_]]
-                (scroll-within-chain! (d/entity @conn [:form/highlight true]))))
-
-
+(register-sub ::scroll-into-view (fn [[_]] (scroll-within-chain! (d/entity @conn [:form/highlight true]))))
 
 (defn scroll-ref-into-view-after-render 
   [ref-name]
@@ -300,52 +270,13 @@ I       (let [ch (async/chan)]
    (fn [{:keys [subsequent] :as state}]
      (when-let [sel (some-> state :rum/react-component (.-refs) (aget ref-name))]
        #_(println "Srivar"
-                (:db/id (first (:rum/args state))))
+                  (:db/id (first (:rum/args state))))
        #_(js/console.log sel)
-       (scroll-within-chain! (first (:rum/args state)))
-       )
-     
-     #_(if-not subsequent
-         (assoc state :subsequent true)
-         (do
-           (println "Subsdeq")
-           state))
-     state
-     )})
+       (scroll-within-chain! (first (:rum/args state))))
+     state)})
 
-
-
-#_(declare edit-box)
-
-#_(rum/defc token-component ;; < rum/static
-  [classes eid child ref]
-  (println eid  "Classes" classes "Ref" ref)
-  [:span (cond-> {:key eid
-                  :class (str "tk " classes)
-                  :on-click (fn [ev]
-                              (.stopPropagation ev)
-                              (pub! [::select-form eid]))}
-           ;; (some? ref) (assoc :ref ref)
-           )
-   child
-   #_(-> text 
-         ;; replace with non-breaking hyphen, lmao
-         (gstring/replaceAll "-" "‑"))])
-
-(defn token-component
-  [classes eid child ref]
-  [:span (cond-> {:key eid
-                  :class (str "tk " classes)
-                  :on-click (fn [ev]
-                              (.stopPropagation ev)
-                              (pub! [::select-form eid]))}
-           (some? ref) (assoc :ref ref))
-   child
-   #_(-> text 
-         ;; replace with non-breaking hyphen, lmao
-         (gstring/replaceAll "-" "‑"))])
-
-
+;; replace with non-breaking hyphen, lmao
+#_(-> text (gstring/replaceAll "-" "‑"))
 
 (declare fcc)
 
@@ -353,14 +284,14 @@ I       (let [ch (async/chan)]
 (defn modeline-portal-id [eid] (str eid "mp"))
 
 (rum/defc top-level-form-component < dbrx/ereactive
-  [e]
+  [e bus]
   [:div.form-card {:ref "top-level"}
-   #_[:span.form-title.code-font (str "#" (:db/id e)
-                                      " T+" (- (js/Date.now) load-time) "ms")]
+   [:span.form-title.code-font (str "#" (:db/id e)
+                                    " T+" (- (js/Date.now) load-time) "ms")]
    [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
-   [:div.top-level-form.code-font (fcc e 0)]
+   [:div.top-level-form.code-font (fcc e bus 0)]
    [:div {:id (modeline-portal-id (:db/id e))}]
-   (if (= :list (:coll/type e))
+   #_(if (= :list (:coll/type e))
      [:div {:style {:width "1800px"}}
       (cc/svg-viewbox e)])])
 
@@ -387,48 +318,50 @@ I       (let [ch (async/chan)]
      (rum/with-key (fcc x (computed-indent e indent-prop)) (:db/id x)))
    (case (:coll/type e) :list ")" :vec "]" :map "}")))
 
-(defmulti display-coll (fn [c indent]
+(defmulti display-coll (fn [c bus indent classes]
                          (:coll/type c)))
 
-(defmethod display-coll :default [c _]
+(defmethod display-coll :default [c _ _ _]
   [:code (pr-str c)])
 
 (defn delimited-coll
-  [e indent classes open close]
+  [e bus indent classes open close]
   [:span (cond-> {:class (str "c " classes)}
            classes (assoc :ref "selected"))
-   [:span.d open]
+   [:span.d
+    #_[:span.inline-tag-outer
+     [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+    #_[:span.inline-tag (str (:db/id e))]
+    open]
    (for [x (e/seq->vec e)]
-     (rum/with-key (fcc x (computed-indent e indent))
+     (rum/with-key (fcc x bus (computed-indent e indent))
        (:db/id x)))
    [:span.d close]])
 
-(defmethod display-coll :list [c i cs] (delimited-coll c i cs "(" ")"))
-(defmethod display-coll :vec  [c i cs] (delimited-coll c i cs "[" "]"))
-(defmethod display-coll :map  [c i cs] (delimited-coll c i cs "{" "}"))
-(defmethod display-coll :set  [c i cs] (delimited-coll c i cs "#{" "}"))
+(defmethod display-coll :list [c b i s] (delimited-coll c b i s "(" ")"))
+(defmethod display-coll :vec  [c b i s] (delimited-coll c b i s "[" "]"))
+(defmethod display-coll :map  [c b i s] (delimited-coll c b i s "{" "}"))
+(defmethod display-coll :set  [c b i s] (delimited-coll c b i s "#{" "}"))
 
-(defmethod display-coll :chain [chain i classes]
+(defmethod display-coll :chain [chain bus i classes]
   [:div.chain
    {:key (:db/id chain)
     :ref "chain"
     :class classes}
    (for [f (e/seq->vec chain)]
-     (-> (top-level-form-component f)
+     (-> (top-level-form-component f bus)
          (rum/with-key (:db/id f))))])
 
-(defmethod display-coll :bar [bar i]
+(defmethod display-coll :bar [bar bus i]
   [:div.bar
     (for [chain-head (e/seq->vec bar)]
-      (-> (fcc chain-head i)
+      (-> (fcc chain-head bus i)
           (rum/with-key (:db/id chain-head))))])
 
-(defmethod display-coll :keyboard [k i]
-  [:div.display-keyboard
-   {:on-click #(pub! [::select-form (:db/id k)])}
-   (ck/keyboard-diagram)])
+(defmethod display-coll :keyboard [k bus i]
+  [:div.display-keyboard (ck/keyboard-diagram)])
 
-(defmethod display-coll :hexes [k i]
+(defmethod display-coll :hexes [k bus i]
   [:div
    (chex/main)])
 
@@ -452,10 +385,10 @@ I       (let [ch (async/chan)]
                   (filter (fn [[e a v t]]
                             (= v (:db/id sel)))))))]]))]))
 
-(defmethod display-coll :inspect [k i]
+(defmethod display-coll :inspect [k bus i]
   (inspector (d/entity-db k)))
 
-(defmethod display-coll :timetravel [tt i]
+(defmethod display-coll :timetravel [tt bus i]
   [:div [:span.prose-font "Time travel"]
    (for [e (e/seq->vec (:seq/first tt))]
      [:div {:key (:db/id e)}
@@ -474,27 +407,33 @@ I       (let [ch (async/chan)]
 
 (defn token-text
   [e]
-  (or (some-> e :symbol/value str)
-      (when-let [k (:keyword/value e)]
-        (let [kns (namespace k)]
-          (if-not kns
-            (str k)
-            (rum/fragment ":" [:span.kn kns] "/" (name k)))))
-      (:string/value e)
-      (some-> e :number/value str)))
+  (or
+   (some-> e :symbol/value str)
+   (when-let [k (:keyword/value e)]
+     (let [kns (namespace k)]
+       (if-not kns
+         (str k)
+         (rum/fragment ":" [:span.kn kns] "/" (name k)))))
+   (:string/value e)
+   (some-> e :number/value str)))
 
-(rum/defc fcc < dbrx/ereactive (scroll-ref-into-view-after-render "selected")
-  [e indent-prop]
+(rum/defc fcc < dbrx/ereactive #_(scroll-ref-into-view-after-render "selected")
+  [e bus indent-prop]
   (-> (or (when (:form/editing e)
             (eb/edit-box bus e))
           (when-let [tc (token-class e)]
-            (token-component
-             (cond-> tc (:form/highlight e) (str " selected"))
-             (:db/id e)
-             (token-text e)
-             (when (:form/highlight e) "selected")))
+            [:span (cond-> {:key (:db/id e)
+                            :class (if (:form/highlight e)
+                                     (str tc " tk selected")
+                                     (str tc " tk"))
+                            :on-click (fn [ev]
+                                        (.stopPropagation ev)
+                                        (async/put! bus [::select-form (:db/id e)]))}
+                     (:form/highlight e) (assoc :ref "selected"))
+             (token-text e)])
           (when (:coll/type e)
             (display-coll e
+                          bus
                           (+ 2 indent-prop)
                           (when (:form/highlight e) "selected")))
           (comment "Probably a retracted entity, do nothing"))
@@ -508,13 +447,8 @@ I       (let [ch (async/chan)]
 
 (register-sub ::select-form (->mutation select-form-tx ))
 
-;; list modifications
-;; [m args] -> db -> txdata
-;; 
-
-
-(register-sub ::raise-selected-form (->mutation edit/raise-selected-form-tx))
-
+(register-sub ::raise-selected-form
+              (->mutation (fn [db] (edit/form-raise-tx (get-selected-form db)))))
 (register-sub ::exchange-with-next
               (->mutation (fn [db] (edit/exchange-with-next-tx (get-selected-form db)))))
 (register-sub ::exchange-with-previous
@@ -556,32 +490,25 @@ I       (let [ch (async/chan)]
           :seq/first (:db/id e)}]
         (edit/form-overwrite-tx e "newnode")))
 
-(register-sub ::wrap-selected-form
-              (->mutation
-               (fn [db ct]
-                 (form-wrap-tx (get-selected-form db) ct))))
+(register-sub ::wrap-selected-form (->mutation (fn [db ct] (form-wrap-tx (get-selected-form db) ct))))
 
+(defn wrap-and-edit-first-tx
+  [sel ct]
+  (let [spine (first (:seq/_first sel))
+        coll (first (:coll/_contains sel))
+        new-node {:db/id "first"
+                  :coll/type ct
+                  :coll/_contains (:db/id coll)
+                  :seq/first {:db/id "funcname"
+                              :coll/_contains "first"
+                              :form/editing true}
+                  :seq/next {:seq/first (:db/id sel)}}]
+    (into [new-node]
+          (concat
+           (edit/form-overwrite-tx sel "first")
+           (move-selection-tx (:db/id sel) "first")))))
 
-
-(register-sub
- ::wrap-and-edit-first
- (->mutation
-  (fn [db ct] 
-    (let [sel (get-selected-form db)
-          spine (first (:seq/_first sel))
-          coll (first (:coll/_contains sel))
-          new-node {:db/id "first"
-                    :coll/type ct
-                    :coll/_contains (:db/id coll)
-                    :seq/first {:db/id "funcname"
-                                :coll/_contains "first"
-                                :form/editing true}
-                    :seq/next {:seq/first (:db/id sel)}}]
-      (into [new-node]
-            (concat
-             (edit/form-overwrite-tx sel "first")
-             (move-selection-tx (:db/id sel) "first")))))))
-
+(register-sub ::wrap-and-edit-first (->mutation (fn [db ct] (wrap-and-edit-first-tx (get-selected-form db) ct))))
 
 ;; editing
 
@@ -592,8 +519,7 @@ I       (let [ch (async/chan)]
 (register-sub :edit/finish-and-move-up (->mutation (fn [db text] (eb/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))))
 (register-sub :edit/finish-and-edit-next-node (->mutation (fn [db text] (eb/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text))))
 
-
-
+#_(register-sub ::insert-editing (->mutation edit/insert-editing-tx))
 (register-sub ::insert-editing (->mutation edit/insert-editing-tx))
 
 (defn begin-edit-existing-node-tx
@@ -652,10 +578,7 @@ I       (let [ch (async/chan)]
 
 (register-sub ::indent-form (->mutation indent-selected-form-tx))
 
-(register-sub ::reset-indent (->mutation
-                              (fn [db]
-                                [{:db/id (:db/id (get-selected-form db))
-                                  :form/indent 0}])))
+(register-sub ::reset-indent (->mutation (fn [db] [{:db/id (:db/id (get-selected-form db)) :form/indent 0}])))
 
 (defn linebreak-selected-form-tx
   [db]
@@ -680,21 +603,15 @@ I       (let [ch (async/chan)]
                  [:db/add (:db/id e) :form/linebreak indent])))))
 
 (register-sub ::recursively-set-indent (->mutation recursively-set-indent-tx))
-(register-sub ::check-invariants
-              (->mutation (fn [db]
-                            (println "Cinvar" (get-selected-form db))
-                            (invar/check (get-selected-form db)))))
+(register-sub ::check-invariants (->mutation (fn [db] (invar/check (get-selected-form db)))))
 
-
-(register-sub ::execute-selected-as-mutation
+#_(register-sub ::execute-selected-as-mutation
               (->mutation (fn [db]
                             (let [m (e/->form (get-selected-form db))]
                               (if (vector? (first m))
                                 (run! pub! m)
                                 (pub! m)))
                             nil)))
-
-
 
 (defn import-formdata-tx
   [db data]
@@ -750,10 +667,7 @@ I       (let [ch (async/chan)]
                                 :tx-meta (:tx-meta r)
                                 :tempids (:tempids r)})))))
 
-(register-sub ::revert-last
-              (->mutation (fn [db]
-                            (println "Revertlast")
-                            (h/undo-last-tx!))))
+(register-sub ::revert-last (->mutation (fn [db] (h/undo-last-tx!))))
 
 (register-sub ::eval
               (->mutation (fn [db]
@@ -795,12 +709,11 @@ I       (let [ch (async/chan)]
     (if (= :chain (:coll/type sel))
       (when-let [hop-chain (mover sel)]
         (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain))))
-      (let [chain (some-> sel reverse-parents-array first :coll/_contains first)
-            hop-chain (mover chain)]
-        (concat
-         (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
-         [{:db/id (:db/id chain)
-           :chain/selection (:db/id sel)}])))))
+      (let [chain (some-> sel reverse-parents-array first :coll/_contains first)]
+        (when-let [hop-chain (mover chain)]
+          (concat (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
+                  [{:db/id (:db/id chain)
+                    :chain/selection (:db/id sel)}]))))))
 
 (defn seq-previous
   [e]
@@ -810,7 +723,9 @@ I       (let [ch (async/chan)]
   [e]
   (some-> e :seq/_first first :seq/next :seq/first))
 
-(register-sub ::hop-left  (->mutation (fn [db] (hop* db seq-previous))))
+(register-sub ::hop-left  (->mutation (fn [db]
+                                        (println "Hopleft")
+                                        (hop* db seq-previous))))
 (register-sub ::hop-right (->mutation (fn [db] (hop* db seq-next))))
 
 (defn drag*
@@ -826,8 +741,6 @@ I       (let [ch (async/chan)]
            #_(edit/form-replace-tx newnode sel)))))))
 
 (register-sub ::drag-left (->mutation (fn [db] (drag* db seq-previous))))
-
-
 
 (defn select-1based-nth-reverse-parent-of-selected-tx
   [db n]
@@ -869,14 +782,6 @@ I       (let [ch (async/chan)]
       :else    i)))
 
 
-(defn link-to-form-by-id
-  [eid children]
-  [:a {:key eid
-       :href "#"
-       :on-click #(do (.preventDefault %)
-                      (pub! [::select-form eid]))}
-   children])
-
 (defn el-bfs
   [top limit]
   (loop [out   []
@@ -893,32 +798,41 @@ I       (let [ch (async/chan)]
 
 (def breadcrumbs-max-numeric-label 8)
 (rum/defc parent-path
-  [rpa]
+  [rpa bus]
   [:ul.parent-path
    (for [i (range (dec (count rpa)))]
      (let [parent (nth rpa i)]
        [:li {:key i}
-        (link-to-form-by-id (:db/id parent)
-                            [:span.code-font
-                             (when (< i breadcrumbs-max-numeric-label)
-                               [:span.parent-index (str (inc i))])
-                             (if (= :list (:coll/type parent))
-                               (or (some-> parent :seq/first :symbol/value) "()")
-                               (case (:coll/type parent) :vec "[]" :map "{}" "??"))])]))])
+        [:a {:href "#"
+             :on-click #(do (.preventDefault %)
+                            (async/put! bus [::select-form (:db/id parent)]))}
+         [:span.code-font
+          (when (< i breadcrumbs-max-numeric-label)
+            [:span.parent-index (str (inc i))])
+          (if (= :list (:coll/type parent))
+            (or (some-> parent :seq/first :symbol/value) "()")
+            (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]
+        
+        #_(link-to-form-by-id (:db/id parent)
+                              [:span.code-font
+                               (when (< i breadcrumbs-max-numeric-label)
+                                 [:span.parent-index (str (inc i))])
+                               (if (= :list (:coll/type parent))
+                                 (or (some-> parent :seq/first :symbol/value) "()")
+                                 (case (:coll/type parent) :vec "[]" :map "{}" "??"))])]))])
 
 (rum/defc breadcrumbs-always < (dbrx/areactive :form/highlight :form/edited-tx)
-  [db]
+  [db bus]
   (when-let [sel (get-selected-form db)]
     (let [rpa (some-> sel (reverse-parents-array))
           top-level (first rpa)]
      (let [node-id (breadcrumbs-portal-id (:db/id top-level))]
        (when-let [n (.getElementById js/document node-id)]
-         (rum/portal
-          (parent-path
-           (if-not (= (:db/id sel) (:db/id top-level))
-             rpa
-             (el-bfs sel 9)))
-          n))))))
+         (-> (if-not (= (:db/id sel) (:db/id top-level))
+               rpa
+               (el-bfs sel 9))
+             (parent-path bus)
+             (rum/portal n)))))))
 
 
 (def special-key-map
@@ -969,7 +883,7 @@ I       (let [ch (async/chan)]
     "M-n"       ["placeholder"]
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
-    "M-x"       [::execute-selected-as-mutation]
+    ;; "M-x"       [::execute-selected-as-mutation]
     "S-A"       {"a" [::linebreak-form]}
     "S-R"       {"f" [::reify-extract-selected]
                  "m" [::reify-last-mutation]
@@ -983,7 +897,7 @@ I       (let [ch (async/chan)]
 
 
 
-(rum/defc key-bindings-table []
+#_(rum/defc key-bindings-table []
   [:table
    [:thead
     [:tr
@@ -1046,28 +960,15 @@ I       (let [ch (async/chan)]
              (rum/react eb/editbox-ednparse-state)))
           (rum/portal nn)))))
 
-(rum/defc edit-history < (dbrx/areactive :form/edited-tx)
-  [db]
-  (let [sel-eid (d/entid db  [:form/highlight true])]
-    [:ul
-     (for [e (form-eids-by-edit-tx-desc db)]
-       [:li {:key e}
-        (link-to-form-by-id
-         e
-         (str "Edited #" e
-              (when (= e sel-eid)
-                " (Selected)")))])]))
-
-
-
 (rum/defc root-component < dbrx/ereactive
   [state]
   (let [db (d/entity-db state)]
     [:div
      #_(str " T+" (- (js/Date.now) load-time) "ms")
-     (breadcrumbs-always db)
-     (h/history-view conn bus)
-     (fcc (:state/bar state) 0)
+     (breadcrumbs-always db -secret-bus)
+     #_(h/history-view conn bus)
+     (fcc (:state/bar state) -secret-bus 0)
+     
      #_(modeline-portal db)]))
 
 (defn event->kbd
@@ -1090,7 +991,7 @@ I       (let [ch (async/chan)]
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
         (prn "Key" kbd)
-        (pub! [::global-keydown kbd])
+        (async/put! -secret-bus [::global-keydown kbd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
           (.preventDefault ev)
@@ -1099,7 +1000,7 @@ I       (let [ch (async/chan)]
           (reset! key-compose-state initial-compose-state)
           (cond
             (vector? mut) (do (reset! key-compose-state initial-compose-state)
-                              (pub! (with-meta mut {:kbd (string/join " " next-kbd)
+                              (async/put! -secret-bus (with-meta mut {:kbd (string/join " " next-kbd)
                                                     ;; :tkd tkd
                                                     })))
             (map? mut) (reset! key-compose-state {:bindings mut :compose next-kbd})
@@ -1130,7 +1031,7 @@ I       (let [ch (async/chan)]
 
 
 ;; last/previous edit position switcher
-(register-sub ::global-keydown
+#_(register-sub ::global-keydown
               (let [tab-index (atom 0)
                     tab-seq   (atom nil)]
                 (fn [[_ k]]

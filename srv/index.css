@@ -46,6 +46,7 @@ body {
     /* font-family: "Iosevka Term SS03", monospace; */
     font-family: iosevka-term-ss03-light;
     font-size: 14pt;
+    /* line-height: 1.25; */
 }
 
 .top-level-form {
@@ -192,6 +193,7 @@ input.edit-box {
     display: flex;
     flex-direction: column;
     margin-right: 1em;
+    padding-left: 1ex;
     overflow-y: scroll;
     /* min-width: 24em; */
     /* width: 100%; */
@@ -303,8 +305,9 @@ span.key-compose-echo {
 }
 .keyboard-container {
     /* width: 50em; */
-    max-width: 65em;
+    /* max-width: 65em; */
     font-size: 10pt;
+    max-width: 100ex;
     /* transition: width 0.08s; */
 }
 .keyboard-container > div  {
@@ -375,4 +378,21 @@ div.keyboard-container .keycap {
 }
 .backspace {
     background-color: tomato;
+}
+
+
+/* combination outer&inner do not take up space */
+.inline-tag-outer {
+    position: relative;
+    color: #ae81ff;
+    top: -1ex;
+    left: -0.8ex;
+}
+.inline-tag-inner { position: absolute; }
+
+/* this one by itself does take up space */
+.inline-tag {
+    position: relative;
+    color: #ae81ff;
+    top: -1ex;
 }

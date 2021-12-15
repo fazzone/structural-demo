@@ -2,8 +2,7 @@
   (:require
    [datascript.core :as d]
    [embed :as e]
-   [core :refer [get-selected-form
-                 move-selection-tx]]))
+   [core :refer [get-selected-form move-selection-tx]]))
 
 (defn form-delete-tx
   [e]
@@ -53,9 +52,7 @@
       (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]]
             (form-replace-tx parent e)))))
 
-(defn raise-selected-form-tx
-  [db]
-  (form-raise-tx (get-selected-form db)))
+
 
 
 (defn insert-after-tx
@@ -84,6 +81,8 @@
        (when-let [next (:seq/next spine)]
          [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
 
+
+
 (defn insert-editing-tx
   [db before-or-after edit-initial]
   (let [sel (get-selected-form db)
@@ -95,6 +94,10 @@
               :after (insert-after-tx sel new-node))]
     (into [new-node]
           (concat itx (move-selection-tx (:db/id sel) "newnode")))))
+
+
+
+
 
 (defn exchange-with-previous-tx
   [sel]

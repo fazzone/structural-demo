@@ -3,9 +3,9 @@
    [datascript.core :as d]
    [rum.core :as rum]))
 
-(def ereactive-components-by-eid (js/Array. 1024))
-(def ereactive-maxt (js/Array. 1024))
-(def ereactive-render-t (js/Array. 1024))
+(def ereactive-components-by-eid (js/Array.))
+(def ereactive-maxt (js/Array.))
+(def ereactive-render-t (js/Array.))
 
 (defn add-ereactive-component!
   [tag eid rc]
