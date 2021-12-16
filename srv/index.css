@@ -396,3 +396,7 @@ div.keyboard-container .keycap {
     color: #ae81ff;
     top: -1ex;
 }
+
+.inspector {
+    width: 80ex;
+}

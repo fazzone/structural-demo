@@ -1,122 +1,87 @@
 (ns db-reactive
   (:require
    [datascript.core :as d]
-   [rum.core :as rum]))
+   [cljs.core.async :as async]
+   [core :as core]
+   [rum.core :as rum])
+  (:require-macros
+   [cljs.core.async.macros :refer [go
+                                   go-loop]]))
 
-(def ereactive-components-by-eid (js/Array.))
-(def ereactive-maxt (js/Array.))
-(def ereactive-render-t (js/Array.))
+(defn update-first-arg!
+  [^js/React.Component rc e]
+  (.setState rc (fn setstate-arx [state props]
+                  (let [rst (aget state :rum/state)]
+                    (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                    state))))
 
-(defn add-ereactive-component!
-  [tag eid rc]
-  (when tag (println "Start listening" tag eid))
-  (aset ereactive-components-by-eid  eid
-        (doto (or (aget ereactive-components-by-eid eid)
-                  (js/Array.))
-          (.push rc))))
-
-(defn remove-ereactive-component!
-  [tag eid rc]
-  (when-let [cs (aget ereactive-components-by-eid eid)]
-    (loop [i 0]
-      (cond
-        (= i (.-length cs))
-        nil
-
-        (js/Object.is rc (aget cs i))
-        (do (.splice cs i 1)
-            (when tag (println "Stopped listening" tag eid)))
-        :else (recur (inc i))))))
-
-;; mixin for components which take datascript entity as their first argument
-;; forces re-render with updated state when entity is touched by a transaction
-(defn ereactive-with-debug-print
-  [tag]
-  {:init (fn [{:rum/keys [args] :as state}]
-           (let [eid (some-> state :rum/args first :db/id)]
-             (if-not eid
-               state
-               (do (add-ereactive-component! tag eid (:rum/react-component state))
-                   (assoc state ::eid eid)))))
-   :should-update (fn [old-state new-state]
-                    (let [new-eid (-> new-state :rum/args first :db/id)]
-                      #_(println "SU"
-                                 (aget ereactive-maxt new-eid)
-                                 (aget ereactive-components-by-eid new-eid))
-                      ;; WRONG - save it!
-                      #_(some? (aget ereactive-maxt new-eid))
-                      true))
+(def ereactive
+  ;; mixin for components taking [entity bus ...] 
+  {:init (fn [{:rum/keys [react-component] :as state} props]
+           (let [[ent bus & args] (some-> state :rum/args)
+                 ch (async/chan)
+                 nupdate (atom nil)]
+             (when-not (and bus (:db/id ent))
+               (throw (ex-info "Cannot use ereactive" {})))
+             (go-loop []
+               (let [[_ updated-entity] (async/<! ch)]
+                 (reset! nupdate true)
+                 (update-first-arg! react-component updated-entity)
+                 (recur)))
+             (core/connect-sub! bus (:db/id ent) ch)
+             (assoc state ::chan ch ::nupdate nupdate)))
+   :should-update (fn [_ {::keys [nupdate]}]
+                    (when (some? @nupdate)
+                      (not (reset! nupdate false))))
    :will-remount (fn [old-state new-state]
-                   (let [old-eid (-> old-state :rum/args first :db/id)
-                         new-eid (-> new-state :rum/args first :db/id )]
+                   (let [[old-e old-bus] (-> old-state :rum/args)
+                         [new-e bus] (-> new-state :rum/args)
+                         old-eid (:db/id old-e)
+                         new-eid (:db/id new-e)]
+                     (when-not (identical? bus old-bus)
+                       (throw (ex-info "The bus cannot change" {})))
+                     (when-not (identical? (::chan old-state) (::chan new-state))
+                       (throw (ex-info "The chan cannot change" {})))
                      (when-not (= old-eid new-eid)
-                       (remove-ereactive-component! tag old-eid (:rum/react-component new-state))
-                       (add-ereactive-component! tag new-eid (:rum/react-component new-state))))
-                   new-state)
-   :will-unmount (fn [{:rum/keys [args] ::keys [eid] :as state}]
-                   (remove-ereactive-component! tag eid (:rum/react-component state)))})
+                       (println "!!!!! The eids changed" old-eid new-eid)
+                       (core/disconnect-sub! bus old-eid (::chan old-state))
+                       (core/connect-sub! bus new-eid (::chan new-state)))
+                     new-state))
+   :will-unmount (fn [{:rum/keys [args] ::keys [chan] :as state}]
+                   (let [[e bus] args]
+                     (core/disconnect-sub! bus (:db/id e) chan)
+                     state))})
 
-(def ereactive (ereactive-with-debug-print nil))
-
-(def areactive-components (atom {}))
-;; mixin to react to all transactions which touch a specific attribute
 (defn areactive
+  ;; mixin for components taking [db bus ...]
   [& as]
   {:init
-   (fn [state props]
-     (doseq [a as]
-      (swap! areactive-components assoc a
-             (doto (or (get @areactive-components a)
-                       (js/Array.))
-               (.push (:rum/react-component state)))))
-     state)
-   :will-unmount
-   (fn [state]
-     (let [c (:rum/react-component state)]
+   (fn [{:rum/keys [react-component] :as state} props]
+     (let [[_ bus] (:rum/args state)
+           ch (async/chan)]
+       (go-loop []
+         (let [[_ db] (async/<! ch)]
+           (update-first-arg! react-component db)
+           (recur)))
        (doseq [a as]
-         (let [cs (get @areactive-components a )]
-           (if-not cs
-             state
-             (loop [i 0]
-               (cond
-                 (= i (.-length cs))
-                 state
-
-                 (js/Object.is c (aget cs i))
-                 (do (.splice cs i 1)
-                     state)
-             
-                 :else (recur (inc i)))))))))})
-
-(defn tx-listen-fn
-  [{:keys [db-after tx-data tx-meta tempids] :as tx-report}]
-  (doseq [attr (distinct (map second tx-data))]
-    (when-let [cs (get @areactive-components attr)]
-      (doseq [^js/React.Component c cs]
-        (.setState c (fn setstate-areactive [state props]
-                       (let [rst (aget state :rum/state)]
-                         (vswap! rst assoc :rum/args (cons db-after (next (:rum/args @rst)))))
-                       state)))))
-  (doseq [[e a v t] tx-data]
-    (when (aget ereactive-components-by-eid e )
-      (aset ereactive-maxt e t)))
-  (doseq [eid (dedupe (map first tx-data))]
-    (when-let [cs (aget ereactive-components-by-eid eid)]
-      (doseq [^js/React.Component c cs]
-        (.setState c
-                   (fn setstate-ereactive [state props]
-                     (let [rst (aget state :rum/state)]
-                       (vswap! rst assoc :rum/args (cons (d/entity db-after eid)
-                                                         (next (:rum/args @rst)))))
-                     state))))))
+         (core/connect-sub! bus a ch))
+       (assoc state ::achan ch)))
+   :will-unmount
+   (fn [{:rum/keys [react-component] :as state}]
+     (let [[_ bus] (:rum/args state)
+           ch (::achan state)]
+       (doseq [a as]
+         (core/disconnect-sub! bus a ch)))
+     state)})
 
 
-(defn reset-for-reload!
-  []
-  (reset! areactive-components {})
-  (dotimes [i (count ereactive-components-by-eid)]
-    (aset ereactive-components-by-eid i nil))
-  (dotimes [i (count ereactive-maxt)]
-    (aset ereactive-maxt i nil))
-  (dotimes [i (count ereactive-render-t)]
-    (aset ereactive-render-t i nil)))
+
+
+
+
+
+
+
+
+
+

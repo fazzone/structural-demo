@@ -8,12 +8,8 @@
    [embed :as e]
    [rum.core :as rum]
    [clojure.string :as string]
-   [core :refer [get-selected-form
-                 move-selection-tx]]
-   ))
-
-
-
+   [core :as core :refer [get-selected-form
+                          move-selection-tx]]))
 
 
 ;; edit box
@@ -131,7 +127,7 @@
 
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
-  [{::keys [text]} bus e]
+  [{::keys [text]} e bus]
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)
                     (some-> (:symbol/value e) str)
@@ -159,7 +155,8 @@
                      (when-let [mut (editbox-keydown-mutation value (.-key ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
-                       (async/put! bus mut)))
+                       (core/send! bus mut)
+                       #_(async/put! bus mut)))
       ;; :on-blur #(pub! [:edit/finish @text])
       }]))
 

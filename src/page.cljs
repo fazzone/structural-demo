@@ -22,8 +22,9 @@
    [cmd.edit :as edit]
    [cmd.invar :as invar]
    
-   [core :refer [get-selected-form
-                 move-selection-tx]])
+   [core :as core
+    :refer [get-selected-form
+            move-selection-tx]])
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
@@ -52,7 +53,10 @@
 
     :edit/of {:db/valueType :db.type/ref}
     
-    :chain/selection {:db/valueType :db.type/ref}}))
+    :chain/selection {:db/valueType :db.type/ref}
+
+    :key/kbd {:db/unique :db.unique/identity}
+    :key/mutation {}}))
 
 (def test-form-data-bar
   '[["Chain 1"
@@ -68,6 +72,8 @@
        (assoc ch
               :coll/type :chain
               :coll/_contains "bar"))
+     
+     
      [{:db/ident ::meta-chain
        :coll/type :chain
        :coll/_contains "bar"
@@ -92,69 +98,59 @@
    :coll/type :bar))
 
 
-(defn create-conn
-  []
+(def init-tx-data
   (let [txe (test-form-data-tx (concat
                                 (map e/->tx test-form-data-bar)
                                 #_[(e/string->tx-all (macro-slurp "src/embed.cljc"))]
                                 #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
-                        timetravel-placeholders (e/->tx (vec (range 9)))]
-   (doto (d/create-conn schema)
-     (d/transact!
-      [{:db/ident ::state
-        :state/bar (:db/id txe)}
-       {:db/ident ::history
-        :db/id "history"
-        :coll/type :vec
-        :seq/first {:string/value "Eod of history" :coll/_contains "history"}
-        :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
-       {:db/ident ::inspect
-        :db/id "inspect"
-        :coll/type :inspect
-        :seq/first {:string/value "No inspect" :coll/_contains "history"}}
-       {:db/ident ::timetravel
-        :db/id "timetravel"
-        :coll/type :timetravel
-        :seq/first (:db/id timetravel-placeholders)}
-       timetravel-placeholders
-       txe])
-     (d/listen!
-      (fn [tx-report]
-        (doto tx-report
-          (dbrx/tx-listen-fn)
-          (h/tx-listen-fn)
-          (invar/tx-listen-fn)))))))
+        timetravel-placeholders (e/->tx (vec (range 9)))]
+    [{:db/ident ::state
+      :state/bar (:db/id txe)}
+     {:db/ident ::history
+      :db/id "history"
+      :coll/type :vec
+      :seq/first {:string/value "Eod of history" :coll/_contains "history"}
+      :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
+     {:db/ident ::inspect
+      :db/id "inspect"
+      :coll/type :inspect
+      :seq/first {:string/value "No inspect" :coll/_contains "history"}}
+     {:db/ident ::timetravel
+      :db/id "timetravel"
+      :coll/type :timetravel
+      :seq/first (:db/id timetravel-placeholders)}
+     
+     
+     {:key/kbd "f" :key/mutation :flow-right}
+     {:key/kbd "a" :key/mutation :flow-left}
+     {:key/kbd "w" :key/mutation :float}
+     {:key/kbd "s" :key/mutation :sink}
+     
+     {:key/kbd "h" :key/mutation :parent}
+     {:key/kbd "j" :key/mutation :next}
+     {:key/kbd "k" :key/mutation :prev}
+     {:key/kbd "l" :key/mutation :tail}
+     {:key/kbd "r" :key/mutation :raise}
 
-(def conn (create-conn))
+     {:key/kbd " " :key/mutation :insert-right}
+     {:key/kbd "S- " :key/mutation :insert-left}
 
-(def -secret-bus (async/chan))
-(def the-pub (async/pub -secret-bus first))
+     {:key/kbd "d" :key/mutation :delete-right}
+     {:key/kbd "Backspace" :key/mutation :delete-left}
 
-(defn register-sub
-  [topic action]
-  #_(let [ch (async/chan 1
-                       (keep action)
-                       (fn [ex]
-                         (prn "Ex handler")
-                         (js/console.log ex)))]
-    (go-loop [] (async/<! ch) (recur))
-    (async/sub the-pub topic ch))
-  (let [ch (async/chan)]
-    (go (async/<!
-         (async/reduce
-          (fn [a m]
-            (or (action m) a))
-          :ok
-          ch)))
-    (async/sub the-pub topic ch)))
+     {:key/kbd "Enter" :key/mutation :linebreak}
 
-(defmulti mut* (fn [[m & args] db zz-bus]
-                 m))
+     {:key/kbd "c" :key/mutation :clone}
+     {:key/kbd "z" :key/mutation :hop-left}
+     {:key/kbd "x" :key/mutation :hop-right}
+     
+     timetravel-placeholders
+     txe]))
 
 (defn ->mutation
   [tx-fn]
   (fn [[_ & args :as mutation]]
-    (let [db @conn]
+    #_(let [db @conn]
      (when-let [tx-data (apply tx-fn db args)]
        ;; transact metadata on db/current-tx?  run out of memory?
        #_(d/transact! conn tx-data (merge {:mutation mutation :input-tx-data tx-data} (meta mutation)))
@@ -212,7 +208,7 @@
   [e]
   (.reverse (parents-array e)))
 
-(defn scroll-within-chain*
+#_(defn scroll-within-chain*
   [sel]
   (let [top-level (first (reverse-parents-array sel))
         chain (some-> top-level :coll/_contains first)
@@ -235,43 +231,18 @@
                 inner-height (.-height br)
                 offset (.-offsetTop el-top)
                 space-left (- outer-height inner-height)
-                pos (.-scrollTop el-chain)
-                ]
-            ;; offset + 
-            #_(println
-             "Outer" outer-height
-             "Inner" inner-height
-             "Pos" pos
-             "Offset" offset
-             "Space left"
-           
-           
-           
-             )
-          
-          
+                pos (.-scrollTop el-chain)]
             (.scrollTo el-chain
                        #js{:top offset
-                           :behavior "smooth"})))
-        
-        #_(set! (.-scrollTop el-chain)
-                (- (.-offsetTop el-sel)
-                   (/ (.-clientHeight el-chain)
-                      2)))))))
+                           :behavior "smooth"})))))))
 
-(def scroll-within-chain!
-  (gf/throttle scroll-within-chain* 222))
+#_(def scroll-within-chain! (gf/throttle scroll-within-chain* 222))
 
-(register-sub ::scroll-into-view (fn [[_]] (scroll-within-chain! (d/entity @conn [:form/highlight true]))))
-
-(defn scroll-ref-into-view-after-render 
+#_(defn scroll-ref-into-view-after-render 
   [ref-name]
   {:did-update
    (fn [{:keys [subsequent] :as state}]
      (when-let [sel (some-> state :rum/react-component (.-refs) (aget ref-name))]
-       #_(println "Srivar"
-                  (:db/id (first (:rum/args state))))
-       #_(js/console.log sel)
        (scroll-within-chain! (first (:rum/args state))))
      state)})
 
@@ -283,7 +254,7 @@
 (defn breadcrumbs-portal-id [eid] (str eid "bp"))
 (defn modeline-portal-id [eid] (str eid "mp"))
 
-(rum/defc top-level-form-component < dbrx/ereactive
+(rum/defc top-level-form-component < dbrx/ereactive 
   [e bus]
   [:div.form-card {:ref "top-level"}
    [:span.form-title.code-font (str "#" (:db/id e)
@@ -348,6 +319,7 @@
    {:key (:db/id chain)
     :ref "chain"
     :class classes}
+   (str "Chain" (:db/id chain))
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus)
          (rum/with-key (:db/id f))))])
@@ -366,9 +338,9 @@
    (chex/main)])
 
 (rum/defc inspector < (dbrx/areactive :form/highlight :form/edited-tx)
-  [db]
+  [db bus]
   (let [sel (get-selected-form db)]
-    [:div
+    [:div.inspector
      [:span.prose-font (str "Inspect #" (:db/id sel))]
      (when-let [parent (first (:coll/_contains sel))]
        (case (:coll/type parent)
@@ -386,7 +358,7 @@
                             (= v (:db/id sel)))))))]]))]))
 
 (defmethod display-coll :inspect [k bus i]
-  (inspector (d/entity-db k)))
+  (inspector (d/entity-db k) bus))
 
 (defmethod display-coll :timetravel [tt bus i]
   [:div [:span.prose-font "Time travel"]
@@ -407,20 +379,24 @@
 
 (defn token-text
   [e]
-  (or
-   (some-> e :symbol/value str)
-   (when-let [k (:keyword/value e)]
-     (let [kns (namespace k)]
-       (if-not kns
-         (str k)
-         (rum/fragment ":" [:span.kn kns] "/" (name k)))))
-   (:string/value e)
-   (some-> e :number/value str)))
+  [:span
+   [:span.inline-tag (str (:db/id e))]
+   (or
+    (some-> e :symbol/value str)
+    (when-let [k (:keyword/value e)]
+      (let [kns (namespace k)]
+        (if-not kns
+          (str k)
+          (rum/fragment ":" [:span.kn kns] "/" (name k)))))
+    (:string/value e)
+    (some-> e :number/value str))])
 
-(rum/defc fcc < dbrx/ereactive #_(scroll-ref-into-view-after-render "selected")
+(rum/defc fcc < dbrx/ereactive
+  #_(scroll-ref-into-view-after-render "selected")
   [e bus indent-prop]
+  #_(println "Fcc" (:db/id e))
   (-> (or (when (:form/editing e)
-            (eb/edit-box bus e))
+            (eb/edit-box e bus))
           (when-let [tc (token-class e)]
             [:span (cond-> {:key (:db/id e)
                             :class (if (:form/highlight e)
@@ -428,7 +404,8 @@
                                      (str tc " tk"))
                             :on-click (fn [ev]
                                         (.stopPropagation ev)
-                                        (async/put! bus [::select-form (:db/id e)]))}
+                                        (core/send! bus [:select (:db/id e)])
+                                        #_(async/put! bus [::select-form (:db/id e)]))}
                      (:form/highlight e) (assoc :ref "selected"))
              (token-text e)])
           (when (:coll/type e)
@@ -445,14 +422,7 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-(register-sub ::select-form (->mutation select-form-tx ))
 
-(register-sub ::raise-selected-form
-              (->mutation (fn [db] (edit/form-raise-tx (get-selected-form db)))))
-(register-sub ::exchange-with-next
-              (->mutation (fn [db] (edit/exchange-with-next-tx (get-selected-form db)))))
-(register-sub ::exchange-with-previous
-              (->mutation (fn [db] (edit/exchange-with-previous-tx (get-selected-form db)))))
 
 (defn form-duplicate-tx
   {:this-ms-masdf "Okay"}
@@ -480,7 +450,7 @@
     (into [new-node]
           (edit/insert-after-tx sel new-node))))
 
-(register-sub ::duplicate-selected-form (->mutation insert-duplicate-tx))
+
 
 (defn form-wrap-tx
   [e ct]
@@ -490,7 +460,6 @@
           :seq/first (:db/id e)}]
         (edit/form-overwrite-tx e "newnode")))
 
-(register-sub ::wrap-selected-form (->mutation (fn [db ct] (form-wrap-tx (get-selected-form db) ct))))
 
 (defn wrap-and-edit-first-tx
   [sel ct]
@@ -508,19 +477,10 @@
            (edit/form-overwrite-tx sel "first")
            (move-selection-tx (:db/id sel) "first")))))
 
-(register-sub ::wrap-and-edit-first (->mutation (fn [db ct] (wrap-and-edit-first-tx (get-selected-form db) ct))))
 
 ;; editing
 
 
-(register-sub :edit/finish (->mutation (fn [db text] (eb/finish-edit-tx db (d/entid db [:form/editing true]) text))))
-(register-sub :edit/reject (->mutation (fn [db] (eb/reject-edit-tx db (d/entid db [:form/editing true])))))
-(register-sub :edit/wrap   (->mutation (fn [db ct value] (eb/wrap-edit-tx db (d/entid db [:form/editing true]) ct value))))
-(register-sub :edit/finish-and-move-up (->mutation (fn [db text] (eb/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))))
-(register-sub :edit/finish-and-edit-next-node (->mutation (fn [db text] (eb/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text))))
-
-#_(register-sub ::insert-editing (->mutation edit/insert-editing-tx))
-(register-sub ::insert-editing (->mutation edit/insert-editing-tx))
 
 (defn begin-edit-existing-node-tx
   [e]
@@ -532,7 +492,7 @@
     (when-not (:coll/type sel)
      (begin-edit-existing-node-tx sel))))
 
-(register-sub ::edit-selected (->mutation edit-selected-tx))
+
 
 (defn edit-new-wrapped-tx
   [db coll-type init]
@@ -548,16 +508,11 @@
           (concat (edit/insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
 
-(register-sub ::edit-new-wrapped (->mutation edit-new-wrapped-tx))
 
 
 
 ;; movements?
 
-
-(register-sub ::move (->mutation move/movement-tx))
-
-(register-sub ::repeat-move (->mutation move/repeat-movement-tx))
 
 (defn move-and-delete-tx
   [db movement-type]
@@ -565,8 +520,6 @@
     (when-let [dst (move/move movement-type src)]
       (concat (edit/form-delete-tx src)
               [[:db/add (:db/id dst) :form/highlight true]]))))
-
-(register-sub ::delete-with-movement (->mutation move-and-delete-tx))
 
 (defn indent-selected-form-tx
   [db delta]
@@ -576,9 +529,6 @@
                       (-> (:form/indent sel)
                           (or 0)))]]))
 
-(register-sub ::indent-form (->mutation indent-selected-form-tx))
-
-(register-sub ::reset-indent (->mutation (fn [db] [{:db/id (:db/id (get-selected-form db)) :form/indent 0}])))
 
 (defn linebreak-selected-form-tx
   [db]
@@ -589,7 +539,6 @@
      (when parent-indent
        [:db/add (:db/id sel) :form/indent parent-indent])]))
 
-(register-sub ::linebreak-form (->mutation linebreak-selected-form-tx))
 
 
 
@@ -602,8 +551,7 @@
                (when (:coll/type e)
                  [:db/add (:db/id e) :form/linebreak indent])))))
 
-(register-sub ::recursively-set-indent (->mutation recursively-set-indent-tx))
-(register-sub ::check-invariants (->mutation (fn [db] (invar/check (get-selected-form db)))))
+
 
 #_(register-sub ::execute-selected-as-mutation
               (->mutation (fn [db]
@@ -625,9 +573,7 @@
           (concat (edit/insert-before-tx top-level new-node)
                   (move-selection-tx (:db/id sel) (:db/id new-node))))))
 
-(register-sub ::import-data-toplevel (->mutation import-formdata-tx))
-
-(register-sub ::reify-extract-selected
+#_(register-sub ::reify-extract-selected
               (->mutation (fn [db]
                             (let [sel (get-selected-form db)]
                              (import-formdata-tx
@@ -644,7 +590,7 @@
                                         :else
                                         [a v]))))))))
 
-(register-sub
+#_(register-sub
  ::reify-parse-selected
  (->mutation
   (fn [db]
@@ -658,7 +604,7 @@
 
 
 
-(register-sub ::reify-last-mutation
+#_(register-sub ::reify-last-mutation
               (->mutation (fn [db]
                             (let [r @h/last-tx-report]
                               (import-formdata-tx
@@ -667,9 +613,9 @@
                                 :tx-meta (:tx-meta r)
                                 :tempids (:tempids r)})))))
 
-(register-sub ::revert-last (->mutation (fn [db] (h/undo-last-tx!))))
 
-(register-sub ::eval
+
+#_(register-sub ::eval
               (->mutation (fn [db]
                             (let [pa (some-> (get-selected-form db) (parents-array))
                                   [mut & args] (first (keep :form/eval-action pa))]
@@ -692,7 +638,7 @@
     (select-form-tx db (:db/id prev-sel))))
 
 
-(register-sub ::select-chain
+#_(register-sub ::select-chain
               (->mutation (fn [db]
                             (let [sel (get-selected-form db)]
                               (if (= :chain (:coll/type sel))
@@ -704,13 +650,16 @@
   (or (:chain/selection chain) chain))
 
 (defn hop*
-  [db mover]
+  [mover db]
   (let [sel (get-selected-form db)]
     (if (= :chain (:coll/type sel))
-      (when-let [hop-chain (mover sel)]
-        (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain))))
+      (do #_(println "Hop from chain")
+          (when-let [hop-chain (mover sel)]
+            (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))))
       (let [chain (some-> sel reverse-parents-array first :coll/_contains first)]
+        #_(println "The chain is" (d/touch chain))
         (when-let [hop-chain (mover chain)]
+          #_(println "The hop-chain is" (d/touch hop-chain) "The tarrget is " (hop-target hop-chain))
           (concat (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
                   [{:db/id (:db/id chain)
                     :chain/selection (:db/id sel)}]))))))
@@ -723,10 +672,6 @@
   [e]
   (some-> e :seq/_first first :seq/next :seq/first))
 
-(register-sub ::hop-left  (->mutation (fn [db]
-                                        (println "Hopleft")
-                                        (hop* db seq-previous))))
-(register-sub ::hop-right (->mutation (fn [db] (hop* db seq-next))))
 
 (defn drag*
   [db mover]
@@ -740,8 +685,6 @@
            
            #_(edit/form-replace-tx newnode sel)))))))
 
-(register-sub ::drag-left (->mutation (fn [db] (drag* db seq-previous))))
-
 (defn select-1based-nth-reverse-parent-of-selected-tx
   [db n]
   (let [sel (get-selected-form db)
@@ -751,9 +694,7 @@
       (move-selection-tx (:db/id sel)
                          (:db/id (nth rpa (dec n)))))))
 
-(register-sub ::select-1based-nth-reverse-parent (->mutation select-1based-nth-reverse-parent-of-selected-tx))
-
-(register-sub ::extract-to-new-top-level
+#_(register-sub ::extract-to-new-top-level
               (->mutation
                (fn [db]
                  (let [sel (get-selected-form db)
@@ -894,26 +835,9 @@
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
 
-
-
-
-#_(rum/defc key-bindings-table []
-  [:table
-   [:thead
-    [:tr
-     [:td {:style {:width "8em"}} "Key"]
-     [:td {:style {:width "30em"}} "Message (click to send)"]]]
-   [:tbody
-    {} 
-    (for [[k msg] (sort-by (comp  pr-str val) (seq special-key-map))]
-      [:tr {:key k}
-       [:td [:code k]]
-       [:td [:button {:style {:font-family "monospace"}
-                      :on-click #(pub! msg) }
-             (pr-str msg)]]])]])
-
 (rum/defc all-datoms-table < rum/reactive []
-  (debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
+  [:div "No datoms table"]
+  #_(debug/datoms-table-eavt* (d/datoms (rum/react conn) :eavt)))
 
 (declare command-compose-feedback)
 (rum/defc modeline-inner
@@ -960,14 +884,15 @@
              (rum/react eb/editbox-ednparse-state)))
           (rum/portal nn)))))
 
-(rum/defc root-component < dbrx/ereactive
-  [state]
+(declare setup-app)
+(rum/defc root-component ;; <  dbrx/ereactive
+  [state bus]
   (let [db (d/entity-db state)]
     [:div
      #_(str " T+" (- (js/Date.now) load-time) "ms")
-     (breadcrumbs-always db -secret-bus)
+     #_(breadcrumbs-always db )
      #_(h/history-view conn bus)
-     (fcc (:state/bar state) -secret-bus 0)
+     (fcc (:state/bar state) bus 0)
      
      #_(modeline-portal db)]))
 
@@ -981,6 +906,8 @@
 (def initial-compose-state {:bindings special-key-map :compose nil})
 (def key-compose-state (atom initial-compose-state))
 
+(def keyboard-bus (atom nil))
+
 (defn global-keydown*
   [ev]
   #_(prn eb/global-editing-flag)
@@ -990,8 +917,9 @@
             {:keys [bindings compose]} @key-compose-state
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
-        (prn "Key" kbd)
-        (async/put! -secret-bus [::global-keydown kbd])
+        #_(prn "Key" kbd)
+        #_(async/put! -secret-bus [::global-keydown kbd])
+        (core/send! @keyboard-bus [:kbd kbd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
           (.preventDefault ev)
@@ -1000,9 +928,12 @@
           (reset! key-compose-state initial-compose-state)
           (cond
             (vector? mut) (do (reset! key-compose-state initial-compose-state)
-                              (async/put! -secret-bus (with-meta mut {:kbd (string/join " " next-kbd)
-                                                    ;; :tkd tkd
-                                                    })))
+                              #_(println "Mut" mut)
+                              (core/send! @keyboard-bus
+                                          (with-meta mut {:kbd (string/join " " next-kbd)}))
+                              #_(async/put! -secret-bus (with-meta mut {:kbd (string/join " " next-kbd)
+                                                                        ;; :tkd tkd
+                                                                        })))
             (map? mut) (reset! key-compose-state {:bindings mut :compose next-kbd})
             :else (do (println "Bad key entry" mut)
                       (reset! key-compose-state initial-compose-state))))))))
@@ -1028,6 +959,89 @@
        " "
        (pr-str bindings)])))
 
+(defn setup-app
+  []
+  (doto (core/app schema init-tx-data)
+    (core/register-simple! :select select-form-tx)
+    (core/register-simple! :flow-right (fn [db] (move/movement-tx db :move/flow)))
+    (core/register-simple! :flow-left  (fn [db] (move/movement-tx db :move/back-flow)))
+    (core/register-simple! :float (comp edit/exchange-with-previous-tx get-selected-form))
+    (core/register-simple! :sink (comp edit/exchange-with-next-tx get-selected-form))
+
+    (core/register-simple! :parent (fn [db] (move/movement-tx db :move/up)))
+    (core/register-simple! :next (fn [db] (move/movement-tx db :move/next-sibling)))
+    (core/register-simple! :prev (fn [db] (move/movement-tx db :move/prev-sibling)))
+    (core/register-simple! :tail (fn [db] (move/movement-tx db :move/most-nested)))
+    
+    (core/register-simple! :insert-right (fn [db] (edit/insert-editing-tx db :after "")))
+    (core/register-simple! :insert-left  (fn [db] (edit/insert-editing-tx db :before "")))
+    
+    (core/register-simple! :edit/reject (fn [db] (eb/reject-edit-tx db (d/entid db [:form/editing true]))))
+    (core/register-simple! :edit/finish (fn [db text] (eb/finish-edit-tx db (d/entid db [:form/editing true]) text)) )
+
+    
+    (core/register-simple! :edit/finish-and-move-up (fn [db text] (eb/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text)))
+    (core/register-simple! :edit/finish-and-edit-next-node (fn [db text] (eb/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text)))
+    (core/register-simple! :edit/wrap (fn [db ct value] (eb/wrap-edit-tx db (d/entid db [:form/editing true]) ct value)))
+    (core/register-simple! :edit/finish-and-edit-next-node (fn [db text] (eb/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text)))
+    
+    (core/register-simple! :delete-right (fn [db] (move-and-delete-tx db :move/forward-up)))
+    (core/register-simple! :delete-left  (fn [db] (move-and-delete-tx db :move/backward-up)))
+    (core/register-simple! :raise (comp edit/form-raise-tx get-selected-form))
+
+    (core/register-simple! :clone insert-duplicate-tx)
+    (core/register-simple! :linebreak linebreak-selected-form-tx)
+    
+    (core/register-simple! :hop-left  (partial hop* seq-previous))
+    (core/register-simple! :hop-right (partial hop* seq-next))
+    
+    (core/register-mutation! :kbd (fn [[_ kbd] db bus]
+                                    (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
+                                      (core/send! bus [mut]))))))
+
+(comment
+  (register-sub ::select-form (->mutation select-form-tx ))
+  (register-sub ::raise-selected-form (->mutation (fn [db] (edit/form-raise-tx (get-selected-form db)))))
+  (register-sub ::exchange-with-next (->mutation (fn [db] (edit/exchange-with-next-tx (get-selected-form db)))))
+  (register-sub ::exchange-with-previous (->mutation (fn [db] (edit/exchange-with-previous-tx (get-selected-form db)))))
+
+  (register-sub ::duplicate-selected-form (->mutation insert-duplicate-tx))
+  (register-sub ::wrap-selected-form (->mutation (fn [db ct] (form-wrap-tx (get-selected-form db) ct))))
+  (register-sub ::wrap-and-edit-first (->mutation (fn [db ct] (wrap-and-edit-first-tx (get-selected-form db) ct))))
+  (register-sub :edit/finish (->mutation (fn [db text] (eb/finish-edit-tx db (d/entid db [:form/editing true]) text))))
+  (register-sub :edit/reject (->mutation (fn [db] (eb/reject-edit-tx db (d/entid db [:form/editing true])))))
+  (register-sub :edit/wrap   (->mutation (fn [db ct value] (eb/wrap-edit-tx db (d/entid db [:form/editing true]) ct value))))
+  (register-sub :edit/finish-and-move-up (->mutation (fn [db text] (eb/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))))
+  (register-sub :edit/finish-and-edit-next-node (->mutation (fn [db text] (eb/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text))))
+
+
+  (register-sub ::edit-selected (->mutation edit-selected-tx))
+  (register-sub ::edit-new-wrapped (->mutation edit-new-wrapped-tx))
+  (register-sub ::move (->mutation move/movement-tx))
+  (register-sub ::repeat-move (->mutation move/repeat-movement-tx))
+  (register-sub ::delete-with-movement (->mutation move-and-delete-tx))
+  (register-sub ::indent-form (->mutation indent-selected-form-tx))
+  (register-sub ::reset-indent (->mutation (fn [db] [{:db/id (:db/id (get-selected-form db)) :form/indent 0}])))
+  (register-sub ::linebreak-form (->mutation linebreak-selected-form-tx))
+  (register-sub ::recursively-set-indent (->mutation recursively-set-indent-tx))
+  (register-sub ::check-invariants (->mutation (fn [db] (invar/check (get-selected-form db)))))
+  (register-sub ::import-data-toplevel (->mutation import-formdata-tx))
+
+  (register-sub ::revert-last (->mutation (fn [db] (h/undo-last-tx!))))
+
+  (register-sub ::hop-left (->mutation (fn [db] (hop* seq-previous db))))
+  (register-sub ::hop-right (->mutation (fn [db] (hop* seq-next db))))
+  (register-sub ::drag-left (->mutation (fn [db] (drag* db seq-previous))))
+  (register-sub ::select-1based-nth-reverse-parent (->mutation select-1based-nth-reverse-parent-of-selected-tx))
+
+
+
+
+  #_ (register-sub ::insert-editing (->mutation edit/insert-editing-tx))
+  (register-sub ::insert-editing (->mutation edit/insert-editing-tx))
+
+
+  (register-sub ::scroll-into-view (fn [[_]] (scroll-within-chain! (d/entity @conn [:form/highlight true])))))
 
 
 ;; last/previous edit position switcher
@@ -1065,9 +1079,17 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
-  (dbrx/reset-for-reload!)
-  (let [se (d/entity @conn ::state)] 
+  #_(dbrx/reset-for-reload!)
+  (let [{:keys [conn bus]} (setup-app)
+        se (d/entity @conn ::state)] 
+    
+    #_(run! (partial core/send! bus)
+          [[:flow-left]
+           [:raise]])
+    
+    (println "Reset keyhboard bus" bus)
+    (reset! keyboard-bus bus)
     (rum/mount
      #_(debug-component @conn)
-     (root-component (d/entity @conn ::state))
+     (root-component se bus)
      (.getElementById js/document "root"))))
