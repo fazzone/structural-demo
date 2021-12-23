@@ -25,23 +25,22 @@
 (defn flow*
   [e]
   (when e
-    
-    #_(or (move :move/next-sibling e)
+    (or (move :move/next-sibling e)
         (recur (move :move/up e)))
-    (if-let [m (move :move/next-sibling e)]
+    #_(if-let [m (move :move/next-sibling e)]
       (do (println "Flow*move" e m) m)
       (do (println "Flow*recurup" e)
           (recur (move :move/up e))))))
 
 (defmethod move :move/flow [_ e]
-  (if-let [f (:seq/first e)]
+  (or (:seq/first e)
+      (flow* e))
+  
+  #_(if-let [f (:seq/first e)]
     (do (println "Flowfirst" e)
         f)
     (do (println "Flow* " e)
-        (flow* e)))
-  
-  #_(or (:seq/first e)
-      (flow* e)))
+        (flow* e))))
 
 (defmethod move :move/back-flow [_ e]
   (or (->> e
@@ -68,9 +67,12 @@
   [db movement-type]
   (let [src (get-selected-form db)
         dst (move movement-type src)] 
-    (if-not dst
-      (println "Cannot" movement-type "from" src)
-      (move-selection-tx (:db/id src) (:db/id dst)))))
+    (when dst
+      (move-selection-tx (:db/id src) (:db/id dst)))
+    #_(if-not dst
+        nil
+        #_(println "Cannot" movement-type "from" src)
+        (move-selection-tx (:db/id src) (:db/id dst)))))
 
 (defn repeat-movement-tx
   [db movement-type reps]

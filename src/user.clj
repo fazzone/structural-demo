@@ -36,5 +36,7 @@
   (System/exit 0))
 
 (comment
+  (server/stop!)
+  (server/start!)
   (shadow/watch :br)
   (shadow/release :br))

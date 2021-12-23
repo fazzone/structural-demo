@@ -66,6 +66,8 @@ body {
 
 span.tk:hover {
     background-color: #4504b982;
+    border-color: #4504b982;
+
     /* background-color: radial-gradient(#000, #ae81ff); */
     /* border: 1px solid #ae81ff; */
     cursor: pointer;
@@ -86,6 +88,8 @@ span.tk.l  { color: #b5bd68; }
     color: #fff;
     border-radius: 1ex;
 }
+
+
 .selected .d { color: #a6a6a0; }
 .selected > .d { color: #fff; }
 
@@ -109,21 +113,29 @@ span.form-title {
 }
 
 
-/* span.tk { */
-/*     padding-left: 1ch; */
-/*     padding-right: 1ch; */
-/* } */
 
+/* token spacing with next sibling selector */
 /* span.tk + span.tk { margin-left: 1ch; } */
-/* span.tk + span.cs { margin-left: 1ch; } */
-/* span.ce + span.cs { margin-left: 1ch; } */
-/* span.ce + span.tk { margin-left: 1ch; } */
-
-span.tk + span.tk { margin-left: 1ch; }
-span.tk + span.c  { margin-left: 1ch; }
+/* span.tk + span.c  { margin-left: 1ch; } */
+/* span.c + span.tk  { margin-left: 1ch; } */
 span.c + span.c   { margin-left: 1ch; }
-span.c + span.tk  { margin-left: 1ch; }
-span.tk + .edit-box {margin-left: 1ch; }
+/* span.tk + .edit-box {margin-left: 1ch; } */
+span.c + .edit-box {margin-left: 1ch; }
+
+
+/* token spacing with borders */
+.tk {
+    border-width: 0 1ex 0 1ex;
+    border-style: solid;
+    border-radius: 1ex;
+    border-color: transparent;
+}
+.tk.selected {
+    border-color: #062606;
+}
+
+
+/* indentation */
 
 span.indented {
     margin-left: 2ch;
@@ -134,9 +146,17 @@ span.indented {
 }
 
 .edit-box {
-    display: inline;
+    display: none;
     margin-right: 1ch;
-    border: 0;
+
+    /* border-width: 3px; */
+    /* border-style: solid; */
+    /* border-radius: 1ex; */
+    /* border-color: tomato; */
+
+    min-width: 2ch;
+    /* border: 1px solid #fff; */
+    /* border-radius: 1ex; */
     padding: 0;
 }
 input.edit-box {
@@ -163,7 +183,7 @@ input.edit-box {
 
 
 .bar {
-    height: 90vh;
+    /* height: 90vh; */
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
@@ -303,10 +323,16 @@ span.key-compose-echo {
 .datoms-table.eav {
     grid-template-columns: minmax(3em, 1fr) minmax(10em, 2fr) 2fr;
 }
+
+.eavt-row.retraction {
+    background-color: #444;
+}
+
+
 .keyboard-container {
     /* width: 50em; */
     /* max-width: 65em; */
-    font-size: 10pt;
+    font-size: 9pt;
     max-width: 100ex;
     /* transition: width 0.08s; */
 }

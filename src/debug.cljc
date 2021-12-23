@@ -35,8 +35,7 @@
                    n 20]
                (if (> n (count s) )
                  s
-                 [:abbr {:title s} (subs s 0 n) ])
-               )]
+                 [:abbr {:title s} (subs s 0 n) ]))]
             [:code {:key (+ (* 3 i) 2)} (str v)]))))])
 
 (rum/defc datoms-table-eavt* [ds]
@@ -52,8 +51,10 @@
     {} 
     (->> ds
          (map-indexed
-          (fn [i [e a v t r]]
-            [:tr {:key i}
+          (fn [i [e a v t a?]]
+            [:tr {:key i
+                  :class (str "eavt-row"
+                              (when-not a? " retraction"))}
              [:td [:code (str e)]]
              [:td [:code (str a)]]
              [:td [:code (str v)]]

@@ -200,7 +200,7 @@
     (go root row col)))
 
 (defn onecell*
-  [node size row col taken]
+  [node bus size row col taken]
   (let [half   (* 0.5 size)
         double (* 2 size)
         width  (* 6 half)
@@ -208,7 +208,6 @@
         x      (* width col)
         y      (* height row)
         label  (str "#" (:db/id node) "-" (count taken))]
-    #_(println "Onecell" (:db/id ))
     (rum/fragment
      (if-let [sv (or (:symbol/value node)
                      (:keyword/value node)
@@ -230,11 +229,14 @@
              arrowright (+ (* 0.2 size) (* width splay))
              control    (+ arrowleft (/ (- arrowright arrowleft) 2))]
          (rum/fragment
-          (onecell cdr size row splay (assoc taken [row col] (:db/id node)))
-          [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
+          (onecell cdr bus size row splay (assoc taken [row col] (:db/id node)))
+          #_[:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
                   :d          (str "M" (str arrowleft) "," (str (+ y half))
                                    " Q" (str control) "," (str y)
-                                   " " (str arrowright) "," (str (+ y half)))}])))
+                                   " " (str arrowright) "," (str (+ y half)))}]
+          [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
+                  :d          (str "M" arrowleft "," (+ y half)
+                                   "H" arrowright)}])))
      (when-let [car (:seq/first node)]
        (let [droop (+ row 1
                       (case (:db/id car)
@@ -242,28 +244,29 @@
                         43 2
                         0))]
          (rum/fragment
-          (onecell car size droop col (assoc taken [row col] (:db/id node)))
+          (onecell car bus size droop col (assoc taken [row col] (:db/id node)))
           
           [:path {:marker-end "url(#head)" 
                   :d          (str "M" (str (+ x half)) "," (str (+ y half))
                                    " V" (str (- (* height droop) half)))}]))))))
 
 (rum/defc onecell < dbrx/ereactive
-  [node size row col taken]
+  [node bus size row col taken]
   (if-not (:form/highlight node)
-    (onecell* node size row col taken)
-    [:g {:stroke "#ae81ff" :fill "#ae81ff"} (onecell* node size row col taken)]))
+    (onecell* node bus size row col taken)
+    [:g {:stroke "#ae81ff" :fill "#ae81ff"}
+     (onecell* node bus size row col taken)]))
 
 (rum/defcs svg-viewbox < 
   {:init (fn [state props]
            (assoc state
                   :computed-size (some-> state :rum/args first (compute-conscell-extents))
                   :taken-pos {}))}
-  [{:keys [computed-size taken-pos]} root]
-  (let [size 50
+  [{:keys [computed-size taken-pos]} root bus]
+  (let [size 45
         [rmax cmax] computed-size
-        width (* 3.5 size (+ 2 cmax))
-        height (* 5 size (inc rmax))]
+        width (* 3.5 size (inc cmax))
+        height (* 2.5 size (inc rmax))]
     #_(prn "Computer size" computed-size)
     #_(conscell-layout-bfs root)
     #_(compute-thing root)
@@ -278,7 +281,7 @@
           :fill "#fff"
           :stroke-width 1}
       
-      (onecell root size 0 0 taken-pos)]
+      (onecell root bus size 0 0 taken-pos)]
      #_(for [i (range 9)]
          [:rect {:key i
                  :stroke "tomato"

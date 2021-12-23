@@ -103,15 +103,6 @@
 
 
 
-(comment
-  (run! prn
-        (->form
-         (d/entity
-          (time (:db-after (d/transact!
-                       (d/create-conn form-schema)
-                       [(time (n->tx (time (p/parse-string-all (slurp "src/embed.cljc")))))])))
-          1))))
-
 (defn string->tx
   [s]
   (n->tx (p/parse-string s )))
@@ -119,7 +110,6 @@
 (defn string->tx-all
   [s]
   (n->tx (p/parse-string-all s )))
-
 
 (declare ->tx)
 

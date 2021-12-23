@@ -29,10 +29,11 @@
                  (update-first-arg! react-component updated-entity)
                  (recur)))
              (core/connect-sub! bus (:db/id ent) ch)
-             (assoc state ::chan ch ::nupdate nupdate)))
+             (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [_ {::keys [nupdate]}]
-                    (when (some? @nupdate)
-                      (not (reset! nupdate false))))
+                    true
+                    #_(when (some? @nupdate)
+                        (not (reset! nupdate false))))
    :will-remount (fn [old-state new-state]
                    (let [[old-e old-bus] (-> old-state :rum/args)
                          [new-e bus] (-> new-state :rum/args)
@@ -40,16 +41,16 @@
                          new-eid (:db/id new-e)]
                      (when-not (identical? bus old-bus)
                        (throw (ex-info "The bus cannot change" {})))
-                     (when-not (identical? (::chan old-state) (::chan new-state))
+                     (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
                        (throw (ex-info "The chan cannot change" {})))
                      (when-not (= old-eid new-eid)
                        (println "!!!!! The eids changed" old-eid new-eid)
-                       (core/disconnect-sub! bus old-eid (::chan old-state))
-                       (core/connect-sub! bus new-eid (::chan new-state)))
+                       (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
+                       (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
                      new-state))
-   :will-unmount (fn [{:rum/keys [args] ::keys [chan] :as state}]
+   :will-unmount (fn [{:rum/keys [args] :as state}]
                    (let [[e bus] args]
-                     (core/disconnect-sub! bus (:db/id e) chan)
+                     (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
                      state))})
 
 (defn areactive
@@ -65,11 +66,11 @@
            (recur)))
        (doseq [a as]
          (core/connect-sub! bus a ch))
-       (assoc state ::achan ch)))
+       (assoc state ::areactive.chan ch)))
    :will-unmount
    (fn [{:rum/keys [react-component] :as state}]
      (let [[_ bus] (:rum/args state)
-           ch (::achan state)]
+           ch (::areactive.chan state)]
        (doseq [a as]
          (core/disconnect-sub! bus a ch)))
      state)})

@@ -9,16 +9,24 @@
   (let [spine (first (:seq/_first e))
         next  (some-> spine :seq/next)
         prev  (some-> spine :seq/_next first)]
-    (into [[:db/retractEntity (:db/id e)]]
-     (cond
-       (and prev next) [[:db/add (:db/id prev) :seq/next (:db/id next)]]
-       prev            [[:db/retract (:db/id prev) :seq/next (:db/id spine)]]
-       next            [(when-let [f (:seq/first next)]
-                          [:db/add (:db/id spine) :seq/first (:db/id f)])
-                        (if-let [n (:seq/next next)]
-                          [:db/add (:db/id spine) :seq/next (:db/id n)]
-                          (when (:seq/next spine)
-                            [:db/retract (:db/id spine) :seq/next (:db/id next)]))]))))
+    (into [[:db/retractEntity (:db/id e)]
+           [:db/retract (:db/id spine) :seq/first (:db/id e)]]
+          (cond
+            (and prev next)
+            [[:db/retract (:db/id spine) :seq/next (:db/id next)]
+             [:db/add (:db/id prev) :seq/next (:db/id next)]]
+       
+            prev
+            [[:db/retract (:db/id prev) :seq/next (:db/id spine)]
+             [:db/retract (:db/id spine) :seq/next (:db/id next)]]
+       
+            next
+            [(when-let [f (:seq/first next)]
+               [:db/add (:db/id spine) :seq/first (:db/id f)])
+             (if-let [n (:seq/next next)]
+               [:db/add (:db/id spine) :seq/next (:db/id n)]
+               (when (:seq/next spine)
+                 [:db/retract (:db/id spine) :seq/next (:db/id next)]))]))))
 
 ;; overwrite with something that has not existed before
 ;; if you have a tempid, you want this one
@@ -27,7 +35,7 @@
   [e replacement-eid]
   (let [spine (first (:seq/_first e))
         coll (first (:coll/_contains e))]
-    (println "Overwrite" spine coll)
+    #_(println "Overwrite" spine coll)
     (when (and spine coll)
       [[:db/retract (:db/id coll) :coll/contains (:db/id e)]
        [:db/add (:db/id coll) :coll/contains replacement-eid]
@@ -98,11 +106,17 @@
 
 
 
+(defn exactly-one
+  [[x & more :as xs]]
+  (when more
+    (throw (ex-info "More than one" {:xs xs}))
+    #_(println "More than one" xs))
+  x)
 
 (defn exchange-with-previous-tx
   [sel]
-  (let [spine  (first (:seq/_first sel))
-        prev   (some-> spine :seq/_next first)
+  (let [spine  (exactly-one (:seq/_first sel))
+        prev   (some-> spine :seq/_next exactly-one)
         next   (some-> spine :seq/next)
         parent (first (:coll/_contains sel))]
     (when (and prev parent)
