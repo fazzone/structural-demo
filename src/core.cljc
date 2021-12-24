@@ -1,9 +1,11 @@
 (ns core
   (:require [datascript.core :as d]
-            [cljs.core.async :as async])
-  (:require-macros
-   [cljs.core.async.macros :refer [go
-                                   go-loop]]))
+            #?(:clj [clojure.core.async :as async :refer [go go-loop]]
+               :cljs [cljs.core.async :as async]))
+  #?(:cljs
+     (:require-macros
+      [cljs.core.async.macros :refer [go
+                                      go-loop]])))
 
 (defn get-selected-form
   [db]
@@ -61,11 +63,9 @@
                          (println "Error handler" err)))]
     (go-loop []
       (let [[_ & args] (async/<! ch)]
-        (try
-          #_(println "Mut" topic args)
-          (d/transact! conn (apply mut-fn @conn args))
-          (catch js/Error e
-            (println "Error transacting" e)))
+        (try (d/transact! conn (apply mut-fn @conn args))
+             (catch #?(:cljs js/Error :clj Exception) e
+               (println "Error transacting" e)))
         (recur)))
     
     #_(go (async/<!

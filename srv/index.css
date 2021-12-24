@@ -115,24 +115,24 @@ span.form-title {
 
 
 /* token spacing with next sibling selector */
-/* span.tk + span.tk { margin-left: 1ch; } */
-/* span.tk + span.c  { margin-left: 1ch; } */
-/* span.c + span.tk  { margin-left: 1ch; } */
+span.tk + span.tk { margin-left: 1ch; }
+span.tk + span.c  { margin-left: 1ch; }
+span.c + span.tk  { margin-left: 1ch; }
 span.c + span.c   { margin-left: 1ch; }
-/* span.tk + .edit-box {margin-left: 1ch; } */
+span.tk + .edit-box {margin-left: 1ch; }
 span.c + .edit-box {margin-left: 1ch; }
 
 
 /* token spacing with borders */
-.tk {
-    border-width: 0 1ex 0 1ex;
-    border-style: solid;
-    border-radius: 1ex;
-    border-color: transparent;
-}
-.tk.selected {
-    border-color: #062606;
-}
+/* .tk { */
+/*     border-width: 0 1ex 0 1ex; */
+/*     border-style: solid; */
+/*     border-radius: 1ex; */
+/*     border-color: transparent; */
+/* } */
+/* .tk.selected { */
+/*     border-color: #062606; */
+/* } */
 
 
 /* indentation */
@@ -146,7 +146,7 @@ span.indented {
 }
 
 .edit-box {
-    display: none;
+    /* display: none; */
     margin-right: 1ch;
 
     /* border-width: 3px; */
@@ -155,8 +155,8 @@ span.indented {
     /* border-color: tomato; */
 
     min-width: 2ch;
-    /* border: 1px solid #fff; */
-    /* border-radius: 1ex; */
+    border: 1px solid #fff;
+    border-radius: 1ex;
     padding: 0;
 }
 input.edit-box {
@@ -232,9 +232,10 @@ ul.parent-path li {
     display: inline;
 }
 ul.parent-path {
+    margin: 0;
     padding: 0;
     /* max-width: min-content; */
-    line-height: 2;
+    line-height: 1.5;
     /* height: 25px; */
     /* white-space: nowrap; */
 }
@@ -257,7 +258,7 @@ ul.parent-path:empty {
 }
 
 div.bp {
-    height: 6ex;
+    height: 4ex;
     /* margin-top: -1ex; */
 }
 
@@ -273,12 +274,12 @@ span.indenter {
     transition: margin-left 0.08s;
     /* transition-timing-function: linear; */
 }
+
 .modeline {
     /* position: fixed; */
     /* left: 0; */
     /* bottom: 0; */
     display: block;
-    height: 3ex;
     width: 100%;
     color: #000;
     background-color: #ae81ff;
@@ -287,6 +288,7 @@ span.indenter {
 .modeline-size {
     height: 3ex;
     line-height: 3ex;
+    margin-bottom: 1ex;
 }
 span.modeline.editing {
     background-color: #2a4a2a;

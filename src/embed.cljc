@@ -4,19 +4,10 @@
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]
    [rewrite-clj.node.protocols :as np]
+   [schema :as s]
    [datascript.core :as d]))
 
-(def form-schema
-  {:symbol/value {:db/index true}
-   :number/value {}
-   :string/value {}
-   :keyword/value {:db/index true}
-   :whitespace/value {}
-   :coll/type {}
-   :coll/contains {:db/valueType :db.type/ref
-                   :db/cardinality :db.cardinality/many}
-   :seq/first {:db/valueType :db.type/ref}
-   :seq/next {:db/valueType :db.type/ref}})
+
 
 (defn seq-tx
   [xs]
@@ -107,9 +98,15 @@
   [s]
   (n->tx (p/parse-string s )))
 
+
+
 (defn string->tx-all
   [s]
-  (n->tx (p/parse-string-all s )))
+  (n->tx
+   (n/forms-node
+    (filter (comp not #{:whitespace :newline} n/tag)
+            (n/children (p/parse-string-all s)))))
+  #_(n->tx (p/parse-string-all s )))
 
 (declare ->tx)
 
@@ -163,7 +160,7 @@
   (let [tx-entity (update (->tx data)
                           :db/id #(or % "top"))
         {:keys [db-after tempids]}
-        (d/with (deref (d/create-conn form-schema))
+        (d/with (deref (d/create-conn s/form-schema))
                 [tx-entity])]
     (->form (d/entity db-after (get tempids (:db/id tx-entity))))))
 
@@ -183,7 +180,7 @@
       (let [tx-entity (update (->tx data)
                               :db/id #(or % "top"))
             {:keys [db-after tempids]}
-            (d/with (deref (d/create-conn form-schema))
+            (d/with (deref (d/create-conn s/form-schema))
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))

@@ -31,9 +31,10 @@
              (core/connect-sub! bus (:db/id ent) ch)
              (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [_ {::keys [nupdate]}]
-                    true
-                    #_(when (some? @nupdate)
-                        (not (reset! nupdate false))))
+                    #_true
+                    ;; defeat react
+                    (when (some? @nupdate)
+                      (not (reset! nupdate false))))
    :will-remount (fn [old-state new-state]
                    (let [[old-e old-bus] (-> old-state :rum/args)
                          [new-e bus] (-> new-state :rum/args)
