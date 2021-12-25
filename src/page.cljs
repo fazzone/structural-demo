@@ -58,6 +58,7 @@
        :coll/_contains "bar"
        :coll/contains #{"label" "keyboard"
                         "inspect"
+                        "evalchain"
                         ;; "history"
                         ;; "timetravel"
                         }
@@ -66,6 +67,7 @@
        :seq/next {:seq/first {:db/id "keyboard"
                               :coll/type :keyboard}
                   :seq/next {:seq/first "inspect"
+                             :seq/next {:seq/first "evalchain"}
                              ;; :seq/next {:seq/first "history"}
                              
                              }
@@ -133,6 +135,10 @@
        :coll/type :vec
        :seq/first {:string/value "Eod of history" :coll/_contains "history"}
        :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
+      {:db/ident ::evalchain
+       :db/id "evalchain"
+       :coll/type :vec
+       :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
       {:db/ident ::inspect
        :db/id "inspect"
        :coll/type :inspect
@@ -331,6 +337,9 @@
 (defmethod display-coll :hexes [k bus i]
   [:div
    (chex/main)])
+
+(defmethod display-coll :alias [{:alias/keys [of]} b i s]
+  (fcc of core/blackhole i))
 
 (rum/defc inspector < (dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
@@ -689,13 +698,14 @@
                                     (core/send! bus [mut]))))
        (core/register-mutation! :eval-sci
                                 (fn [_ db bus]
-                                  (let [c (->> (get-selected-form db)
-                                               (move/move :move/most-upward)
-                                               (e/->form)
+                                  (let [et (->> (get-selected-form db)
+                                                (move/move :move/most-upward))
+                                        c (->> (e/->form et)
                                                (pr-str))]
                                     (println "Eval sci" c)
                                     (try
-                                      (println (sci/eval-string* s c))
+                                      (let [ans (sci/eval-string* s c)]
+                                        (core/send! bus [:eval-result et ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight
@@ -971,6 +981,7 @@
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
+    
     (rum/mount
      #_(debug-component)
      (root-component se bus)

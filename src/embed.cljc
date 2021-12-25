@@ -36,11 +36,6 @@
    []
    m))"))
 
-(take-while (comp not neg?) (iterate dec 9))
-(range 9 0 -1)
-(comment
-  (clojure.pprint/pprint (->tx [:a :b :c])))
-
 (defn n->tx
   [n]
   (letfn [(coll-tx [coll-type xs]
@@ -65,7 +60,9 @@
         :symbol  {:symbol/value (n/string n)}
         :keyword {:keyword/value (n/sexpr n)}
         :string  {:string/value (n/string n)}
-        {:number/value (n/string n)})
+        (if (= nil (n/sexpr n))
+          {:symbol/value "nil"}
+          {:number/value (n/sexpr n)}))
       
       :list   (coll-tx :list (n/children n))
       :vector (coll-tx :vec (n/children n))
@@ -97,6 +94,7 @@
 (defn string->tx
   [s]
   (n->tx (p/parse-string s )))
+
 
 
 
@@ -139,6 +137,8 @@
    (if-let [f (:seq/first e)]
      (recur (:seq/next e) (conj a f))
      a)))
+
+
 
 (defn ->form
   [e]

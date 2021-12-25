@@ -88,6 +88,35 @@
     (select-1based-nth-reverse-parent sel n)
     (select-1based-nth-breadthfirst-descendant sel n)))
 
+
+#_(defn import-formdata-tx
+  [db data]
+  (let [sel (get-selected-form db)
+        top-level (first (nav/parents-vec sel))
+        chain (some-> top-level :coll/_contains first)
+        new-node (-> (e/->tx data)
+                     (update :db/id #(or % "import-formdata-tx")))]
+    (into [new-node]
+          (concat (edit/insert-before-tx top-level new-node)
+                  (move-selection-tx (:db/id sel) (:db/id new-node))))))
+
+(defn eval-result
+  [db et c]
+  (let [ee (d/entity db :page/evalchain)
+        new-node (-> (e/->tx* (pr-str c))
+                     (update :db/id #(or % "import-formdata-tx")))]
+    (into [{:db/id "evalresult"
+            :coll/type :vec
+            :form/linebreak true
+            :seq/first {:coll/type :alias
+                        :alias/of (:db/id et)}
+            :seq/next {:seq/first new-node}}]
+          (edit/insert-before-tx
+           (:seq/first ee)
+           {:db/id "evalresult"}))
+    #_(into [new-node]
+            (edit/insert-before-tx (:seq/first ee) new-node))))
+
 (def dispatch-table
   {:select                         nav/select-form-tx
    :flow-right                     (fn [db] (move/movement-tx db :move/flow))
@@ -129,5 +158,6 @@
    :m6 (fn [db] (numeric-movement (get-selected-form db) 6))
    :m7 (fn [db] (numeric-movement (get-selected-form db) 7))
    :m8 (fn [db] (numeric-movement (get-selected-form db) 8))
-
+   
+   :eval-result eval-result
    })
