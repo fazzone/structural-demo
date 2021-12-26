@@ -240,8 +240,6 @@
      (when-let [car (:seq/first node)]
        (let [droop (+ row 1
                       (case (:db/id car)
-                        36 1
-                        43 2
                         0))]
          (rum/fragment
           (onecell car bus size droop col (assoc taken [row col] (:db/id node)))

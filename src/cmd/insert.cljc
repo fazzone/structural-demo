@@ -52,8 +52,9 @@
           (edit/form-delete-tx (d/entity db form-eid))))
 
 (defn wrap-edit-tx
-  [db form-eid ct value]
-  (into [[:db/retract form-eid :form/editing true]
+  [ed ct value]
+  (println "ETSX" ed ct value)
+  (into [[:db/retract (:db/id ed) :form/editing true]
          {:db/id "newnode"
           :coll/type ct
           :seq/first {:db/id "inner"
@@ -61,8 +62,11 @@
                       :form/edit-initial (or value "")
                       :form/editing true}}]
         (concat
-         (edit/form-overwrite-tx (d/entity db form-eid) "newnode")
-         (move-selection-tx form-eid "inner"))))
+         (edit/form-overwrite-tx ed "newnode")
+         (move-selection-tx (:db/id ed) "inner")
+         (when (:form/linebreak ed)
+           [[:db/retract (:db/id ed) :form/linebreak true]
+            [:db/add "newnode" :form/linebreak true]]))))
 
 (defn finish-edit-tx
   [db eid text]

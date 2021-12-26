@@ -124,7 +124,9 @@
       (list? e)    (coll-tx :list e)
       (vector? e)  (coll-tx :vec e)
       (map? e)     (coll-tx :map (flatten-map e))
-      (set? e)     (coll-tx :set e))))
+      (set? e)     (coll-tx :set e)
+      :else (throw (ex-info "What is this" {:e e :t (type e)}))
+      )))
 
 (defn ->tx
   [e]

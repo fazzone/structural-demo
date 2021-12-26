@@ -89,7 +89,8 @@
    "m" {:label [:span {:style {:color "tomato"}} "modify"]}
    "n" {:label [:span {:style {:color "tomato"}} "next"]}
    "b" {:label [:span {:style {:color "tomato"}} "bind"]}
-   "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
+   ;; "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
+   "p" {:label [:span {:style {:color "tomato"}} "←)push"]}
    
    
    "z" {:label "<-hop"}
@@ -142,26 +143,26 @@
   (let [k->l defaultkl
         key (partial kkc k->l)]
     [:div.keyboard-container
-     [:div.number-row
+     [:div.keyboard-row.number
       (key "Esc")
       (for [ch (vec "1234567890-=")]
         (rum/with-key (key ch) ch))
       (key "Backspace")]
-     [:div.qwer-row
+     [:div.keyboard-row.qwer
       (key "Tab")
       (for [ch "qwertyuiop[]\\"]
         (rum/with-key (key ch) ch))]
-     [:div.asdf-row
+     [:div.keyboard-row.asdf
       (key "Caps")
       (for [ch "asdfghjkl;'"]
         (rum/with-key (key ch) ch))
       (key "Enter")]
-     [:div.zxcv-row
+     [:div.keyboard-row.zxcv
       (key "Shift")
       (for [ch "zxcvbnm,./"]
         (rum/with-key (key ch) ch))
       (key "Shift")]
-     [:div.space-row
+     [:div.keyboard-row.space
       (key "Ctrl")
       (key "Mod")
       (key "Alt")

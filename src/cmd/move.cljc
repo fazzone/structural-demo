@@ -76,12 +76,14 @@
 
 (defn repeat-movement-tx
   [db movement-type reps]
-  (let [src (get-selected-form db)
-        dst (->> src
-                 (iterate (partial move movement-type))
-                 (take reps)
-                 (take-while some?)
-                 (last))] 
+  (let [sel (get-selected-form db)
+        dst (loop [i 0
+                   n sel]
+              (if-not (< i reps)
+                n
+                (if-let [nn (move movement-type n)]
+                  (recur (inc i) nn)
+                  n)))] 
     (if-not dst
-      (println "Cannot" movement-type "from" src)
-      (move-selection-tx (:db/id src) (:db/id dst)))))
+      (println "Cannot" movement-type "from" sel)
+      (move-selection-tx (:db/id sel) (:db/id dst)))))

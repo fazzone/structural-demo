@@ -55,7 +55,9 @@
    [:wrap]
    [:delete-left]
    [:delete-right]
-   [:clone]])
+   [:clone]
+   [:barf-right]
+   [:slurp-right]])
 
 (defn search-for-failure
   [init-form maxn]
@@ -77,13 +79,15 @@
         (< i maxn) (recur (inc i) ndb (conj mutations mut))  
         :else      nil))))
 
+
 (comment
 
- (def the-future
-   (future
-    (time
-     (dotimes [i 99]
-       (prn i)
-       (when-let [r (search-for-failure '[a ^:form/highlight b c] 3333)]
-         (prn r)))))))
+  (+ 18 18 9 9 9)
+  (def the-future
+    (future
+      (time
+       (dotimes [i 99]
+         (prn i)
+         (when-let [r (search-for-failure '[a ^:form/highlight b c] 9544)]
+           (prn r)))))))
 

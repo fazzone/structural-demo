@@ -88,23 +88,14 @@
     (select-1based-nth-reverse-parent sel n)
     (select-1based-nth-breadthfirst-descendant sel n)))
 
-
-#_(defn import-formdata-tx
-  [db data]
-  (let [sel (get-selected-form db)
-        top-level (first (nav/parents-vec sel))
-        chain (some-> top-level :coll/_contains first)
-        new-node (-> (e/->tx data)
-                     (update :db/id #(or % "import-formdata-tx")))]
-    (into [new-node]
-          (concat (edit/insert-before-tx top-level new-node)
-                  (move-selection-tx (:db/id sel) (:db/id new-node))))))
-
 (defn eval-result
   [db et c]
   (let [ee (d/entity db :page/evalchain)
-        new-node (-> (e/->tx* (pr-str c))
+        new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
+                              (pr-str c))
+                     (assoc :form/linebreak true)
                      (update :db/id #(or % "import-formdata-tx")))]
+    (prn c)
     (into [{:db/id "evalresult"
             :coll/type :vec
             :form/linebreak true
@@ -128,13 +119,18 @@
    :next                           (fn [db] (move/movement-tx db :move/next-sibling))
    :prev                           (fn [db] (move/movement-tx db :move/prev-sibling))
    :tail                           (fn [db] (move/movement-tx db :move/most-nested))
-   :insert-right                   (fn [db] (edit/insert-editing-tx db :after ""))
-   :insert-left                    (fn [db] (edit/insert-editing-tx db :before ""))
+   :insert-right                   (fn [db] (edit/insert-editing-tx db :after))
+   :insert-left                    (fn [db] (edit/insert-editing-tx db :before))
+   :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx db :list "" {:form/linebreak true}))
    :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
    :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-edit-next-node (fn [db text] (insert/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text))
-   :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx db (d/entid db [:form/editing true]) ct value))
+   :edit/wrap
+   (fn [db ct value]
+     (insert/wrap-edit-tx
+      (d/entity db [:form/editing true])
+      ct value))
    :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up))
    :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up))
    :raise                          (comp edit/form-raise-tx get-selected-form)
@@ -147,8 +143,9 @@
    :indent                         (fn [db] (indent-selected-form-tx db 1))
    :dedent                         (fn [db] (indent-selected-form-tx db -1))
    :slurp-right                    (fn [db] (edit/slurp-right-tx (get-selected-form db)))
-   :new-list                       (fn [db] (edit/edit-new-wrapped-tx db :list ""))
-   :new-vec                        (fn [db] (edit/edit-new-wrapped-tx db :vec ""))
+   :barf-right                     (fn [db] (edit/barf-right-tx (get-selected-form db)))
+   :new-list                       (fn [db] (edit/edit-new-wrapped-tx db :list "" {}))
+   :new-vec                        (fn [db] (edit/edit-new-wrapped-tx db :vec "" {}))
    
    :m1 (fn [db] (numeric-movement (get-selected-form db) 1))
    :m2 (fn [db] (numeric-movement (get-selected-form db) 2))
@@ -159,5 +156,4 @@
    :m7 (fn [db] (numeric-movement (get-selected-form db) 7))
    :m8 (fn [db] (numeric-movement (get-selected-form db) 8))
    
-   :eval-result eval-result
-   })
+   :eval-result eval-result})

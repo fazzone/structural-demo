@@ -89,22 +89,19 @@
        (when-let [next (:seq/next spine)]
          [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
 
-
-
 (defn insert-editing-tx
-  [db before-or-after edit-initial]
-  (let [sel (get-selected-form db)
-        new-node {:db/id "newnode"
-                  :form/editing true
-                  :form/edit-initial (or edit-initial "")}
-        itx (case before-or-after
-              :before (insert-before-tx sel new-node)
-              :after (insert-after-tx sel new-node))]
-    (into [new-node]
-          (concat itx (move-selection-tx (:db/id sel) "newnode")))))
-
-
-
+  ([db ba] (insert-editing-tx db ba nil))
+  ([db before-or-after opts]
+   (let [sel (get-selected-form db)
+         new-node (merge {:db/id "newnode"
+                          :form/editing true
+                          :form/edit-initial ""}
+                         opts)
+         itx (case before-or-after
+               :before (insert-before-tx sel new-node)
+               :after (insert-after-tx sel new-node))]
+     (into [new-node]
+           (concat itx (move-selection-tx (:db/id sel) "newnode"))))))
 
 (defn exactly-one
   [[x & more :as xs]]
@@ -196,15 +193,16 @@
 
 
 (defn edit-new-wrapped-tx
-  [db coll-type init]
+  [db ct init opts]
   (let [sel (get-selected-form db)
-        new-node {:db/id "newnode"
-                  :coll/type coll-type
-                  :coll/contains "inner" 
-                  :seq/first {:db/id "inner"
-                              :coll/_contains "newnode"
-                              :form/edit-initial (or init "")
-                              :form/editing true}}]
+        new-node (merge opts
+                        {:db/id "newnode"
+                         :coll/type ct
+                         :coll/contains "inner" 
+                         :seq/first {:db/id "inner"
+                                     :coll/_contains "newnode"
+                                     :form/edit-initial (or init  "")
+                                     :form/editing true}})]
     (into [new-node]
           (concat (insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
@@ -232,9 +230,51 @@
       :else
       [[:db/retract (:db/id coll) :coll/contains (:db/id (:seq/first next))]
        [:db/add (:db/id e) :coll/contains (:db/id (:seq/first next))]
+       (when-not (:seq/first e)
+         [:db/retractEntity (:db/id next)])
+       (if-not (:seq/first e)
+         [:db/add (:db/id e) :seq/first (:db/id (:seq/first next))]
+         [:db/add (:db/id last-cons) :seq/next (:db/id next)])
        (when nnext
          [:db/retract (:db/id next) :seq/next (:db/id nnext)])
        (if nnext
          [:db/add (:db/id spine) :seq/next (:db/id nnext)]
-         [:db/retract (:db/id spine) :seq/next (:db/id next)])
-       [:db/add (:db/id last-cons) :seq/next (:db/id next)]])))
+         [:db/retract (:db/id spine) :seq/next (:db/id next)])])))
+
+;; [a [b c] d] -> [a [b] c d]
+(defn barf-right-tx
+  [e]
+  (let [spine     (some-> e :seq/_first exactly-one)
+        coll      (some-> e :coll/_contains exactly-one)
+        next      (some-> spine :seq/next)
+        last-cons (loop [s e]
+                    (if-let [n (:seq/next s)]
+                      (recur n)
+                      s))
+        penult    (some-> last-cons :seq/_next exactly-one)]
+    #_(println "E" (:db/id e) "Spine" (:db/id spine) "Coll" (:db/id coll) "Next" (:db/id next) "PU" (:db/id penult) "LC" (:db/id last-cons))
+    (cond
+      (nil? (:coll/type e)) (recur coll)
+      
+      (= :bar (:coll/type coll)) nil
+      
+      (= (:db/id e) (:db/id last-cons))
+      (when (:seq/first e)
+        [[:db/retract (:db/id e) :coll/contains (:db/id (:seq/first e))]
+         [:db/retract (:db/id e) :seq/first (:db/id (:seq/first e))]
+         [:db/add (:db/id coll) :coll/contains (:db/id (:seq/first e))]
+         
+         {:db/id (:db/id spine)
+          :seq/next {:db/id     "bnc"
+                     :seq/first (:db/id (:seq/first e))}}
+         (when next
+           [:db/add "bnc" :seq/next (:db/id next)])])
+      
+      :else
+      [[:db/add (:db/id coll) :coll/contains (:db/id (:seq/first last-cons))]
+       [:db/retract (:db/id e) :coll/contains (:db/id (:seq/first last-cons))]
+       [:db/add (:db/id spine) :seq/next (:db/id last-cons)]
+       (when penult
+         [:db/retract (:db/id penult) :seq/next (:db/id last-cons)])
+       (if next
+         [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))

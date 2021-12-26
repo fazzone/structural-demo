@@ -95,39 +95,39 @@
    "d"         :delete-right
    "Backspace" :delete-left
    "Enter"     :linebreak
+   "C-Enter"   :insert-right-newline
    "c"         :clone
    "z"         :hop-left
    "x"         :hop-right
    "q"         :compose
-   "9"         :wrap
+   ;; "9"         :wrap
+   "9"         :new-list
    "0"         :parent
    "p"         :slurp-right
+   "S-P"       :barf-right
    "Tab"       :indent
    "S-Tab"     :dedent
    "e"         :eval-sci
    "S-("       :new-list
    "["         :new-vec
-
-
-   "1" :m1
-   "2" :m2
-   "3" :m3
-   "4" :m4
-   "5" :m5
-   "6" :m6
-   "7" :m7
-   "8" :m8
-   
+   "1"         :m1
+   "2"         :m2
+   "3"         :m3
+   "4"         :m4
+   "5"         :m5
+   "6"         :m6
+   "7"         :m7
+   "8"         :m8
+   "v"         :scroll
    })
 
 (def init-tx-data
   (let [txe (test-form-data-tx (concat
                                 (map e/->tx test-form-data-bar)
-                                [(e/string->tx-all (macro-slurp "src/embed.cljc"))]
+                                #_[(e/string->tx-all (macro-slurp "src/embed.cljc"))]
                                 #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
         timetravel-placeholders (e/->tx (vec (range 9)))]
     (concat
-     
      [{:db/ident ::state
        :state/bar (:db/id txe)}
       {:db/ident ::history
@@ -250,15 +250,22 @@
 (defn breadcrumbs-portal-id [eid] (str eid "bp"))
 (defn modeline-portal-id [eid] (str eid "mp"))
 
+(declare el-bfs)
 (rum/defc top-level-form-component < dbrx/ereactive 
   [e bus]
   [:div.form-card {:ref "top-level"}
    
-   #_[:span.form-title.code-font (str "#" (:db/id e)
-                                      " T+" (- (js/Date.now) load-time) "ms")]
+   #_[:span.form-title.code-font (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    
    [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
-   [:div.top-level-form.code-font (fcc e bus 0)]
+   [:div.top-level-form.code-font
+    
+    (fcc e bus 0)
+    #_(if-not (:form/highlight e)
+      (fcc e bus 0 (zipmap (map :db/id (reverse (next (nav/parents-vec (get-selected-form (d/entity-db e))))))
+                           (range 1 9)))
+      (fcc e bus 0 (zipmap (map :db/id (el-bfs e 9))
+                           (range 1 9))))]
    [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]
    
    
@@ -298,28 +305,34 @@
   [:code (pr-str c)])
 
 (defn delimited-coll
-  [e bus indent classes open close]
+  [open close e bus indent classes proply]
+  #_(when proply (println "DC" e proply))
   [:span (cond-> {:class (str "c " classes)}
            classes (assoc :ref "selected"))
    [:span.d
     #_[:span.inline-tag-outer
-     [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+       [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+    (when-let [p (get proply (:db/id e))]
+      [:span.inline-tag-outer
+       [:span.inline-tag-inner
+        (str p)]])
     #_[:span.inline-tag (str (:db/id e))]
     open]
    (for [x (e/seq->vec e)]
-     (-> (fcc x bus (computed-indent e indent))
+     (-> (fcc x bus (computed-indent e indent) proply)
          (rum/with-key (:db/id x))))
    [:span.d close]])
 
-(defmethod display-coll :list [c b i s] (delimited-coll c b i s "(" ")"))
-(defmethod display-coll :vec  [c b i s] (delimited-coll c b i s "[" "]"))
-(defmethod display-coll :map  [c b i s] (delimited-coll c b i s "{" "}"))
-(defmethod display-coll :set  [c b i s] (delimited-coll c b i s "#{" "}"))
+(defmethod display-coll :list [c b i s p] (delimited-coll "(" ")" c b i s p))
+(defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]" c b i s p))
+(defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}" c b i s p))
+(defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
 
 (defmethod display-coll :chain [chain bus i classes]
   [:div.chain
    {:key (:db/id chain)
     :ref "chain"
+    :id (str "c" (:db/id chain))
     :class classes}
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus)
@@ -332,7 +345,13 @@
           (rum/with-key (:db/id chain-head))))])
 
 (defmethod display-coll :keyboard [k bus i]
-  [:div.display-keyboard (ck/keyboard-diagram)])
+  [:div.display-keyboard
+   (ck/keyboard-diagram)
+   
+   [:div {:style {:width "6ex"
+                  :font-size "9pt"}}
+    (ck/kkc {} "F")]])
+
 
 (defmethod display-coll :hexes [k bus i]
   [:div
@@ -346,20 +365,13 @@
   (let [sel (get-selected-form db)]
     [:div.inspector
      [:span.prose-font (str "Inspect #" (:db/id sel))]
-     (when-let [parent (first (:coll/_contains sel))]
-       (case (:coll/type parent)
-         (:bar :chain)
-         [:div "Cannot inspect this"]
-         
-         [:div
-          #_(fcc parent 0)
-          [:div
-           (debug/datoms-table-eavt*
-            (concat
-             (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
-             (->> (d/datoms (d/entity-db sel) :avet  )
-                  (filter (fn [[e a v t]]
-                            (= v (:db/id sel)))))))]]))]))
+     [:div
+      (debug/datoms-table-eavt*
+       (concat
+        (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
+        (->> (d/datoms (d/entity-db sel) :avet  )
+             (filter (fn [[e a v t]]
+                       (= v (:db/id sel)))))))]]))
 
 (defmethod display-coll :inspect [k bus i]
   (inspector (d/entity-db k) bus))
@@ -383,20 +395,19 @@
 
 (defn token-text
   [e]
-  [:span
-   #_[:span.inline-tag (str (:db/id e))]
-   (or
-    (some-> e :symbol/value str)
-    (when-let [k (:keyword/value e)]
-      (let [kns (namespace k)]
-        (if-not kns
-          (str k)
-          (rum/fragment ":" [:span.kn kns] "/" (name k)))))
-    (:string/value e)
-    (some-> e :number/value str))])
+  (or
+   (some-> e :symbol/value str)
+   (when-let [k (:keyword/value e)]
+     (let [kns (namespace k)]
+       (if-not kns
+         (str k)
+         (rum/fragment ":" [:span.kn kns] "/" (name k)))))
+   (:string/value e)
+   (some-> e :number/value str)))
 
 (rum/defc fcc < dbrx/ereactive
-  [e bus indent-prop]
+  [e bus indent-prop proply]
+  #_(when proply (println (:db/id e) "proply" proply))
   (-> (or (when (:form/editing e)
             (eb/edit-box e bus))
           (when-let [tc (token-class e)]
@@ -406,15 +417,15 @@
                                      (str tc " tk"))
                             :on-click (fn [ev]
                                         (.stopPropagation ev)
-                                        (core/send! bus [:select (:db/id e)])
-                                        #_(async/put! bus [::select-form (:db/id e)]))}
+                                        (core/send! bus [:select (:db/id e)]))}
                      (:form/highlight e) (assoc :ref "selected"))
              (token-text e)])
           (when (:coll/type e)
             (display-coll e
                           bus
                           (+ 2 indent-prop)
-                          (when (:form/highlight e) "selected")))
+                          (when (:form/highlight e) "selected")
+                          proply))
           (comment "Probably a retracted entity, do nothing"))
       (do-indent (:form/linebreak e)
                  (computed-indent e indent-prop))))
@@ -479,10 +490,13 @@
        [:li {:key i}
         [:a {:href "#"
              :on-click #(do (.preventDefault %)
-                            (async/put! bus [::select-form (:db/id parent)]))}
+                            (core/send! bus [:select (:db/id parent)])
+                            #_(async/put! bus [::select-form (:db/id parent)]))}
          [:span.code-font
+          #_(when (< i breadcrumbs-max-numeric-label)
+              [:span.parent-index (str (inc i))])
           (when (< i breadcrumbs-max-numeric-label)
-            [:span.parent-index (str (inc i))])
+            [:span.inline-tag (str (inc i))])
           (if (= :list (:coll/type parent))
             (or (some-> parent :seq/first :symbol/value) "()")
             (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]]))])
@@ -607,10 +621,9 @@
 (rum/defc root-component ;; <  dbrx/ereactive
   [state bus]
   (let [db (d/entity-db state)]
-    [:div
+    [:div.bar-container
      #_(str " T+" (- (js/Date.now) load-time) "ms")
      (breadcrumbs-always db bus)
-     #_(h/history-view conn bus)
      (fcc (:state/bar state) bus 0)
      (modeline-portal db bus)]))
 
@@ -680,6 +693,27 @@
        (pr-str bindings)])))
 
 
+(defn scroll-to-selected!
+  ([] (scroll-to-selected! true))
+  ([always]
+   (let [tl    (some-> (js/document.querySelector ".selected")
+                       (.closest ".form-card"))
+         h     (some-> tl (.getBoundingClientRect) (.-height))
+         chain (some-> tl (.closest ".chain"))
+         pos   (some-> chain (.-scrollTop))
+         off   (some-> tl (.-offsetTop))]
+     (when (and chain
+                (or always (not (< pos off (+ off h)
+                                   (+ pos (.-clientHeight chain))))))
+       (let [align-bottom (- off
+                             (- (.-clientHeight chain)
+                                h))]
+         (.scrollTo chain #js{:top (if (< (js/Math.abs (- pos off))
+                                          (js/Math.abs (- pos align-bottom)))
+                                     off
+                                     align-bottom)}))))))
+
+(defn ensure-selected-in-view! [] (scroll-to-selected! false))
 
 (defn setup-app
   ([]
@@ -688,7 +722,16 @@
       (d/transact! init-tx-data))))
   ([conn]
    (let [a (core/app s/schema conn)
-         s (sci/init {})]
+         s (sci/init {})
+         
+         chain->io (atom {})
+         
+         io (js/IntersectionObserver.
+             (fn [a b c d e]
+               (js/console.log "IO" a))
+             #js {:root       js/document.body
+                  :rootMargin "0px"
+                  :threshold  (array 0 0.2 0.4 0.6 0.8 1)})]
      (doseq [[m f] mut/dispatch-table]
        (core/register-simple! a m f))
      (doto a
@@ -700,17 +743,22 @@
                                 (fn [_ db bus]
                                   (let [et (->> (get-selected-form db)
                                                 (move/move :move/most-upward))
-                                        c (->> (e/->form et)
-                                               (pr-str))]
+                                        c  (->> (e/->form et)
+                                                (pr-str))]
                                     (println "Eval sci" c)
                                     (try
-                                      (let [ans (sci/eval-string* s c)]
+                                      (let [ans #_(sci/eval-string* s c)
+                                            (sci/eval-string c
+                                                             {:namespaces {'d {'datoms d/datoms
+                                                                               'touch d/touch}}
+                                                              :bindings {'db db
+                                                                         'sel (get-selected-form db)}})]
                                         (core/send! bus [:eval-result et ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
-       (core/register-mutation! :form/highlight
-                                (fn [_ db bus]
-                                  (println "Highlight changed" )))))))
+       #_(setup-scrolling!)
+       (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
+       (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))))))
 
 (comment
   (register-sub ::select-form (->mutation select-form-tx ))
@@ -808,17 +856,12 @@
                             "Mutation"
                             [:p (pr-str (into [m] args) )]
                             "At selected form"
-                            [:p (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]
-                            
-                            ]})))
+                            [:p (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]]})))
                      (throw (ex-info "No mutation" {:m m}))))
                  init-report
                  muts)]
-    [:div {:style {:display "flex"
-                   :flex-direction "row"
-                   :width "1000px"
-                   }}
-     [:div {:style {:display "flex" :flex-direction "column"}}
+    [:div {:style {:display "flex" :flex-direction "row" :width "1200px"}}
+     [:div {:style {:display "flex" :flex-direction "column" :width "100%"}}
       (for [[i m {:keys [failure input-tx db-after tx-data]} other] (map vector (range) (cons "initial" muts) reports (cons nil reports))]
         (if failure
           [:div failure]
@@ -849,7 +892,7 @@
 
 (defn some-random-mutations
   [n]
-  (->> [[[:insert-right] [:edit/finish "x"]]
+  (->> #_[[[:insert-right] [:edit/finish "x"]]
         [[:insert-right] [:edit/finish "y"]]
         [[:flow-right]]
         [[:flow-right]]
@@ -878,6 +921,9 @@
         [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]]
         #_[[:delete-right]]
         #_[[:delete-left]]]
+       [
+        [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]]
+        [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]]]
        cycle
        (take n)
        vec
@@ -944,13 +990,14 @@
 (rum/defc debug-component
   []
   [:div {:style {:margin-top "2ex"}  }
-   (player
+   #_(player
       '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
       (some-random-mutations 10000))
    
-   #_(example
-    '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
-    (some-random-mutations 199))
+   (example
+    '[a ^:form/highlight [] b c]
+    [[:slurp-right] [:slurp-right]]
+    #_[[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
    #_(example
     '[a ^:form/highlight b c [a a a]]
     [[:float] [:delete-left] [:flow-right] [:float]]

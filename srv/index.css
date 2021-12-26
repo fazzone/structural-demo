@@ -11,7 +11,7 @@ body {
 
 a {
     color: #2c32ff;
-    font-weight: bolder;
+    /* font-weight: bolder; */
     text-decoration: none;
 }
 
@@ -46,7 +46,7 @@ body {
     /* font-family: "Iosevka Term SS03", monospace; */
     font-family: iosevka-term-ss03-light;
     font-size: 14pt;
-    /* line-height: 1.25; */
+    /* line-height: 1.5; */
 }
 
 .top-level-form {
@@ -81,7 +81,7 @@ span.tk.m  { color: #c397d8; }
 span.tk.v  { color: #eee; }
 /* span.tk.p  { color: #70c0b1; } */
 span.tk.n  { color: #f0c674; }
-span.tk.l  { color: #b5bd68; }
+span.tk.l  { color: #b5bd68; white-space: pre;}
 
 .selected {
     background-color: #062606;
@@ -175,15 +175,22 @@ input.edit-box {
     flex-shrink: 0;
 }
 
+.form-card:first-child {
+    padding-top: 3ex;
+}
+
 #root {
     height: 100vh;
-    margin: 0;
+    /* margin: 0; */
     padding: 0;
 }
 
 
+.bar-container {
+    height: 100%;
+}
 .bar {
-    /* height: 90vh; */
+    height: 100%;
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
@@ -215,7 +222,7 @@ input.edit-box {
     margin-right: 1em;
     padding-left: 1ex;
     overflow-y: scroll;
-    /* min-width: 24em; */
+    min-width: fit-content;
     /* width: 100%; */
 }
 
@@ -223,7 +230,7 @@ input.edit-box {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
-.chain::-webkit-scrollbar { 
+.chain::-webkit-scrollbar {
     display: none;
 }
 
@@ -234,10 +241,9 @@ ul.parent-path li {
 ul.parent-path {
     margin: 0;
     padding: 0;
-    /* max-width: min-content; */
     line-height: 1.5;
-    /* height: 25px; */
-    /* white-space: nowrap; */
+
+    position: absolute;
 }
 ul.parent-path li:not(:last-child):after {
     content: ">";
@@ -258,8 +264,11 @@ ul.parent-path:empty {
 }
 
 div.bp {
-    height: 4ex;
+    top: -3ex;
+    /* height: 3ex; */
     /* margin-top: -1ex; */
+    padding-top: 0.5ex;
+    position: relative;
 }
 
 
@@ -334,22 +343,23 @@ span.key-compose-echo {
 .keyboard-container {
     /* width: 50em; */
     /* max-width: 65em; */
-    font-size: 9pt;
-    max-width: 100ex;
+    font-size: 101pt;
+    max-width: 120ex;
     /* transition: width 0.08s; */
 }
-.keyboard-container > div  {
+
+.keyboard-row {
     margin-top: 2px;
     display: grid;
     grid-gap: 0 2px;
 }
-.number-row { grid-template-columns: repeat(13, 1fr) 2fr; }
-.qwer-row   { grid-template-columns: 1.5fr repeat(12, 1fr) 1.5fr; }
-.asdf-row   { grid-template-columns: 2fr repeat(11, 1fr) 2.5fr; }
-.zxcv-row   { grid-template-columns: 3fr repeat(10, 1fr) 3fr; }
-.space-row  { grid-template-columns: repeat(3, 1fr) 4.5fr repeat(4, 1fr); }
+.keyboard-row.number { grid-template-columns: repeat(13, 1fr) 2fr; }
+.keyboard-row.qwer   { grid-template-columns: 1.5fr repeat(12, 1fr) 1.5fr; }
+.keyboard-row.asdf   { grid-template-columns: 2fr repeat(11, 1fr) 2.5fr; }
+.keyboard-row.zxcv   { grid-template-columns: 3fr repeat(10, 1fr) 3fr; }
+.keyboard-row.space  { grid-template-columns: repeat(3, 1fr) 4.5fr repeat(4, 1fr); }
 
-div.keyboard-container .key {
+/* div.keyboard-container */ .key {
     border: 1px solid #777;
     border-radius: 0.8ex;
     /* text-align: center; */
@@ -357,63 +367,61 @@ div.keyboard-container .key {
     height: 6ex;
     box-sizing: border-box;
 }
-div.keyboard-container .key:hover {
+/* div.keyboard-container */ .key:hover {
     border: 2px solid #fff;
     padding: 0px;
 }
 
-div.keyboard-container .key.single-width {
+/* div.keyboard-container */ .key.single-width {
     min-width: 6ex;
 }
-div.keyboard-container .key-label  {
+/* div.keyboard-container */ .key-label  {
     font-size: 95%;
     text-align: center;
     margin-top: 3ex;
     color: #ae81ff;
 }
 
-.keyboard-container .key-symbol-parent { position: relative; }
+/* .keyboard-container */ .key-symbol-parent { position: relative; }
 
-.keyboard-container .key-symbol {
+/* .keyboard-container */ .key-symbol {
     position: absolute;
     margin-left: 2ex;
     color: #fff;
 }
 
 
-div.keyboard-container .symbol1 {
+/* div.keyboard-container */ .symbol1 {
     /* font-size: 150%; */
     margin-top: 0;
     /* margin-left: -0.5ex; */
     transform: scale(-1, -1);
 }
 
-div.keyboard-container .symbol2 {
+/* div.keyboard-container */ .symbol2 {
     /* font-size: 150%; */
     margin-top: 0;
 }
-div.keyboard-container .symbol3 {
+/* div.keyboard-container */ .symbol3 {
     font-size: 100%;
     margin-top: 0.5ex;
 }
 
-div.keyboard-container .keycap-parent { position: relative; }
+/* div.keyboard-container */ .keycap-parent { position: relative; }
 
-div.keyboard-container .keycap {
+/* div.keyboard-container */ .keycap {
     padding-left: 0.5ex;
     color: #777;
     position: absolute;
-}
-.backspace {
-    background-color: tomato;
 }
 
 
 /* combination outer&inner do not take up space */
 .inline-tag-outer {
     position: relative;
-    color: #ae81ff;
-    top: -1ex;
+    color: #777;
+    font-size: 80%;
+    top: -0.4ex;
     left: -0.8ex;
 }
 .inline-tag-inner { position: absolute; }
@@ -426,5 +434,7 @@ div.keyboard-container .keycap {
 }
 
 .inspector {
-    width: 80ex;
+    width: 60ex;
 }
+
+

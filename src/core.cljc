@@ -56,26 +56,15 @@
           ch)))))
 
 (defn register-simple!
-  [{:keys [conn] :as app} topic mut-fn]
-  (let [ch (async/chan nil
-                       nil
-                       (fn [err]
-                         (println "Error handler" err)))]
+  [{:keys [bus conn] :as app} topic mut-fn]
+  (let [ch (async/chan)]
     (go-loop []
       (let [[_ & args] (async/<! ch)]
         (try (d/transact! conn (apply mut-fn @conn args))
              (catch #?(:cljs js/Error :clj Exception) e
                (println "Error transacting" e)))
         (recur)))
-    
-    #_(go (async/<!
-           (async/reduce
-            (fn [_ [_ & args]]
-              (d/transact! conn
-                           (apply mut-fn @conn args)))
-            :ok
-            ch)))
-    (connect-sub! (:bus app) topic ch)))
+    (connect-sub! bus topic ch)))
 
 (defn app
   [schema conn]
@@ -85,14 +74,14 @@
       :conn (doto conn
               (d/listen! (fn [{:keys [tx-data tempids db-after] :as tx-report}]
                            (let [new-entities (set (vals tempids))
-                                   es (into #{} (comp
-                                                 (filter (comp not new-entities))
-                                                 (map (fn [[e a v t]] e))) tx-data)
-                                   as (into #{} (map (fn [[e a v t]] a)) tx-data)]
-                               (doseq [e es]
-                                 (send! the-bus [e (d/entity db-after e)]))
-                               (doseq [a as]
-                                 (send! the-bus [a db-after]))))))})))
+                                 es (into #{} (comp
+                                               (filter (comp not new-entities))
+                                               (map (fn [[e a v t]] e))) tx-data)
+                                 as (into #{} (map (fn [[e a v t]] a)) tx-data)]
+                             (doseq [e es]
+                               (send! the-bus [e (d/entity db-after e)]))
+                             (doseq [a as]
+                               (send! the-bus [a db-after]))))))})))
 
 
 
