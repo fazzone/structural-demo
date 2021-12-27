@@ -89,8 +89,8 @@
    "m" {:label [:span {:style {:color "tomato"}} "modify"]}
    "n" {:label [:span {:style {:color "tomato"}} "next"]}
    "b" {:label [:span {:style {:color "tomato"}} "bind"]}
-   ;; "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
-   "p" {:label [:span {:style {:color "tomato"}} "←)push"]}
+   "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
+   "o" {:label [:span {:style {:color "tomato"}} "←)pull"]}
    
    
    "z" {:label "<-hop"}

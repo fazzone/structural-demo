@@ -207,7 +207,6 @@
           (concat (insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
 
-
 (defn move-last*
   [e]
   (if-let [n (:seq/next e)]
