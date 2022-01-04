@@ -18,7 +18,6 @@
    [comp.cons :as cc]
    [comp.edit-box :as eb]
    [comp.keyboard :as ck]
-   [comp.hex :as chex]
 
    [cmd.move :as move]
    [cmd.nav :as nav]
