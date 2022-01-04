@@ -53,7 +53,6 @@
 
 (defn wrap-edit-tx
   [ed ct value]
-  (println "ETSX" ed ct value)
   (into [[:db/retract (:db/id ed) :form/editing true]
          {:db/id "newnode"
           :coll/type ct
