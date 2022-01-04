@@ -20,14 +20,6 @@
         {:keys [port]} (nrepl-server/start-server #_ #_:handler cnr/cider-nrepl-handler)]
     (spit ".nrepl-port" port)))
 
-
-(vec
-   (for [i (range 6)]
-     (+ 30 (* 60 i ))))
-
-(vec (range 6))
-#_(server/start!)
-
 (defn release-cljs-and-exit
   []
   (future-cancel shadow-watch)

@@ -36,10 +36,12 @@
    []
    m))"))
 
+
+
 (defn n->tx
   [n]
   (letfn [(coll-tx [coll-type xs]
-            (let [id (new-tempid)
+            (let [id         (new-tempid)
                   linebreak? (atom nil)]
               (cond-> {:db/id id :coll/type coll-type}
                 (seq xs) (merge (seq-tx (for [x     xs
@@ -50,7 +52,7 @@
                                                           false)
                                                       true)]
                                           (cond-> (n->tx x)
-                                            true (assoc :coll/_contains id)
+                                            true               (assoc :coll/_contains id)
                                             (deref linebreak?) (assoc :form/linebreak
                                                                       (do (reset! linebreak? nil)
                                                                           true)))))))))]
@@ -58,45 +60,61 @@
       (:token :multi-line)
       (case (np/node-type n)
         :symbol  {:symbol/value (n/string n)}
-        :keyword {:keyword/value (n/sexpr n)}
+        :keyword {:keyword/value (n/string n)}
         :string  {:string/value (n/string n)}
         (if (= nil (n/sexpr n))
           {:symbol/value "nil"}
           {:number/value (n/sexpr n)}))
       
-      :list   (coll-tx :list (n/children n))
-      :vector (coll-tx :vec (n/children n))
-      :map    (coll-tx :map (n/children n))
-      :set    (coll-tx :set (n/children n))
-      :forms  (coll-tx :vec (n/children n))
-      :comma  nil
+      :list    (coll-tx :list (n/children n))
+      :vector  (coll-tx :vec (n/children n))
+      :map     (coll-tx :map (n/children n))
+      :set     (coll-tx :set (n/children n))
+      :forms   (coll-tx :vec (n/children n))
+      :deref   (coll-tx :list (cons
+                               (p/parse-string "deref")
+                               (n/children n)))
+      :comma   nil
       :comment {:string/value (n/string n)}
-      :meta   (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
-                    mta                (n/sexpr n)]
-                (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-                (cond
-                  (symbol? mta)
-                  (assoc (n->tx val) :tag {:symbol/value mta})
-                
-                  (map? mta)
-                  (merge (n->tx val) mta)
-
-                  :else (throw (ex-info "What meta is this" {:mta mta}))))
+      :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
+                     mta                (n/sexpr mta-n)]
+                 (println "Mta-n" (n/string mta-n)
+                          "Mta" mta
+                          "Val" (n/string val)
+                          "More" more
+                          )
+                 (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
+                 (cond
+                   (symbol? mta)
+                   (assoc (n->tx val) :tag {:symbol/value mta})
+                  
+                   (map? mta)
+                   (merge (n->tx val) mta)
+                  
+                   (keyword? mta)
+                   (assoc (n->tx val) mta true)
+                  
+                   :else (do
+                           (println "What meat?" mta)
+                           (println "Type" (type mta))
+                           (println "N string" (n/string n))
+                           (throw (ex-info (str "What meta is this") {})))))
+      
+      :reader-macro
+      (coll-tx :map (n/children n))
       
       :namespaced-map (coll-tx :map (n/children n))
       (:uneval :fn :quote)
       (coll-tx :list (n/children n))
       
-      (throw (ex-info  "Cannot decode" {:tag (n/tag n)})))))
+      (throw (ex-info  (str "Cannot decode " (n/string n)) {:tag (n/tag n)})))))
 
-
+#_(n/sexpr (p/parse-string "::bar"))
+#_(type (p/parse-string "#_#_1 2 3"))
 
 (defn string->tx
   [s]
   (n->tx (p/parse-string s )))
-
-
-
 
 (defn string->tx-all
   [s]

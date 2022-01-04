@@ -15,7 +15,6 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-
 (defn move-and-delete-tx
   [db movement-type]
   (let [src (get-selected-form db)]
@@ -54,7 +53,7 @@
                  [:db/add (:db/id e) :form/linebreak indent])))))
 
 
-(defn select-1based-nth-reverse-parent
+#_(defn select-1based-nth-reverse-parent
   [sel n]
   (let [rpa (reverse (nav/parents-vec sel))]
     (when (< 0 n (inc (count rpa)))
@@ -75,20 +74,27 @@
                        (:seq/next e) (conj (:seq/next e))
                        (:seq/first e) (conj (:seq/first e))))))))
 
-(defn select-1based-nth-breadthfirst-descendant
+#_(defn select-1based-nth-breadthfirst-descendant
   [sel n]
   (let [rpa (el-bfs sel 8)]
     (when (< 0 n (inc (count rpa)))
       (move-selection-tx (:db/id sel)
                          (:db/id (nth rpa (dec n)))))))
 
+(defn get-numeric-movement-vec
+  [sel]
+  (if (move/move :move/up sel)
+    (reverse (nav/parents-vec sel))
+    (el-bfs sel 8)))
+
 (defn numeric-movement
   [sel n]
-  (if (move/move :move/up sel)
-    (select-1based-nth-reverse-parent sel n)
-    (select-1based-nth-breadthfirst-descendant sel n)))
+  (when-let [nmv (get-numeric-movement-vec sel)]
+    (when (< -1 n (count nmv))
+      (move-selection-tx (:db/id sel)
+                         (:db/id (nth nmv n))))))
 
-(defn eval-result
+#_(defn eval-result
   [db et c]
   (let [ee (d/entity db :page/evalchain)
         new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
@@ -105,6 +111,51 @@
           (edit/insert-before-tx
            (:seq/first ee)
            {:db/id "evalresult"}))
+    #_(into [new-node]
+            (edit/insert-before-tx (:seq/first ee) new-node))))
+
+[{:db/id "eval-result"
+  :eval/of 33
+  :coll/type :eval-result
+  :eval/result {:string/value "#'user/thing"
+                :db/id "import-formdata-tx"}}
+ [{:db/id 32
+   :seq/first "eval-result"
+   :seq/next {:db/id "insert-before-cons"
+              :seq/first 33}}
+  [:db/add 30 :coll/contains "eval-result"]
+  nil]]
+
+
+(defn eval-result
+  [db et c]
+  (let [top-level   (peek (nav/parents-vec et))
+        prev        (move/move :move/prev-sibling top-level)
+        result-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
+                                 (pr-str c))
+                        (update :db/id #(or % "import-formdata-tx")))
+        prev-eval (d/datoms db :avet :eval/of )
+        new-node    {:db/id       "eval-result"
+                     :eval/of     (:db/id et)
+                     :coll/type   :eval-result
+                     :eval/result result-node}]
+    (println "PRevevel")
+    (run! prn prev-eval)
+    (doto
+        (into [new-node]
+              (apply
+               concat
+               (edit/insert-before-tx top-level new-node)
+               (for [[e a v t a?] (d/datoms db :avet :eval/of)
+                     :when a?]
+                 (edit/form-delete-tx (d/entity db e)))))
+        prn
+        )
+    
+    #_(into [new-node]
+            (if (= (:db/id et) (:db/id (:eval/of prev)))
+              (edit/form-overwrite-tx prev (:db/id new-node))
+              (edit/insert-before-tx top-level new-node)))
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
 
@@ -147,13 +198,13 @@
    :new-list                       (fn [db] (edit/edit-new-wrapped-tx db :list "" {}))
    :new-vec                        (fn [db] (edit/edit-new-wrapped-tx db :vec "" {}))
    
-   :m1 (fn [db] (numeric-movement (get-selected-form db) 1))
-   :m2 (fn [db] (numeric-movement (get-selected-form db) 2))
-   :m3 (fn [db] (numeric-movement (get-selected-form db) 3))
-   :m4 (fn [db] (numeric-movement (get-selected-form db) 4))
-   :m5 (fn [db] (numeric-movement (get-selected-form db) 5))
-   :m6 (fn [db] (numeric-movement (get-selected-form db) 6))
-   :m7 (fn [db] (numeric-movement (get-selected-form db) 7))
-   :m8 (fn [db] (numeric-movement (get-selected-form db) 8))
+   :m1 (fn [db] (numeric-movement (get-selected-form db) 0))
+   :m2 (fn [db] (numeric-movement (get-selected-form db) 1))
+   :m3 (fn [db] (numeric-movement (get-selected-form db) 2))
+   :m4 (fn [db] (numeric-movement (get-selected-form db) 3))
+   :m5 (fn [db] (numeric-movement (get-selected-form db) 4))
+   :m6 (fn [db] (numeric-movement (get-selected-form db) 5))
+   :m7 (fn [db] (numeric-movement (get-selected-form db) 6))
+   :m8 (fn [db] (numeric-movement (get-selected-form db) 7))
    
    :eval-result eval-result})

@@ -79,7 +79,8 @@
                                                (map (fn [[e a v t]] e))) tx-data)
                                  as (into #{} (map (fn [[e a v t]] a)) tx-data)]
                              (doseq [e es]
-                               (send! the-bus [e (d/entity db-after e)]))
+                               (when-not (empty? (d/datoms db-after :eavt e))
+                                 (send! the-bus [e (d/entity db-after e)])))
                              (doseq [a as]
                                (send! the-bus [a db-after]))))))})))
 

@@ -45,7 +45,7 @@ body {
 .code-font {
     /* font-family: "Iosevka Term SS03", monospace; */
     font-family: iosevka-term-ss03-light;
-    font-size: 14pt;
+    font-size: 12pt;
     /* line-height: 1.5; */
 }
 
@@ -251,13 +251,10 @@ ul.parent-path li:not(:last-child):after {
     padding-left: 1ex;
     padding-right: 0.3ex;
 }
-.parent-index {
-    position: relative;
-    font-size: 70%;
-    color: #ae81ff;
-    top: -2ex;
-}
 
+.parent-path li a {
+    color: #777;
+}
 ul.parent-path:empty {
     display: none;
     /* height: 3ex; */
@@ -290,8 +287,10 @@ span.indenter {
     /* bottom: 0; */
     display: block;
     width: 100%;
-    color: #000;
-    background-color: #ae81ff;
+    margin-top: 0.5ex;
+    /* color: #000; */
+    color: #777;
+    /* background-color: #ae81ff; */
 }
 
 .modeline-size {
@@ -429,7 +428,7 @@ span.key-compose-echo {
 /* this one by itself does take up space */
 .inline-tag {
     position: relative;
-    color: #ae81ff;
+    color: #777;
     top: -1ex;
 }
 
@@ -438,3 +437,15 @@ span.key-compose-echo {
 }
 
 
+
+.eval-result-outer {
+    margin-bottom: 0.5ex;
+}
+.eval-result {
+    background-color: #111;
+    padding: 1ex;
+    border-radius: 2ex;
+}
+.er1 {
+
+}

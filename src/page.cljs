@@ -39,8 +39,8 @@
 
 (def test-form-data-bar
   '[["Chain 1"
-     (defn thing
-       [a b c ^:form/highlight [a s d f] [l e l] [O] d] blah)]])
+     (def thing
+       [[1 2 3 ^:form/highlight (+ 1 2 9) [:a :b :c] "ok"] :x.y/z])]])
 
 (defn test-form-data-tx
   [chain-txdatas]
@@ -91,8 +91,8 @@
    "z"         :hop-left
    "x"         :hop-right
    "q"         :compose
-   ;; "9"         :wrap
-   "9"         :new-list
+   "9"         :wrap
+   ;; "9"         :new-list
    "0"         :parent
    "p"         :slurp-right
    "S-P"       :barf-right
@@ -115,7 +115,7 @@
 (def init-tx-data
   (let [txe (test-form-data-tx (concat
                                 (map e/->tx test-form-data-bar)
-                                #_[(e/string->tx-all (macro-slurp "src/embed.cljc"))]
+                                #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
                                 #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
         timetravel-placeholders (e/->tx (vec (range 9)))]
     (concat
@@ -153,12 +153,12 @@
 
 (declare el-bfs)
 (rum/defc top-level-form-component < dbrx/ereactive 
-  [e bus]
+  [e bus p]
   [:div.form-card {:ref "top-level"}
-   #_[:span.form-title.code-font (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
+   [:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
    [:div.top-level-form.code-font
-    (fcc e bus 0)]
+      (fcc e bus 0 p)]
    [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]])
 
 (defn do-indent
@@ -196,13 +196,15 @@
   [:span (cond-> {:class (str "c " classes)}
            classes (assoc :ref "selected"))
    [:span.d
-    #_[:span.inline-tag-outer
-       [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+    #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+    
     (when-let [p (get proply (:db/id e))]
       [:span.inline-tag-outer
        [:span.inline-tag-inner
         (str p)]])
+    
     #_[:span.inline-tag (str (:db/id e))]
+    
     open]
    (for [x (e/seq->vec e)]
      (-> (fcc x bus (computed-indent e indent) proply)
@@ -214,20 +216,20 @@
 (defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}" c b i s p))
 (defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
 
-(defmethod display-coll :chain [chain bus i classes]
+(defmethod display-coll :chain [chain bus i classes proply]
   [:div.chain
    {:key (:db/id chain)
     :ref "chain"
     :id (str "c" (:db/id chain))
     :class classes}
    (for [f (e/seq->vec chain)]
-     (-> (top-level-form-component f bus)
+     (-> (top-level-form-component f bus proply)
          (rum/with-key (:db/id f))))])
 
-(defmethod display-coll :bar [bar bus i]
+(defmethod display-coll :bar [bar bus i c p]
   [:div.bar
     (for [chain-head (e/seq->vec bar)]
-      (-> (fcc chain-head bus i)
+      (-> (fcc chain-head bus i p)
           (rum/with-key (:db/id chain-head))))])
 
 (defmethod display-coll :keyboard [k bus i]
@@ -241,6 +243,12 @@
 
 (defmethod display-coll :alias [{:alias/keys [of]} b i s]
   (fcc of core/blackhole i))
+
+(defmethod display-coll :eval-result [c b i s]
+  [:div.eval-result-outer
+   [:span.eval-result
+    (str "[" (:db/id c) "] " (:db/id (:eval/of c)) "=>")
+    (fcc (:eval/result c) b 0)]])
 
 (rum/defc inspector < (dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
@@ -280,15 +288,18 @@
   (or
    (some-> e :symbol/value str)
    (when-let [k (:keyword/value e)]
-     (let [kns (namespace k)]
-       (if-not kns
-         (str k)
-         (rum/fragment ":" [:span.kn kns] "/" (name k)))))
+     (if (string? k)
+       k
+       (let [kns (namespace k)]
+         (if-not kns
+           (str k)
+           (rum/fragment ":" [:span.kn kns] "/" (name k))))))
    (:string/value e)
    (some-> e :number/value str)))
 
 (rum/defc fcc < dbrx/ereactive
   [e bus indent-prop proply]
+  #_(when proply (prn "FccProply" (:db/id e) proply))
   (-> (or (when (:form/editing e)
             (eb/edit-box e bus))
           (when-let [tc (token-class e)]
@@ -449,11 +460,12 @@
       "(no selection)"
       (str "#" (:db/id sel)
            " "
-           (pr-str
-            (apply max
-                   (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
-                         :when (not= :form/highlight a)]
-                     t)))))
+           #_(pr-str
+              (apply max
+                     (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
+                           :when (not= :form/highlight a)]
+                       t)))
+           (:coll/type sel)))
     (command-compose-feedback)]])
 
 (rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
@@ -470,12 +482,12 @@
           (rum/portal nn)))))
 
 (declare setup-app)
-(rum/defc root-component
-  [state bus]
-  (let [db (d/entity-db state)]
+(rum/defc root-component < (dbrx/areactive :form/highlight) 
+  [db bus]
+  (let [state (d/entity db ::state)]
     [:div.bar-container
      (breadcrumbs-always db bus)
-     (fcc (:state/bar state) bus 0)
+     (fcc (:state/bar state) bus 0 nil)
      (modeline-portal db bus)]))
 
 (defn event->kbd
@@ -551,13 +563,27 @@
                                    (+ pos (.-clientHeight chain))))))
        (let [align-bottom (- off
                              (- (.-clientHeight chain)
-                                h))]
-         (.scrollTo chain #js{:top (if (< (js/Math.abs (- pos off))
-                                          (js/Math.abs (- pos align-bottom)))
-                                     off
-                                     align-bottom)}))))))
+                                h))
+             top-closer?  (< (js/Math.abs (- pos off))
+                             (js/Math.abs (- pos align-bottom)))
+             [best other] (if top-closer?
+                            [off align-bottom]
+                            [align-bottom off])]
+         (println "Pos" pos "Best" best "Other" other)
+         (.scrollTo chain #js{:top
+                              (if (< -1 (- pos best) 1)
+                                other
+                                best)
+                              #_(cond
+                                  (and top-closer? (= pos off)) align-bottom
+                                  top-closer?                   off
+                                  (= pos align-bottom)          off
+                                  :else                         align-bottom)
+                              }))))))
 
 (defn ensure-selected-in-view! [] (scroll-to-selected! false))
+
+
 
 (defn setup-app
   ([]
@@ -591,12 +617,13 @@
                                                 (pr-str))]
                                     (println "Eval sci" c)
                                     (try
-                                      (let [ans #_(sci/eval-string* s c)
-                                            (sci/eval-string c
-                                                             {:namespaces {'d {'datoms d/datoms
-                                                                               'touch d/touch}}
-                                                              :bindings {'db db
-                                                                         'sel (get-selected-form db)}})]
+                                      (let [ans (sci/eval-string* s c)
+                                            
+                                            #_(sci/eval-string c
+                                                               {:namespaces {'d {'datoms d/datoms
+                                                                                 'touch d/touch}}
+                                                                :bindings {'db db
+                                                                           'sel (get-selected-form db)}})]
                                         (core/send! bus [:eval-result et ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
@@ -652,9 +679,9 @@
                                 :border "1px solid #ae81ff"}}
            [:span (str "#" i " " (pr-str m))]
            [:div {:style {:border "1px solid #777"}}
-            (when other (root-component (d/entity (:db-after other) ::state) core/blackhole))]
+            (when other (root-component (:db-after other) core/blackhole))]
            [:div {:style {:border "1px solid #777"}}
-            (root-component (d/entity db-after ::state) core/blackhole)]
+            (root-component db-after core/blackhole)]
            (when (< 0 i)
              [:div
               #_(pr-str (e/->form (get-selected-form db-after)))
@@ -728,7 +755,7 @@
                                                                                :coll/_contains "bar"
                                                                                :coll/contains #{(:db/id form-txdata)}
                                                                                :seq/first form-txdata}}}])))
-        se (d/entity @conn ::state)
+        ;; se (d/entity @conn ::state)
         hz 44
         mv (atom nil)
         zch (core/zchan bus)]
@@ -764,7 +791,7 @@
          (println "Cleanup")))
      [])
     [:div
-     (root-component se bus)
+     (root-component @conn bus)
      #_(player-mutation-view mv)]))
 
 (rum/defc debug-component
@@ -792,14 +819,16 @@
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
   (let [{:keys [conn bus]} (setup-app)
-        se (d/entity @conn ::state)] 
+        ;; se (d/entity @conn ::state)
+        ] 
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
     
     (rum/mount
      #_(debug-component)
-     (root-component se bus)
+     (root-component @conn bus)
+     
      (.getElementById js/document "root"))))
 
 
