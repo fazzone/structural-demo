@@ -21,58 +21,41 @@
                     (let [[ent bus & args] (some-> state :rum/args)
                           ch               (async/chan)
                           nupdate          (atom nil)]
-                      (when-not (and bus (:db/id ent))
-                        (throw (ex-info "Cannot use ereactive" {})))
-                      (go-loop []
-                        (let [[_ updated-entity] (async/<! ch)]
-                          (reset! nupdate true)
-                          (update-first-arg! react-component updated-entity)
-                          (recur)))
-                      (core/connect-sub! bus (:db/id ent) ch)
-                      (assoc state ::ereactive.chan ch ::nupdate nupdate)))
+             (when-not (and bus (:db/id ent))
+               (throw (ex-info "Cannot use ereactive" {})))
+             (go-loop []
+               (let [[_ updated-entity] (async/<! ch)]
+                 (reset! nupdate true)
+                 (update-first-arg! react-component updated-entity)
+                 (recur)))
+             (core/connect-sub! bus (:db/id ent) ch)
+             (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [old-state {::keys [nupdate] :as new-state}]
-                    (let [[e _ oi old-props] (:rum/args old-state)
-                          [_ _ ni new-props] (:rum/args new-state)]
+                    (let [[e _ & old-props] (:rum/args old-state)
+                          [_ _ & new-props] (:rum/args new-state)]
                       #_(println " " (:db/id e) "Old props" old-props
-                                 "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
-                      #_(when (and
-                               (not= old-props new-props)
-                               (= (get old-props (:db/id e))
-                                  (get new-props (:db/id e))))
-                          (println "Nopropchange " (:db/id e) new-props))
-                        
-                      (if-let [g (get new-props (:db/id e))]
-                        (println "G" (:db/id e) g))
-                      
+                               "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
                       (cond
-                        (not= oi ni) true
-                        
-                        (get new-props (:db/id e))
-                        true
-                        
-                        (some? @nupdate)
-                        (do (reset! nupdate false)
-                            true)
-                        
-                        )))
+                        (not= old-props new-props) true
+                        (some? @nupdate)           (not (reset! nupdate false)))))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)
                           old-eid         (:db/id old-e)
                           new-eid         (:db/id new-e)]
-                      (when-not (identical? bus old-bus)
-                        (throw (ex-info "The bus cannot change" {})))
-                      (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
-                        (throw (ex-info "The chan cannot change" {})))
-                      (when-not (= old-eid new-eid)
-                        (println "!!!!! The eids changed" old-eid new-eid)
-                        (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
-                        (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
-                      new-state))
+                     (when-not (identical? bus old-bus)
+                       (throw (ex-info "The bus cannot change" {})))
+                     (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
+                       (throw (ex-info "The chan cannot change" {})))
+                     (when-not (= old-eid new-eid)
+                       (println "!!!!! The eids changed" old-eid new-eid)
+                       (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
+                       (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
+                     new-state))
    :will-unmount  (fn [{:rum/keys [args] :as state}]
                     (let [[e bus] args]
-                      (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
-                      state))})
+                     (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
+                     state))})
 
 (defn areactive
   ;; mixin for components taking [db bus ...]
