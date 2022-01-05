@@ -67,7 +67,7 @@
      {:type        :text
       :ref         "the-input"
       :value       (or value "")
-      :style       {:width (str (max 1 (inc (count value))) "ch")}
+      :style       {:width (str (max 1 (count value)) "ch")}
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
                           token (insert/parse-token-tx new-text form-eid)]
                       (reset! text new-text)

@@ -51,19 +51,21 @@
               :coll/type :chain
               :coll/_contains "bar"))
      
-     [#_{:db/ident ::meta-chain
+     [{:db/ident ::meta-chain
        :coll/type :chain
        :coll/_contains "bar"
        :coll/contains #{"label"
                         "keyboard"
-                        "inspect"
+                        ;; "inspect"
                         "evalchain"}
        :seq/first {:db/id "label"
                    :string/value "Keyboard"}
        :seq/next {:seq/first {:db/id "keyboard"
                               :coll/type :keyboard}
-                  :seq/next {:seq/first "inspect"
-                             :seq/next {:seq/first "evalchain"}}}}]))
+                  :seq/next {:seq/first "evalchain"}
+                  ;; :seq/next {:seq/first "inspect"
+                  ;;            :seq/next {:seq/first "evalchain"}}
+                  }}]))
    :db/id "bar"
    :coll/type :bar))
 
@@ -115,8 +117,11 @@
 (def init-tx-data
   (let [txe (test-form-data-tx (concat
                                 (map e/->tx test-form-data-bar)
+                                
                                 #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
-                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))]
+                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]
+                                #_[(e/string->tx-all (macro-slurp "src/cmd/mut.cljc"))]
+                                #_[(e/string->tx-all (macro-slurp "src/cmd/nav.cljc"))]))]
     (concat
      [{:db/ident ::state
        :state/bar (:db/id txe)}
@@ -151,7 +156,7 @@
 (rum/defc top-level-form-component < dbrx/ereactive 
   [e bus p]
   [:div.form-card {:ref "top-level"}
-   [:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
+   #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
    [:div.top-level-form.code-font
       (fcc e bus 0 p)]
@@ -189,7 +194,7 @@
 (defn delimited-coll
   [open close e bus indent classes proply]
   #_(when proply (println "DC" e proply))
-  [:span (cond-> {:class (str "c " classes)}
+  [:span (cond-> {:class (str "c dl " classes)}
            classes (assoc :ref "selected"))
    [:span.d
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
@@ -199,13 +204,13 @@
        [:span.inline-tag-inner
         (str p)]])
     
-    [:span.inline-tag (str (:db/id e))]
+    #_[:span.inline-tag (str (:db/id e))]
     
     open]
    (for [x (e/seq->vec e)]
      (-> (fcc x bus (computed-indent e indent) proply)
          (rum/with-key (:db/id x))))
-   [:span.d close]])
+   [:span.d.cl close]])
 
 (defmethod display-coll :list [c b i s p] (delimited-coll "(" ")" c b i s p))
 (defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]" c b i s p))
@@ -229,14 +234,14 @@
     :ref "chain"
     :id (str "c" (:db/id chain))
     :class classes}
-   (str "Chain" (:db/id chain))
+   #_(str "Chain" (:db/id chain))
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus proply)
          (rum/with-key (:db/id f))))])
 
 (defmethod display-coll :bar [bar bus i c p]
   [:div
-   (cond-> {:class (str "bar " c)}
+   (cond-> {:class (str "bar"  (when c " ") c)}
      c (assoc :ref "selected"))
    (for [chain-head (e/seq->vec bar)]
      (-> (fcc chain-head bus i p)
@@ -286,7 +291,8 @@
   [e]
   (or (when-let [s (:symbol/value e)]
         (case s
-          ("defn" "let" "when" "and") "m"
+          ("defn" "let" "when" "and" "or" "if"
+           "when-not" "if-not" "def" "cond" "case") "m"
           ("first") "s"
           "v"))
       (when (:keyword/value e) "k")
@@ -490,7 +496,7 @@
     [:div.bar-container
      (breadcrumbs-always db bus)
      (fcc (:state/bar state) bus 0 nil)
-     (modeline-portal db bus)
+     #_(modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
@@ -515,7 +521,7 @@
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
         #_(prn "Key" kbd mut)
-        (core/send! @keyboard-bus [:kbd kbd])
+        (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
           (.preventDefault ev)
@@ -552,7 +558,46 @@
        " "
        (pr-str bindings)])))
 
+(defn scroll-1d
+  [size h pos off]
+  (let [align-bottom (- off (- size h))
+        top-closer?  (< (js/Math.abs (- pos off))
+                        (js/Math.abs (- pos align-bottom)))
+        [best other] (if top-closer?
+                       [off align-bottom]
+                       [align-bottom off])]
+    (if (< -1 (- pos best) 1)
+      other
+      best)))
+
 (defn scroll-to-selected!
+  ([] (scroll-to-selected! true))
+  ([always]
+   (let [el (js/document.querySelector ".selected")
+         tl    (some-> el (.closest ".form-card"))
+         chain (some-> el (.closest ".chain"))
+         bar   (some-> chain (.closest ".bar"))
+         
+         chain-height (some-> chain (.-clientHeight))
+         bar-width    (some-> bar (.-clientWidth))
+         
+         h    (some-> tl (.getBoundingClientRect) (.-height))
+         vpos (some-> chain (.-scrollTop))
+         voff (some-> tl (.-offsetTop))
+         
+         w    (some-> chain (.getBoundingClientRect) (.-width))
+         hpos (some-> bar (.-scrollLeft))
+         hoff (some-> chain (.-offsetLeft))]
+     (when (and chain 
+                (or always (not (< vpos voff (+ h voff)
+                                   (+ vpos chain-height)))))
+       (.scrollTo chain #js{:top (scroll-1d chain-height h vpos voff)}))
+     (when (and bar 
+                (or always (not (< hpos hoff (+ w hoff)
+                                   (+ hpos bar-width)))))
+       (.scrollTo bar #js{:left (scroll-1d bar-width w hpos hoff)})))))
+
+#_(defn scroll-to-selected!
   ([] (scroll-to-selected! true))
   ([always]
    (let [tl    (some-> (js/document.querySelector ".selected")
@@ -600,7 +645,7 @@
        (core/register-simple! a m f))
      (doto a
        (core/register-mutation! :kbd
-                                (fn [[_ kbd] db bus]
+                                (fn [[_ kbd tkd] db bus]
                                   (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
                                     (core/send! bus [mut]))))
        (core/register-mutation! :eval-sci
@@ -790,18 +835,19 @@
 (rum/defc debug-component
   []
   [:div {:style {:margin-top "2ex"}  }
-   #_(player
-      '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
-      (some-random-mutations 10000))
+   (player
+    '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
+    (some-random-mutations 10000))
    
-   (example
-    '[a ^:form/highlight [] b c]
-    [[:slurp-right] [:slurp-right]]
-    #_[[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
    #_(example
-    '[a ^:form/highlight b c [a a a]]
-    [[:float] [:delete-left] [:flow-right] [:float]]
-    #_[[:last]])])
+      '[a ^:form/highlight [] b c]
+      [[:slurp-right] [:slurp-right]]
+      #_[[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
+   
+   #_(example
+      '[a ^:form/highlight b c [a a a]]
+      [[:float] [:delete-left] [:flow-right] [:float]]
+      #_[[:last]])])
 
 #_(def the-singleton-db
   (doto (d/create-conn s/schema)
@@ -823,6 +869,7 @@
     (run! prn (d/touch (d/entity @conn ::default-keymap)))
     
     (rum/mount
+     
      #_(debug-component)
      (root-component @conn bus)
      

@@ -60,8 +60,7 @@
   (let [ch (async/chan)]
     (go-loop []
       (let [[_ & args] (async/<! ch)
-            tx-data (apply mut-fn @conn args)
-            ]
+            tx-data (apply mut-fn @conn args)]
         (try (d/transact! conn tx-data)
              (catch #?(:cljs js/Error :clj Exception) e
                (println "Error transacting" e)

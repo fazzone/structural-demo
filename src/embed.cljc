@@ -104,13 +104,16 @@
       (coll-tx :map (n/children n))
       
       :namespaced-map (coll-tx :map (n/children n))
-      (:uneval :fn :quote)
+      :uneval (coll-tx :uneval (n/children n))
+      
+      (:fn :quote)
       (coll-tx :list (n/children n))
       
       (throw (ex-info  (str "Cannot decode " (n/string n)) {:tag (n/tag n)})))))
 
 #_(n/sexpr (p/parse-string "::bar"))
-#_(type (p/parse-string "#_#_1 2 3"))
+(n/children (p/parse-string-all "#_ #_1 2 3"))
+(n/tag (p/parse-string "#_ #_1 2 3"))
 
 (defn string->tx
   [s]
