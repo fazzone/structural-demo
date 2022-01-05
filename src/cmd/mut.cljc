@@ -15,10 +15,17 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-(defn move-and-delete-tx
+#_(defn move-and-delete-tx
   [db movement-type]
   (let [src (get-selected-form db)]
     (when-let [dst (move/move movement-type src)]
+      (concat (edit/form-delete-tx src)
+              [[:db/add (:db/id dst) :form/highlight true]]))))
+(defn move-and-delete-tx
+  [db mta mtb]
+  (let [src (get-selected-form db)]
+    (when-let [dst (or (move/move mta src)
+                       (and mtb (move/move mtb src)))]
       (concat (edit/form-delete-tx src)
               [[:db/add (:db/id dst) :form/highlight true]]))))
 
@@ -65,14 +72,16 @@
   (loop [out   []
          front [top]]
     (cond
-      (empty? front) out
+      (empty? front)        out
       (= limit (count out)) out
-      :else (let [e (first front)]
-              (recur (cond-> out
-                       (:coll/type e) (conj e))
-                     (cond-> (subvec front 1)
-                       (:seq/next e) (conj (:seq/next e))
-                       (:seq/first e) (conj (:seq/first e))))))))
+      :else                 (let [e (first front)]
+                              (when (:coll/type e)
+                                (println "Bfs" limit e (next front)))
+                              (recur (cond-> out
+                                       (:coll/type e) (conj e))
+                                     (cond-> (subvec front 1)
+                                       (:seq/next e)  (conj (:seq/next e))
+                                       (:seq/first e) (conj (:seq/first e))))))))
 
 #_(defn select-1based-nth-breadthfirst-descendant
   [sel n]
@@ -84,12 +93,18 @@
 (defn get-numeric-movement-vec
   [sel]
   (if (move/move :move/up sel)
-    (reverse (nav/parents-vec sel))
-    (el-bfs sel 8)))
+    (do
+      (println "Reverse parents")
+      (reverse (nav/parents-vec sel)))
+    (do
+      (println "El-bfs")
+      (el-bfs sel 8))))
 
 (defn numeric-movement
   [sel n]
   (when-let [nmv (get-numeric-movement-vec sel)]
+    (println "NMove" n sel )
+    (run! prn (map vector (range) nmv))
     (when (< -1 n (count nmv))
       (move-selection-tx (:db/id sel)
                          (:db/id (nth nmv n))))))
@@ -114,20 +129,18 @@
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
 
-[{:db/id "eval-result"
-  :eval/of 33
-  :coll/type :eval-result
-  :eval/result {:string/value "#'user/thing"
-                :db/id "import-formdata-tx"}}
- [{:db/id 32
-   :seq/first "eval-result"
-   :seq/next {:db/id "insert-before-cons"
-              :seq/first 33}}
-  [:db/add 30 :coll/contains "eval-result"]
-  nil]]
-
-
 (defn eval-result
+  [db et c]
+  (let [ee (d/entity db :page/evalchain)
+        new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
+                              (pr-str c))
+                     (assoc :form/linebreak true)
+                     (update :db/id #(or % "import-formdata-tx")))]
+    (prn c)
+    (into [new-node]
+          (edit/insert-before-tx (:seq/first ee) new-node))))
+
+#_(defn eval-result
   [db et c]
   (let [top-level   (peek (nav/parents-vec et))
         prev        (move/move :move/prev-sibling top-level)
@@ -159,6 +172,19 @@
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
 
+(defn toggle-hide-show
+  [e]
+  (let [ct (:coll/type e)
+        hct (:hidden/coll-type e)]
+    (cond
+      hct
+      [[:db/retract (:db/id e) :hidden/coll-type hct]
+       [:db/add (:db/id e) :coll/type hct]]
+      
+      ct
+      [[:db/add (:db/id e) :hidden/coll-type ct]
+       [:db/add (:db/id e) :coll/type :hidden]])))
+
 (def dispatch-table
   {:select                         nav/select-form-tx
    :flow-right                     (fn [db] (move/movement-tx db :move/flow))
@@ -182,8 +208,9 @@
      (insert/wrap-edit-tx
       (d/entity db [:form/editing true])
       ct value))
-   :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up))
-   :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up))
+   ;; second movement type is plan B in case we are asked to delete first/last of chain 
+   :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
+   :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
    :clone                          edit/insert-duplicate-tx
    :linebreak                      linebreak-selected-form-tx
@@ -207,4 +234,7 @@
    :m7 (fn [db] (numeric-movement (get-selected-form db) 6))
    :m8 (fn [db] (numeric-movement (get-selected-form db) 7))
    
-   :eval-result eval-result})
+   :eval-result  eval-result
+   :hide         (fn [db] (toggle-hide-show (get-selected-form db)))
+   :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
+   })

@@ -34,11 +34,15 @@
     
     :chain/selection {:db/valueType :db.type/ref}
 
-    :key/kbd      {:db/unique :db.unique/identity}
-    :key/mutation {}
+    :key/kbd         {:db/unique :db.unique/identity}
+    :key/mutation    {}
+    :keymap/bindings {:db/valueType :db.type/ref
+                      :db/cardinality :db.cardinality/many}
     
     :alias/of {:db/valueType :db.type/ref}
     
     :eval/of     {:db/valueType :db.type/ref}
     :eval/result {:db/valueType :db.type/ref}
+    
+    :hidden/coll-type {}
     }))

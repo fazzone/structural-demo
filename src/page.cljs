@@ -51,8 +51,7 @@
               :coll/type :chain
               :coll/_contains "bar"))
      
-     
-     [{:db/ident ::meta-chain
+     [#_{:db/ident ::meta-chain
        :coll/type :chain
        :coll/_contains "bar"
        :coll/contains #{"label"
@@ -86,6 +85,7 @@
    "Backspace" :delete-left
    "Enter"     :linebreak
    "C-Enter"   :insert-right-newline
+   "Escape"    :select-chain
    "c"         :clone
    "z"         :hop-left
    "x"         :hop-right
@@ -109,14 +109,14 @@
    "7"         :m7
    "8"         :m8
    "v"         :scroll
+   "-"         :hide
    })
 
 (def init-tx-data
   (let [txe (test-form-data-tx (concat
                                 (map e/->tx test-form-data-bar)
                                 #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
-                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))
-        timetravel-placeholders (e/->tx (vec (range 9)))]
+                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]))]
     (concat
      [{:db/ident ::state
        :state/bar (:db/id txe)}
@@ -133,14 +133,11 @@
        :db/id "inspect"
        :coll/type :inspect
        :seq/first {:string/value "No inspect" :coll/_contains "history"}}
-      {:db/ident ::timetravel
-       :db/id "timetravel"
-       :coll/type :timetravel
-       :seq/first (:db/id timetravel-placeholders)}
-      timetravel-placeholders
-      txe]
-     (for [[k m] default-keymap]
-       {:key/kbd k :key/mutation m}))))
+      txe
+      {:db/ident ::default-keymap
+       :db/id "defaultkeymap"
+       :keymap/bindings (for [[k m] default-keymap]
+                          {:key/kbd k :key/mutation m})}])))
 
 ;; replace with non-breaking hyphen, lmao
 #_(-> text (gstring/replaceAll "-" "‑"))
@@ -202,7 +199,7 @@
        [:span.inline-tag-inner
         (str p)]])
     
-    #_[:span.inline-tag (str (:db/id e))]
+    [:span.inline-tag (str (:db/id e))]
     
     open]
    (for [x (e/seq->vec e)]
@@ -215,21 +212,35 @@
 (defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}" c b i s p))
 (defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
 
+(defmethod display-coll :hidden  [c b i s p]
+  [:span
+   (cond-> {:class (str "c " s)}
+     s (assoc :ref "selected"))
+   (case (:hidden/coll-type c)
+     :list "(...)"
+     :vec "[...]"
+     :map "{...}"
+     :set "#{...}"
+     "<...>")])
+
 (defmethod display-coll :chain [chain bus i classes proply]
   [:div.chain
    {:key (:db/id chain)
     :ref "chain"
     :id (str "c" (:db/id chain))
     :class classes}
+   (str "Chain" (:db/id chain))
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus proply)
          (rum/with-key (:db/id f))))])
 
 (defmethod display-coll :bar [bar bus i c p]
-  [:div.bar
-    (for [chain-head (e/seq->vec bar)]
-      (-> (fcc chain-head bus i p)
-          (rum/with-key (:db/id chain-head))))])
+  [:div
+   (cond-> {:class (str "bar " c)}
+     c (assoc :ref "selected"))
+   (for [chain-head (e/seq->vec bar)]
+     (-> (fcc chain-head bus i p)
+         (rum/with-key (:db/id chain-head))))])
 
 (defmethod display-coll :keyboard [k bus i]
   [:div.display-keyboard
@@ -410,9 +421,9 @@
     "d"      [::delete-with-movement :move/forward-up]
     "e"      [::eval]
     
-    "z"         [::hop-left]
-    "x"         [::hop-right]
-    "S-Z"       [::drag-left] 
+    "z"   [::hop-left]
+    "x"   [::hop-right]
+    "S-Z" [::drag-left] 
     
     "Backspace" [::delete-with-movement :move/backward-up]
     "c"         [::duplicate-selected-form]
@@ -420,10 +431,11 @@
     ;; "S-I"       [::indent-form -1]
     "Tab"       [::indent-form 1]
     "S-Tab"     [::indent-form -1]
-    "i"         [::check-invariants] #_[::reset-indent]
+    "i"         [::check-invariants] #_ [::reset-indent]
     "Enter"     [::linebreak-form]
     "M-p"       ["placeholder"]
     "M-n"       ["placeholder"]
+    "-"         ["placeholder"]
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     ;; "M-x"       [::execute-selected-as-mutation]
@@ -437,23 +449,14 @@
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
 (declare command-compose-feedback)
-(rum/defc modeline-inner
-  [sel tx-report {:keys [text valid] :as edn-parse-state}]
+(rum/defc modeline-inner < dbrx/ereactive
+  [sel bus {:keys [text valid] :as edn-parse-state}]
   [:span {:class (str "modeline modeline-size code-font"
                       (when text " editing")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
    [:span.modeline-echo.modeline-size
-    (if text
-      (pr-str text)
-      (let [r tx-report]
-        (str (pr-str (:mutation (:tx-meta r)))
-             (when-let [kbd (:kbd (:tx-meta r))]
-               (str " " kbd))
-             " "
-             (:db/current-tx (:tempids r))
-             " ("
-             (count (:tx-data r))
-             ")")))]
+    (when text
+      (pr-str text))]
    [:span.modeline-content
     (if-not sel
       "(no selection)"
@@ -475,19 +478,20 @@
     (when nn
       (-> (modeline-inner
            sel
-           (rum/react h/last-tx-report)
+           bus
            (when (:form/editing sel)
              (rum/react eb/editbox-ednparse-state)))
           (rum/portal nn)))))
 
 (declare setup-app)
-(rum/defc root-component < (dbrx/areactive :form/highlight) 
+(rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)]
     [:div.bar-container
      (breadcrumbs-always db bus)
      (fcc (:state/bar state) bus 0 nil)
-     (modeline-portal db bus)]))
+     (modeline-portal db bus)
+     #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
   [^KeyboardEvent ev]
@@ -568,21 +572,12 @@
              [best other] (if top-closer?
                             [off align-bottom]
                             [align-bottom off])]
-         (println "Pos" pos "Best" best "Other" other)
          (.scrollTo chain #js{:top
                               (if (< -1 (- pos best) 1)
                                 other
-                                best)
-                              #_(cond
-                                  (and top-closer? (= pos off)) align-bottom
-                                  top-closer?                   off
-                                  (= pos align-bottom)          off
-                                  :else                         align-bottom)
-                              }))))))
+                                best)}))))))
 
 (defn ensure-selected-in-view! [] (scroll-to-selected! false))
-
-
 
 (defn setup-app
   ([]
@@ -590,7 +585,7 @@
     (doto (d/create-conn s/schema)
       (d/transact! init-tx-data))))
   ([conn]
-   (let [a (core/app s/schema conn)
+   (let [a (core/app conn)
          s (sci/init {})
          
          chain->io (atom {})
@@ -614,7 +609,7 @@
                                                 (move/move :move/most-upward))
                                         c  (->> (e/->form et)
                                                 (pr-str))]
-                                    (println "Eval sci" c)
+                                    (println "Eval sciNioce" c)
                                     (try
                                       (let [ans (sci/eval-string* s c)
                                             
@@ -626,7 +621,6 @@
                                         (core/send! bus [:eval-result et ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
-       #_(setup-scrolling!)
        (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
        (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))))))
 
@@ -809,6 +803,10 @@
     [[:float] [:delete-left] [:flow-right] [:float]]
     #_[[:last]])])
 
+#_(def the-singleton-db
+  (doto (d/create-conn s/schema)
+    (d/transact! init-tx-data)))
+
 (defn  ^:dev/after-load init []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
@@ -817,12 +815,12 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
-  (let [{:keys [conn bus]} (setup-app)
-        ;; se (d/entity @conn ::state)
-        ] 
+  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
+    (println "DKL" (d/entity @conn ::default-keymap))
+    (run! prn (d/touch (d/entity @conn ::default-keymap)))
     
     (rum/mount
      #_(debug-component)

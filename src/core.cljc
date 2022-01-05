@@ -59,15 +59,19 @@
   [{:keys [bus conn] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop []
-      (let [[_ & args] (async/<! ch)]
-        (try (d/transact! conn (apply mut-fn @conn args))
+      (let [[_ & args] (async/<! ch)
+            tx-data (apply mut-fn @conn args)
+            ]
+        (try (d/transact! conn tx-data)
              (catch #?(:cljs js/Error :clj Exception) e
-               (println "Error transacting" e)))
+               (println "Error transacting" e)
+               (println "Tx-data")
+               (cljs.pprint/pprint tx-data)))
         (recur)))
     (connect-sub! bus topic ch)))
 
 (defn app
-  [schema conn]
+  [conn]
   (let [the-bus (bus)]
     (map->App
      {:bus the-bus

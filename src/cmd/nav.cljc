@@ -43,12 +43,15 @@
 (def hop-right (partial hop* seq-next))
 
 (defn select-chain-tx
-  [db sel]
-  (let [top-level (peek (parents-vec sel))
-        chain (some-> top-level :coll/_contains first)]
-    (concat (select-form-tx db (:db/id chain))
-            [{:db/id (:db/id chain)
-              :chain/selection (:db/id sel)}])))
+  [sel]
+  (if-let [cs (:chain/selection sel)] 
+    (move-selection-tx (:db/id sel) (:db/id cs))
+    (let [top-level (peek (parents-vec sel))
+          chain (some-> top-level :coll/_contains first)]
+      (when (= :chain (:coll/type chain))
+       (concat (move-selection-tx (:db/id sel) (:db/id chain))
+               [{:db/id (:db/id chain)
+                 :chain/selection (:db/id sel)}])))))
 
 (defn restore-chain-selection-tx
   [db chain]
