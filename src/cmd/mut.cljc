@@ -185,6 +185,19 @@
       [[:db/add (:db/id e) :hidden/coll-type ct]
        [:db/add (:db/id e) :coll/type :hidden]])))
 
+(defn replace-with-pr-str
+  [sel]
+  (let [new-node {:db/id        "eval-result"
+                  :string/value (pr-str (e/->form sel))}]
+    (prn "RPPRS" new-node )
+    (doto
+        (into [new-node]
+              (concat
+               (edit/form-overwrite-tx sel "eval-result")
+               (move-selection-tx (:db/id sel) "eval-result")))
+        prn
+        )))
+
 (def dispatch-table
   {:select                         nav/select-form-tx
    :flow-right                     (fn [db] (move/movement-tx db :move/flow))
@@ -237,4 +250,4 @@
    :eval-result  eval-result
    :hide         (fn [db] (toggle-hide-show (get-selected-form db)))
    :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
-   })
+   :stringify (fn [db] (replace-with-pr-str (get-selected-form db)))})

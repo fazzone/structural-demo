@@ -61,11 +61,13 @@
     (go-loop []
       (let [[_ & args] (async/<! ch)
             tx-data (apply mut-fn @conn args)]
-        (try (d/transact! conn tx-data)
-             (catch #?(:cljs js/Error :clj Exception) e
-               (println "Error transacting" e)
-               (println "Tx-data")
-               (cljs.pprint/pprint tx-data)))
+        (try
+          (d/transact! conn tx-data)
+          (catch #?(:cljs js/Error :clj Exception) e
+            (println "Error transacting" e)
+            (println "Tx-data")
+            (cljs.pprint/pprint tx-data)))
+        
         (recur)))
     (connect-sub! bus topic ch)))
 

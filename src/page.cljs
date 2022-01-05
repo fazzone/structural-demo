@@ -112,6 +112,8 @@
    "8"         :m8
    "v"         :scroll
    "-"         :hide
+   "i"         :insert-left
+   "S-Q"         :stringify
    })
 
 (def init-tx-data
@@ -194,8 +196,8 @@
 (defn delimited-coll
   [open close e bus indent classes proply]
   #_(when proply (println "DC" e proply))
-  [:span (cond-> {:class (str "c dl " classes)}
-           classes (assoc :ref "selected"))
+  [:span.c.dl
+   (when classes {:class classes :ref "selected"})
    [:span.d
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
@@ -222,7 +224,7 @@
    (cond-> {:class (str "c " s)}
      s (assoc :ref "selected"))
    (case (:hidden/coll-type c)
-     :list "(...)"
+     :list "(\u00b7\u00b7\u00b7)"
      :vec "[...]"
      :map "{...}"
      :set "#{...}"
@@ -442,6 +444,8 @@
     "M-p"       ["placeholder"]
     "M-n"       ["placeholder"]
     "-"         ["placeholder"]
+    "S-Q"         ["placeholder"]
+
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     ;; "M-x"       [::execute-selected-as-mutation]

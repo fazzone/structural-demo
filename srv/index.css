@@ -134,10 +134,8 @@ span.form-title {
 }
 .d  + .tk       { border-width: 0 1ch 0 0; }
 .tk + .c        { margin-left: 1ch; }
-
 .c  + .tk       { margin-left: 1ch; }
 .c  + .edit-box { margin-left: 1ch; }
-
 .c  + .c        { margin-left: 2ch; }
 .d  + .edit-box { border-width: 0; }
 .edit-box       { border-width: 0 1ch 0 1ch; }
