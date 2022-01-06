@@ -15,12 +15,7 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-#_(defn move-and-delete-tx
-  [db movement-type]
-  (let [src (get-selected-form db)]
-    (when-let [dst (move/move movement-type src)]
-      (concat (edit/form-delete-tx src)
-              [[:db/add (:db/id dst) :form/highlight true]]))))
+;; second movement type is plan B in case we are asked to delete first/last of chain 
 (defn move-and-delete-tx
   [db mta mtb]
   (let [src (get-selected-form db)]
@@ -221,7 +216,6 @@
      (insert/wrap-edit-tx
       (d/entity db [:form/editing true])
       ct value))
-   ;; second movement type is plan B in case we are asked to delete first/last of chain 
    :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
    :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
@@ -237,17 +231,15 @@
    :barf-right                     (fn [db] (edit/barf-right-tx (get-selected-form db)))
    :new-list                       (fn [db] (edit/edit-new-wrapped-tx db :list "" {}))
    :new-vec                        (fn [db] (edit/edit-new-wrapped-tx db :vec "" {}))
-   
-   :m1 (fn [db] (numeric-movement (get-selected-form db) 0))
-   :m2 (fn [db] (numeric-movement (get-selected-form db) 1))
-   :m3 (fn [db] (numeric-movement (get-selected-form db) 2))
-   :m4 (fn [db] (numeric-movement (get-selected-form db) 3))
-   :m5 (fn [db] (numeric-movement (get-selected-form db) 4))
-   :m6 (fn [db] (numeric-movement (get-selected-form db) 5))
-   :m7 (fn [db] (numeric-movement (get-selected-form db) 6))
-   :m8 (fn [db] (numeric-movement (get-selected-form db) 7))
-   
-   :eval-result  eval-result
-   :hide         (fn [db] (toggle-hide-show (get-selected-form db)))
-   :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
-   :stringify (fn [db] (replace-with-pr-str (get-selected-form db)))})
+   :m1                             (fn [db] (numeric-movement (get-selected-form db) 0))
+   :m2                             (fn [db] (numeric-movement (get-selected-form db) 1))
+   :m3                             (fn [db] (numeric-movement (get-selected-form db) 2))
+   :m4                             (fn [db] (numeric-movement (get-selected-form db) 3))
+   :m5                             (fn [db] (numeric-movement (get-selected-form db) 4))
+   :m6                             (fn [db] (numeric-movement (get-selected-form db) 5))
+   :m7                             (fn [db] (numeric-movement (get-selected-form db) 6))
+   :m8                             (fn [db] (numeric-movement (get-selected-form db) 7)) 
+   :eval-result                    eval-result
+   :hide                           (fn [db] (toggle-hide-show (get-selected-form db)))
+   :select-chain                   (fn [db] (nav/select-chain-tx (get-selected-form db)))
+   :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))})

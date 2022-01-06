@@ -1,5 +1,7 @@
 (ns comp.keyboard
-  (:require [rum.core :as rum]))
+  (:require
+   [rum.core :as rum]
+   [datascript.core :as d]))
 
 (rum/defc keyboard-key-component
   [k->l keycap]
@@ -37,6 +39,73 @@
                                  (cond-> more (list* more))
                                  (cons acc)))
       :else       (list* '-> arg func acc))))
+
+
+
+(def mutation->label
+  {
+   :flow-right {:label "flow->" :symbol [:span.symbol1 "==>"] }
+   :flow-left  {:label "<-flow" :symbol [:span.symbol1 "<=="] }
+   :raise      {:label  "raise"
+                :symbol [:div {:style {:transform   "rotate(225deg)"
+                                       :margin-top  "0.5ex"
+                                       :margin-left "-0.5ex"
+                                       }} "=>>"]}
+   :float      {:label  "float"
+                :symbol [:div {:style {:margin-top  "0.5ex"
+                                       :margin-left "-0.5ex"
+                                       :transform   "rotate(-90deg)"}}
+                         "=>>"]}
+   :sink       {:label  "sink"
+                :symbol [:div {:style {:margin-top  "0.5ex"
+                                       :margin-left "-0.5ex"
+                                       :transform   "rotate(90deg)"}} "=>>"]}
+   :eval-sci   {:label  [:span {:style {:color "tomato"}} "eval"]
+                :symbol [:div {:style {:font-size   "220%"
+                                       :margin-top  "-1.175ex"
+                                       :margin-left "0ex"
+                                       }}
+                         "\u2026"]}
+   :hide {:label [:span {:style {:color "tomato"}} "hide"]}
+   
+   :compose {:label  [:span {:style {:color "tomato"}} "comp"]
+             :symbol [:div {:style {:font-size   "120%"
+                                    :margin-left "0.2ex"
+                                    }}
+                      "\u25ef"]}
+   
+   :slurp-right {:label [:span {:style {:color "tomato"}} "push)→"]}
+   :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
+   
+   :hop-left  {:label "<-hop"}
+   :hop-right {:label "hop->"}
+   
+   :insert-left  {:label "ins<-"}
+   :insert-right {:label "->ins"}
+
+   :wrap         {:label "(wrap)"}
+   :new-vec      {:label "new []"}
+   :delete-right {:label  "del->"
+                  :symbol [:div {:style {:font-size   "120%"
+                                         :margin-left "0.0ex"
+                                         :margin-top  "-0.2ex"}}
+                           "\u2326"]}
+   :delete-left  {:label "<-del"}
+   
+   :scroll {:label "view"}
+   :parent {:label  "parent"
+            :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
+   :next   {:label  "next"
+            :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
+   :prev   {:label  "prev"
+            :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"] }
+   :tail   { :label "tail"
+            :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
+
+   
+   
+   :clone     {:label "clone" :symbol [:div.symbol3 "++"]}
+   :linebreak {:label "linebreak"}})
 
 (def defaultkl
   {
@@ -139,8 +208,11 @@
    "Backspace" {:label "←delete"}})
 
 (rum/defc keyboard-diagram
-  [ ]
-  (let [k->l defaultkl
+  [kme]
+  (let [k->l #_defaultkl
+        (into {}
+              (for [{:key/keys [kbd mutation]} (:keymap/bindings kme)]
+                [kbd (get mutation->label mutation)]))
         key (partial kkc k->l)]
     [:div.keyboard-container
      [:div.keyboard-row.number

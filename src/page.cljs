@@ -55,13 +55,12 @@
        :coll/type :chain
        :coll/_contains "bar"
        :coll/contains #{"label"
-                        "keyboard"
+                        "defaultkeymap"
                         ;; "inspect"
                         "evalchain"}
        :seq/first {:db/id "label"
                    :string/value "Keyboard"}
-       :seq/next {:seq/first {:db/id "keyboard"
-                              :coll/type :keyboard}
+       :seq/next {:seq/first "defaultkeymap"
                   :seq/next {:seq/first "evalchain"}
                   ;; :seq/next {:seq/first "inspect"
                   ;;            :seq/next {:seq/first "evalchain"}}
@@ -95,6 +94,7 @@
    "9"         :wrap
    ;; "9"         :new-list
    "0"         :parent
+   "]"         :parent
    "p"         :slurp-right
    "S-P"       :barf-right
    "Tab"       :indent
@@ -113,7 +113,7 @@
    "v"         :scroll
    "-"         :hide
    "i"         :insert-left
-   "S-Q"         :stringify
+   "S-Q"       :stringify
    })
 
 (def init-tx-data
@@ -140,11 +140,12 @@
        :db/id "inspect"
        :coll/type :inspect
        :seq/first {:string/value "No inspect" :coll/_contains "history"}}
-      txe
       {:db/ident ::default-keymap
        :db/id "defaultkeymap"
+       :coll/type :keyboard
        :keymap/bindings (for [[k m] default-keymap]
-                          {:key/kbd k :key/mutation m})}])))
+                          {:key/kbd k :key/mutation m})}
+      txe])))
 
 ;; replace with non-breaking hyphen, lmao
 #_(-> text (gstring/replaceAll "-" "‑"))
@@ -251,7 +252,10 @@
 
 (defmethod display-coll :keyboard [k bus i]
   [:div.display-keyboard
-   (ck/keyboard-diagram)
+   (ck/keyboard-diagram
+    k
+    #_(d/entity (d/entity-db k) )
+    )
    
    [:div {:style {:width "6ex"
                   :font-size "9pt"}}
