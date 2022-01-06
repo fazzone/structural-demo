@@ -43,7 +43,7 @@
   (sub-chan [this topic])
   (with [this msg]))
 
-(defrecord App [conn bus])
+(defrecord App [conn bus history])
 
 (defn register-mutation!
   [{:keys [conn bus]} topic mut-fn]
@@ -56,7 +56,7 @@
           :ok
           ch)))))
 
-(defn register-simple!
+#_(defn register-simple!
   [{:keys [bus conn] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
@@ -85,23 +85,86 @@
                    last-tx))))
     (connect-sub! bus topic ch)))
 
+(defn register-simple!
+  [{:keys [bus conn history] :as app} topic mut-fn]
+  (let [ch (async/chan)]
+    (go-loop [last-tx nil]
+      (let [[_ & args :as mut] (async/<! ch)
+            db         @conn
+            hent       (d/entity db :page/history)
+            tx-data    (apply mut-fn db args)
+            report     (try (and tx-data (d/transact! conn tx-data))
+                            (catch #?(:cljs js/Error :clj Exception) e
+                              {:error e}))]
+        
+        (when (:tempids report)
+          (reset! history (cons (assoc report :mut (first mut)) @history)))
+        
+        #_(prn
+           (for [h @history]
+             (if (map? h)
+               (:db/current-tx (:tempids h))
+               (map #(:db/current-tx (:tempids %)) h))))
+        
+        #_(doseq [h @history]
+          
+            #_(prn (get (:tempids h) :db/current-tx) (:tx-data h)))
+        (when-let [e (:error report)]
+          (println "Error transacting" e)
+          (println "Tx-data")
+          (run! prn tx-data))
+        (recur (or (get (:tempids report) :db/current-tx)
+                   last-tx))))
+    (connect-sub! bus topic ch)))
+
+
+(defn revert-txdata
+  [tx-data]
+  (for [[e a v t a?] (reverse tx-data)]
+    [(if a? :db/retract :db/add) e a v]))
+
+(defn setup-undo!
+  [{:keys [bus conn history] :as app}]
+  (let [ch (async/chan)]
+    (go-loop []
+      (let [_                    (async/<! ch)
+            [prior-undo & undos] (take-while list? @history)
+            [u & more]           (drop-while list? @history)]
+        (prn "Udo"
+             (for [h @history]
+               (if (map? h)
+                 (:mut h)
+                 (map :mut h))))
+        (when u
+          (d/transact! conn (revert-txdata (:tx-data u)))
+          (reset! history
+                  (cons (cons u prior-undo)
+                        (concat undos more)))))
+      (recur))
+    (connect-sub! bus :undo ch))
+  app)
+
+
+
 (defn app
   [conn]
   (let [the-bus (bus)]
-    (map->App
-     {:bus the-bus
-      :conn (doto conn
-              (d/listen! (fn [{:keys [tx-data tempids db-after] :as tx-report}]
-                           (let [new-entities (set (vals tempids))
-                                 es (into #{} (comp
-                                               (filter (comp not new-entities))
-                                               (map (fn [[e a v t]] e))) tx-data)
-                                 as (into #{} (map (fn [[e a v t]] a)) tx-data)]
-                             (doseq [e es]
-                               (when-not (empty? (d/datoms db-after :eavt e))
-                                 (send! the-bus [e (d/entity db-after e)])))
-                             (doseq [a as]
-                               (send! the-bus [a db-after]))))))})))
+    (-> {:bus the-bus
+         :history (atom ())
+         :conn (doto conn
+                 (d/listen! (fn [{:keys [tx-data tempids db-after] :as tx-report}]
+                              (let [new-entities (set (vals tempids))
+                                    es (into #{} (comp
+                                                  (filter (comp not new-entities))
+                                                  (map (fn [[e a v t]] e))) tx-data)
+                                    as (into #{} (map (fn [[e a v t]] a)) tx-data)]
+                                (doseq [e es]
+                                  (when-not (empty? (d/datoms db-after :eavt e))
+                                    (send! the-bus [e (d/entity db-after e)])))
+                                (doseq [a as]
+                                  (send! the-bus [a db-after]))))))}
+        (map->App)
+        (setup-undo!))))
 
 
 

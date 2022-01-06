@@ -22,6 +22,7 @@
     "Backspace"   (when (empty? text)
                     [:edit/reject])
     "Enter"       [:edit/finish text]
+    "C-/"         [:undo]
     (")" "]" "}") [:edit/finish-and-move-up text]
     ("[" "(" "{") [:edit/wrap (case key "(" :list "[" :vec "{" :map) text]
     " "           (cond
@@ -52,6 +53,13 @@
 
 (def editbox-ednparse-state (atom nil))
 
+(defn event->kbd
+  [^KeyboardEvent ev]
+  (str (when (.-altKey ev) "M-")
+       (when (.-ctrlKey ev ) "C-")
+       (when (.-shiftKey ev) "S-")
+       (.-key ev)))
+
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
   [{::keys [text]} e bus]
@@ -80,7 +88,9 @@
                       nil
                       )
       :on-key-down (fn [ev]
-                     (when-let [mut (editbox-keydown-mutation value (.-key ev))]
+                     (when-let [mut (editbox-keydown-mutation
+                                     value
+                                     (event->kbd ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
                        (core/send! bus mut)

@@ -256,3 +256,6 @@
    :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
    :plus                           (comp plus* get-selected-form)
    :minus                          (comp minus* get-selected-form)})
+
+
+

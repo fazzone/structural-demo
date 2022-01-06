@@ -56,7 +56,7 @@
        :coll/_contains "bar"
        :coll/contains #{"label"
                         "defaultkeymap"
-                        "inspect"
+                        ;; "inspect"
                         "evalchain"
                         "history"
                         }
@@ -66,7 +66,8 @@
                   ;; :seq/next {:seq/first "evalchain"}
                   :seq/next {:seq/first "history"
                              :seq/next {:seq/first "evalchain"
-                                        :seq/next {:seq/first "inspect"}}}
+                                        ;; :seq/next {:seq/first "inspect"}
+                                        }}
                   }}]))
    :db/id "bar"
    :coll/type :bar))
@@ -74,6 +75,8 @@
 
 (def default-keymap
   {"f"         :flow-right
+   "u"         :undo
+   "C-/"       :undo
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -114,7 +117,7 @@
    "7"         :m7
    "8"         :m8
    "v"         :scroll
-   "-"         :minus
+   "-"         :hide
    "i"         :insert-left
    "S-Q"       :stringify
    "S-+"       :plus
@@ -535,7 +538,7 @@
             
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
-        #_(prn "Key" kbd mut)
+        (prn "Key" kbd mut)
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
