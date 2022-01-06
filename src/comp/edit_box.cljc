@@ -76,7 +76,8 @@
                                :text new-text
                                :valid (some? token)
                                :type (some-> token first val)})
-                      (prn "PTT" token )
+                      #_(prn "PTT" token )
+                      nil
                       )
       :on-key-down (fn [ev]
                      (when-let [mut (editbox-keydown-mutation value (.-key ev))]

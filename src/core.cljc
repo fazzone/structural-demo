@@ -1,5 +1,6 @@
 (ns core
   (:require [datascript.core :as d]
+            [embed :as e]
             #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async]))
   #?(:cljs
@@ -58,17 +59,30 @@
 (defn register-simple!
   [{:keys [bus conn] :as app} topic mut-fn]
   (let [ch (async/chan)]
-    (go-loop []
-      (let [[_ & args] (async/<! ch)
-            tx-data (apply mut-fn @conn args)]
-        (try
-          (d/transact! conn tx-data)
-          (catch #?(:cljs js/Error :clj Exception) e
-            (println "Error transacting" e)
-            (println "Tx-data")
-            (cljs.pprint/pprint tx-data)))
-        
-        (recur)))
+    (go-loop [last-tx nil]
+      (let [[_ & args :as mut] (async/<! ch)
+            db         @conn
+            hent       (d/entity db :page/history)
+            tx-data    (concat (apply mut-fn db args)
+                               (when (:seq/first hent)
+                                 [{:db/id (:db/id hent)
+                                   :seq/first {:db/id :db/current-tx
+                                               :coll/_contains (:db/id hent)
+                                               :form/linebreak true
+                                               :string/value (pr-str mut)}
+                                   :seq/next {:db/id "nh"
+                                              :seq/first (:db/id (:seq/first hent))}}
+                                  (when-let [next (:seq/next hent)]
+                                    [:db/add "nh" :seq/next (:db/id next) ])]))
+            report     (try (d/transact! conn tx-data)
+                            (catch #?(:cljs js/Error :clj Exception) e
+                              {:error e}))]
+        (when-let [e (:error report)]
+          (println "Error transacting" e)
+          (println "Tx-data")
+          (run! prn tx-data))
+        (recur (or (get (:tempids report) :db/current-tx)
+                   last-tx))))
     (connect-sub! bus topic ch)))
 
 (defn app

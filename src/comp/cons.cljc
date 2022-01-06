@@ -239,6 +239,7 @@
                                    "H" arrowright)}])))
      (when-let [car (:seq/first node)]
        (let [droop (+ row 1
+                      (or  (:form/indent car) 0)
                       (case (:db/id car)
                         0))]
          (rum/fragment
@@ -264,7 +265,9 @@
   (let [size 45
         [rmax cmax] computed-size
         width (* 3.5 size (inc cmax))
-        height (* 2.5 size (inc rmax))]
+        ;; height (* 2.5 size (inc rmax))
+        height (* 4.5 size (inc rmax))
+        ]
     #_(prn "Computer size" computed-size)
     #_(conscell-layout-bfs root)
     #_(compute-thing root)

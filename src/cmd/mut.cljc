@@ -125,8 +125,9 @@
             (edit/insert-before-tx (:seq/first ee) new-node))))
 
 (defn eval-result
-  [db et c]
-  (let [ee (d/entity db :page/evalchain)
+  [db et-eid c]
+  (let [et (d/entity db et-eid)
+        ee (d/entity db :page/evalchain)
         new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
                               (pr-str c))
                      (assoc :form/linebreak true)
@@ -193,6 +194,16 @@
         prn
         )))
 
+(defn plus*
+  [e]
+  (when-let [n (:number/value e)]
+    [[:db/add (:db/id e) :number/value (inc n)]]))
+
+(defn minus*
+  [e]
+  (when-let [n (:number/value e)]
+    [[:db/add (:db/id e) :number/value (dec n)]]))
+
 (def dispatch-table
   {:select                         nav/select-form-tx
    :flow-right                     (fn [db] (move/movement-tx db :move/flow))
@@ -242,4 +253,6 @@
    :eval-result                    eval-result
    :hide                           (fn [db] (toggle-hide-show (get-selected-form db)))
    :select-chain                   (fn [db] (nav/select-chain-tx (get-selected-form db)))
-   :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))})
+   :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
+   :plus                           (comp plus* get-selected-form)
+   :minus                          (comp minus* get-selected-form)})

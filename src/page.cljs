@@ -56,14 +56,17 @@
        :coll/_contains "bar"
        :coll/contains #{"label"
                         "defaultkeymap"
-                        ;; "inspect"
-                        "evalchain"}
+                        "inspect"
+                        "evalchain"
+                        "history"
+                        }
        :seq/first {:db/id "label"
                    :string/value "Keyboard"}
        :seq/next {:seq/first "defaultkeymap"
-                  :seq/next {:seq/first "evalchain"}
-                  ;; :seq/next {:seq/first "inspect"
-                  ;;            :seq/next {:seq/first "evalchain"}}
+                  ;; :seq/next {:seq/first "evalchain"}
+                  :seq/next {:seq/first "history"
+                             :seq/next {:seq/first "evalchain"
+                                        :seq/next {:seq/first "inspect"}}}
                   }}]))
    :db/id "bar"
    :coll/type :bar))
@@ -111,9 +114,11 @@
    "7"         :m7
    "8"         :m8
    "v"         :scroll
-   "-"         :hide
+   "-"         :minus
    "i"         :insert-left
    "S-Q"       :stringify
+   "S-+"       :plus
+   
    })
 
 (def init-tx-data
@@ -130,8 +135,8 @@
       {:db/ident ::history
        :db/id "history"
        :coll/type :vec
-       :seq/first {:string/value "Eod of history" :coll/_contains "history"}
-       :seq/next {:seq/first {:string/value "Really end " :coll/_contains "history"}}}
+       :seq/first {:string/value "end of history"
+                   :coll/_contains "history"}}
       {:db/ident ::evalchain
        :db/id "evalchain"
        :coll/type :vec
@@ -162,7 +167,7 @@
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
    [:div.top-level-form.code-font
-      (fcc e bus 0 p)]
+    (fcc e bus 0 p)]
    [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]])
 
 (defn do-indent
@@ -202,7 +207,7 @@
    [:span.d
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
-    (when-let [p (get proply (:db/id e))]
+    #_(when-let [p (get proply (:db/id e))]
       [:span.inline-tag-outer
        [:span.inline-tag-inner
         (str p)]])
@@ -221,7 +226,9 @@
 (defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
 
 (defmethod display-coll :hidden  [c b i s p]
-  [:span
+  [:div {:style {:width "800px"}}
+   (cc/svg-viewbox c core/blackhole)]
+  #_[:span
    (cond-> {:class (str "c " s)}
      s (assoc :ref "selected"))
    (case (:hidden/coll-type c)
@@ -671,7 +678,7 @@
                                                                                  'touch d/touch}}
                                                                 :bindings {'db db
                                                                            'sel (get-selected-form db)}})]
-                                        (core/send! bus [:eval-result et ans]))
+                                        (core/send! bus [:eval-result (:db/id et) ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
