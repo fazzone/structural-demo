@@ -208,6 +208,7 @@
         x      (* width col)
         y      (* height row)
         label  (str "#" (:db/id node) "-" (count taken))]
+    (println "Oncell* " (:db/id node))
     (rum/fragment
      (if-let [sv (or (:symbol/value node)
                      (:keyword/value node)
@@ -218,7 +219,7 @@
        (rum/fragment
         [:text {:x (+ x (* 3 half)) :y (- y 4)} label]
         (when-let [ct (:coll/type node)]
-         [:text {:x x :y (- y 4)} (pr-str ct)])
+          [:text {:x x :y (- y 4)} (pr-str ct)])
         [:rect {:x x :y y :fill :none :width size :height size}]
         [:rect {:x (+ x size) :y y :fill :none :width size :height size}]))
      
@@ -231,15 +232,15 @@
          (rum/fragment
           (onecell cdr bus size row splay (assoc taken [row col] (:db/id node)))
           #_[:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
-                  :d          (str "M" (str arrowleft) "," (str (+ y half))
-                                   " Q" (str control) "," (str y)
-                                   " " (str arrowright) "," (str (+ y half)))}]
+                    :d          (str "M" (str arrowleft) "," (str (+ y half))
+                                     " Q" (str control) "," (str y)
+                                     " " (str arrowright) "," (str (+ y half)))}]
           [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
                   :d          (str "M" arrowleft "," (+ y half)
                                    "H" arrowright)}])))
      (when-let [car (:seq/first node)]
        (let [droop (+ row 1
-                      (or  (:form/indent car) 0)
+                      (or  (:form/indent node) 0)
                       (case (:db/id car)
                         0))]
          (rum/fragment

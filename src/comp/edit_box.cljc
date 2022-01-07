@@ -25,7 +25,7 @@
     "C-/"         [:undo]
     (")" "]" "}") [:edit/finish-and-move-up text]
     ("[" "(" "{") [:edit/wrap (case key "(" :list "[" :vec "{" :map) text]
-    " "           (cond
+    (" " "S- ")   (cond
                     (empty? text)
                     [:edit/reject]
                     

@@ -137,17 +137,17 @@
                 (seq xs) (merge (seq-tx (for [x xs]
                                           (assoc (->tx x) :coll/_contains id)))))))]
     (cond 
-      (symbol? e)  {:symbol/value (str e)}
-      (keyword? e) {:keyword/value e}
-      (string? e)  {:string/value e}
-      (number? e)  {:number/value e}
-      (boolean? e) {:symbol/value (str e)}
-      (list? e)    (coll-tx :list e)
-      (vector? e)  (coll-tx :vec e)
-      (map? e)     (coll-tx :map (flatten-map e))
-      (set? e)     (coll-tx :set e)
-      :else (throw (ex-info "What is this" {:e e :t (type e)}))
-      )))
+      (symbol? e)     {:symbol/value (str e)}
+      (keyword? e)    {:keyword/value e}
+      (string? e)     {:string/value e}
+      (number? e)     {:number/value e}
+      (boolean? e)    {:symbol/value (str e)}
+      (list? e)       (coll-tx :list e)
+      (vector? e)     (coll-tx :vec e)
+      (map? e)        (coll-tx :map (flatten-map e))
+      (set? e)        (coll-tx :set e)
+      (sequential? e) (coll-tx :list e)
+      :else           (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
 (defn ->tx
   [e]

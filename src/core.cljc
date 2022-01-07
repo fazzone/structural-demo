@@ -142,6 +142,19 @@
                         (concat undos more)))))
       (recur))
     (connect-sub! bus :undo ch))
+
+  (let [ch (async/chan)]
+    (connect-sub! bus :reify-undo ch)
+    (go-loop []
+      (let [_ (async/<! ch)
+            rd (for [h @history]
+                       (if (map? h)
+                         (:mut h)
+                         (map :mut h)))
+            ]
+        (prn "Reify" rd)
+        (send! bus [:insert-data rd])
+        (recur))))
   app)
 
 

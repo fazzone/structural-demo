@@ -74,9 +74,12 @@
 
 
 (def default-keymap
-  {"f"         :flow-right
-   "u"         :undo
-   "C-/"       :undo
+  {"f" :flow-right
+   "u" :undo
+   
+   "C-/" :undo
+   "S-R" :reify-undo
+   
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -208,12 +211,13 @@
   [:span.c.dl
    (when classes {:class classes :ref "selected"})
    [:span.d
+    
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
     #_(when-let [p (get proply (:db/id e))]
-      [:span.inline-tag-outer
-       [:span.inline-tag-inner
-        (str p)]])
+        [:span.inline-tag-outer
+         [:span.inline-tag-inner
+          (str p)]])
     
     #_[:span.inline-tag (str (:db/id e))]
     
@@ -230,7 +234,9 @@
 
 (defmethod display-coll :hidden  [c b i s p]
   [:div {:style {:width "800px"}}
-   (cc/svg-viewbox c core/blackhole)]
+   (delimited-coll "SVG{ " " }SVG" c b i s p)
+   (cc/svg-viewbox c b)
+   #_(cc/svg-viewbox c core/blackhole)]
   #_[:span
    (cond-> {:class (str "c " s)}
      s (assoc :ref "selected"))
@@ -743,7 +749,7 @@
               #_(pr-str (e/->form (get-selected-form db-after)))
               #_(pr-str (invar/check-all (:state/bar (d/entity db-after ::state))))
               
-              [:div ;; :details [:summary "SVG"]
+              #_[:div ;; :details [:summary "SVG"]
                  [:div {:style {:display :flex :flex-direction :row}}
                   (cc/svg-viewbox (:state/bar (d/entity (:db-after other) ::state)) core/blackhole)
                   (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
@@ -853,14 +859,14 @@
 (rum/defc debug-component
   []
   [:div {:style {:margin-top "2ex"}  }
-   (player
+   #_(player
     '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
     (some-random-mutations 10000))
    
-   #_(example
-      '[a ^:form/highlight [] b c]
-      [[:slurp-right] [:slurp-right]]
-      #_[[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
+   (example
+    '[a ^:form/highlight [] b c]
+    #_[[:slurp-right] [:slurp-right]]
+    [[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
    
    #_(example
       '[a ^:form/highlight b c [a a a]]

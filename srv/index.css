@@ -197,7 +197,7 @@ input.edit-box {
 .bar {
     height: 100%;
     width: 100%;
-    overflow-x: scroll;
+    overflow-x: auto;
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
@@ -407,12 +407,14 @@ span.key-compose-echo {
 /* combination outer&inner do not take up space */
 .inline-tag-outer {
     position: relative;
-    color: #777;
+    color: #fff;
     font-size: 80%;
     top: -0.4ex;
     left: -0.8ex;
 }
-.inline-tag-inner { position: absolute; }
+.inline-tag-inner {
+    position: absolute;
+}
 
 /* this one by itself does take up space */
 .inline-tag {

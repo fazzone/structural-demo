@@ -126,13 +126,12 @@
 
 (defn eval-result
   [db et-eid c]
-  (let [et (d/entity db et-eid)
-        ee (d/entity db :page/evalchain)
+  (let [ee (d/entity db :page/evalchain)
         new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
                               (pr-str c))
                      (assoc :form/linebreak true)
                      (update :db/id #(or % "import-formdata-tx")))]
-    (prn c)
+    (prn et-eid c)
     (into [new-node]
           (edit/insert-before-tx (:seq/first ee) new-node))))
 
@@ -167,6 +166,15 @@
               (edit/insert-before-tx top-level new-node)))
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
+
+(defn insert-data
+  [et c]
+  (let [top-level (peek (nav/parents-vec et))
+        prev (move/move :move/prev-sibling top-level)
+        result-node (-> (e/->tx* c)
+                        (update :db/id #(or % "import-formdata-tx")))]
+    (into [result-node]
+          (edit/insert-before-tx top-level result-node))))
 
 (defn toggle-hide-show
   [e]
@@ -222,11 +230,7 @@
    :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-edit-next-node (fn [db text] (insert/finish-edit-and-edit-next-tx db (d/entid db [:form/editing true]) text))
-   :edit/wrap
-   (fn [db ct value]
-     (insert/wrap-edit-tx
-      (d/entity db [:form/editing true])
-      ct value))
+   :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
    :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
    :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
@@ -255,7 +259,6 @@
    :select-chain                   (fn [db] (nav/select-chain-tx (get-selected-form db)))
    :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
    :plus                           (comp plus* get-selected-form)
-   :minus                          (comp minus* get-selected-form)})
-
-
+   :minus                          (comp minus* get-selected-form)
+   :insert-data                    (fn [db c] (insert-data (get-selected-form db) c))})
 
