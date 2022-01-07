@@ -24,8 +24,22 @@
   ;; history?
   (get-history [this txid])
   (save-history! [this txid tx-report])
+  
   ;; hacks
   (zchan [this]))
+
+(defprotocol ICursor
+  (selection [this ent])
+  (get-selection [this])
+  (set-selection! [this ent]))
+
+(defn cursor
+  []
+  (let [c (atom nil)]
+    (reify ICursor
+      (selection [this e] (= (:db/id e) (:db/id @c)))
+      (get-selection [this] @c)
+      (set-selection! [this e] (reset! c e)))))
 
 (defn bus
   []
@@ -40,12 +54,32 @@
       (save-history! [this txid r] (swap! hs assoc txid r))
       (zchan [this] ch))))
 
+(defn context
+  []
+  (let [b (bus)
+        c (cursor)]
+    (reify
+      ICursor
+      (selection [t e] (selection c e))
+      (set-selection! [t e] (set-selection! c e))
+      (get-selection [t] (get-selection c))
+      
+      IBus
+      (send! [t m] (send! b m))
+      (connect-sub! [t o s] (connect-sub! b o s))
+      (disconnect-sub! [t o s] (disconnect-sub! b o s))
+
+      (get-history [t x] (get-history b x))
+      (save-history! [t x r] (save-history! b x r))
+      (zchan [t] (zchan b)))))
+
 (def blackhole
   (reify IBus
     (send! [_ _])
     (connect-sub! [_ _ _])
     (disconnect-sub! [_ _ _])
     (get-history [this txid])
+
     (save-history! [this txid r])
     (zchan [this])))
 
@@ -53,7 +87,7 @@
   (sub-chan [this topic])
   (with [this msg]))
 
-(defrecord App [conn bus history])
+(defrecord App [conn bus! history])
 
 (defn register-mutation!
   [{:keys [conn bus]} topic mut-fn]
@@ -73,6 +107,9 @@
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[_ & args :as mut] (async/<! ch)
+            _ (println "Bustype" (type bus))
+            zzsel              (get-selection bus)
+            _                  (println "Zzzsel" zzsel )
             db                 @conn
             tx-data            (apply mut-fn db args)
             _                  (println "Mut " mut)
@@ -96,6 +133,20 @@
           (run! prn tx-data))
         (recur (or (get (:tempids report) :db/current-tx)
                    last-tx))))
+    (connect-sub! bus topic ch)))
+
+(defn register-movement!
+  [{:keys [bus conn history] :as app} topic mover]
+  (let [ch (async/chan)]
+    (go-loop []
+      (let [[_ & args :as mut] (async/<! ch)
+            src                (get-selection bus)
+            dst                (try (apply mover src args)
+                                    (catch #?(:cljs js/Error :clj Exception) e
+                                      {:error e}))]
+        (when-not (:error dst)
+         (set-selection! bus dst))
+        (recur)))
     (connect-sub! bus topic ch)))
 
 
@@ -175,7 +226,7 @@
 
 (defn app
   [conn]
-  (let [the-bus (bus)]
+  (let [the-bus (context)]
     (-> {:bus the-bus
          :history (atom ())
          :conn (doto conn
