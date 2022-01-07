@@ -176,6 +176,14 @@
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
 
+(defn insert-txdata
+  [et c]
+  (let [top-level (peek (nav/parents-vec et))
+        prev (move/move :move/prev-sibling top-level)
+        result-node (update c :db/id #(or % "import-formdata-tx"))]
+    (into [result-node]
+          (edit/insert-before-tx top-level result-node))))
+
 (defn toggle-hide-show
   [e]
   (let [ct (:coll/type e)
@@ -260,5 +268,6 @@
    :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
    :plus                           (comp plus* get-selected-form)
    :minus                          (comp minus* get-selected-form)
-   :insert-data                    (fn [db c] (insert-data (get-selected-form db) c))})
+   :insert-data                    (fn [db c] (insert-data (get-selected-form db) c))
+   :insert-txdata                  (fn [db c] (insert-txdata (get-selected-form db) c))})
 

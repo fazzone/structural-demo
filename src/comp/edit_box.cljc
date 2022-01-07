@@ -18,38 +18,47 @@
 (defn editbox-keydown-mutation
   [text key]
   (case key
-    "Escape"      [:edit/reject]
-    "Backspace"   (when (empty? text)
-                    [:edit/reject])
-    "Enter"       [:edit/finish text]
-    "C-/"         [:undo]
-    (")" "]" "}") [:edit/finish-and-move-up text]
-    ("[" "(" "{") [:edit/wrap (case key "(" :list "[" :vec "{" :map) text]
-    (" " "S- ")   (cond
-                    (empty? text)
-                    [:edit/reject]
-                    
-                    (= "\"" (first text))
-                    (println "Quotedstring")
-                    
-                    :else
-                    [:edit/finish-and-edit-next-node text])
+    "Escape"          [:edit/reject]
+    "Backspace"       (when (empty? text)
+                        [:edit/reject])
+    "Enter"           [:edit/finish text]
+    "C-/"             [:undo]
+    ("S-)" "]" "S-}") [:edit/finish-and-move-up text]
+    "["               [:edit/wrap :vec text]
+    "S-("             [:edit/wrap :list text]
+    "S-{"             [:edit/wrap :map text]
+    (" " "S- ")       (cond
+                        (empty? text)
+                        [:edit/reject]
+                        
+                        (= "\"" (first text))
+                        (println "Quotedstring")
+                        
+                        :else
+                        [:edit/finish-and-edit-next-node text])
     nil))
+
 
 (defn focus-ref-on-mount
   [ref-name]
   {:did-mount (fn [state]
-                (some-> state :rum/react-component (.-refs) (aget ref-name) (.focus))
+                #_(some-> state :rum/react-component (.-refs) (aget ref-name) (.focus))
+                (when-let [el (some-> state :rum/react-component (.-refs) (aget ref-name))]
+                  (when-not (.closest el ".alternate-reality")
+                    (.focus el)))
                 state)})
 
 (def global-editing-flag (atom false))
-(def editing-when-mounted
-  {:did-mount (fn [state]
-                (reset! global-editing-flag true)
-                state)
-   :will-unmount (fn [state]
-                   (reset! global-editing-flag false)
-                   state)})
+(defn editing-when-mounted
+  [ref-name]
+  (letfn [(setgef [state v]
+            (let [el (some-> state :rum/react-component (.-refs) (aget ref-name))
+                  ar (some-> el (.closest ".alternate-reality"))]
+              (when (and el (nil? ar))
+                (reset! global-editing-flag v)))
+            state)]
+    {:did-mount    (fn [state] (setgef state true))
+     :will-unmount (fn [state] (setgef state false))}))
 
 (def editbox-ednparse-state (atom nil))
 
@@ -61,7 +70,7 @@
        (.-key ev)))
 
 (rum/defcs edit-box
-  < (rum/local [] ::text) (focus-ref-on-mount "the-input") editing-when-mounted
+  < (rum/local [] ::text) (focus-ref-on-mount "the-input") (editing-when-mounted "the-input")
   [{::keys [text]} e bus]
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)

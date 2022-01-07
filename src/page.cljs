@@ -39,7 +39,7 @@
 (def test-form-data-bar
   '[["Chain 1"
      (def thing
-       [[1 2 3 ^:form/highlight (+ 1 2 9) [:a :b :c] "ok"] :x.y/z])]])
+       [[1 (+ 2 3 ^:form/highlight foo  1 2 9) [:a :b :c] "ok"] :x.y/z])]])
 
 (defn test-form-data-tx
   [chain-txdatas]
@@ -56,7 +56,7 @@
        :coll/_contains "bar"
        :coll/contains #{"label"
                         "defaultkeymap"
-                        ;; "inspect"
+                        "inspect"
                         "evalchain"
                         "history"
                         }
@@ -66,7 +66,7 @@
                   ;; :seq/next {:seq/first "evalchain"}
                   :seq/next {:seq/first "history"
                              :seq/next {:seq/first "evalchain"
-                                        ;; :seq/next {:seq/first "inspect"}
+                                        :seq/next {:seq/first "inspect"}
                                         }}
                   }}]))
    :db/id "bar"
@@ -227,6 +227,7 @@
          (rum/with-key (:db/id x))))
    [:span.d.cl close]])
 
+
 (defmethod display-coll :list [c b i s p] (delimited-coll "(" ")" c b i s p))
 (defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]" c b i s p))
 (defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}" c b i s p))
@@ -246,6 +247,41 @@
      :map "{...}"
      :set "#{...}"
      "<...>")])
+
+(declare snapshot)
+
+(defn display-undo-preview
+  [c b s top?]
+  [:ul.undo-preview
+   (when s {:class s :ref "selected"})
+   (when top?
+     [:span.prose-font "History"])
+   (for [e (cond-> (e/seq->vec c) (not top?) reverse)]
+     (rum/with-key
+       (snapshot e b)
+       (:db/id e)))])
+
+(rum/defc snapshot < dbrx/ereactive
+  [e bus]
+  (let [tx (:number/value e)
+        r  (core/get-history bus tx)]
+    (if-not tx
+      (display-undo-preview e bus (when (:form/highlight e) "selected") nil)
+      [:li.undo-preview-entry
+       (when (:form/highlight e) {:class "selected" :ref "selected"})
+       (str tx " " (some-> r :mut pr-str))
+       #_(apply str (interpose " " (map pr-str (:mut r))))
+       (if-not (some (fn [[e a v t]] (not= a :form/highlight))
+                     (:tx-data r))
+         " movement only"
+         (when r
+           [:div.alternate-reality
+            (-> (peek (nav/parents-vec (get-selected-form (:db-after r))))
+                (fcc core/blackhole 0 nil))]))])))
+
+(defmethod display-coll :undo-preview  [c b i s p]
+  (display-undo-preview c b s true))
+
 
 (defmethod display-coll :chain [chain bus i classes proply]
   [:div.chain
@@ -544,7 +580,7 @@
             
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
-        (prn "Key" kbd mut)
+        #_(prn "Key" kbd mut)
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
@@ -889,15 +925,26 @@
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
-    (println "DKL" (d/entity @conn ::default-keymap))
-    (run! prn (d/touch (d/entity @conn ::default-keymap)))
-    
-    (rum/mount
-     
-     #_(debug-component)
-     (root-component @conn bus)
-     
-     (.getElementById js/document "root"))))
+    #_(println "DKL" (d/entity @conn ::default-keymap))
+    #_(run! prn (d/touch (d/entity @conn ::default-keymap)))
+
+    (go
+      (async/<!
+       (async/onto-chan!
+        (core/zchan bus)
+        [[:clone]
+         [:delete-right] [:delete-right] [:delete-right]
+         [:undo] [:undo] [:undo]
+         [:insert-right]
+         [:edit/finish "nice"]
+         [:reify-undo]]
+        false))
+      (println "We did it")
+      
+      (rum/mount
+       #_(debug-component)
+       (root-component @conn bus)
+       (.getElementById js/document "root")))))
 
 
 ;; create a new toplevel function above the current

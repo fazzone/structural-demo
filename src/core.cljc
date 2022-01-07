@@ -21,23 +21,33 @@
   (send! [this msg])
   (connect-sub! [this topic ch])
   (disconnect-sub! [this toipic ch])
+  ;; history?
+  (get-history [this txid])
+  (save-history! [this txid tx-report])
+  ;; hacks
   (zchan [this]))
 
 (defn bus
   []
   (let [ch (async/chan)
-        pub (async/pub ch first)]
+        pub (async/pub ch first)
+        hs (atom {})]
     (reify IBus
       (send! [this msg] (async/put! ch msg))
       (connect-sub! [this topic sch] (async/sub pub topic sch))
       (disconnect-sub! [this topic sch] (async/unsub pub topic sch))
+      (get-history [this txid] (get @hs txid))
+      (save-history! [this txid r] (swap! hs assoc txid r))
       (zchan [this] ch))))
 
 (def blackhole
   (reify IBus
     (send! [_ _])
     (connect-sub! [_ _ _])
-    (disconnect-sub! [_ _ _])))
+    (disconnect-sub! [_ _ _])
+    (get-history [this txid])
+    (save-history! [this txid r])
+    (zchan [this])))
 
 (defprotocol IApp
   (sub-chan [this topic])
@@ -56,59 +66,28 @@
           :ok
           ch)))))
 
-#_(defn register-simple!
-  [{:keys [bus conn] :as app} topic mut-fn]
-  (let [ch (async/chan)]
-    (go-loop [last-tx nil]
-      (let [[_ & args :as mut] (async/<! ch)
-            db         @conn
-            hent       (d/entity db :page/history)
-            tx-data    (concat (apply mut-fn db args)
-                               (when (:seq/first hent)
-                                 [{:db/id (:db/id hent)
-                                   :seq/first {:db/id :db/current-tx
-                                               :coll/_contains (:db/id hent)
-                                               :form/linebreak true
-                                               :string/value (pr-str mut)}
-                                   :seq/next {:db/id "nh"
-                                              :seq/first (:db/id (:seq/first hent))}}
-                                  (when-let [next (:seq/next hent)]
-                                    [:db/add "nh" :seq/next (:db/id next) ])]))
-            report     (try (d/transact! conn tx-data)
-                            (catch #?(:cljs js/Error :clj Exception) e
-                              {:error e}))]
-        (when-let [e (:error report)]
-          (println "Error transacting" e)
-          (println "Tx-data")
-          (run! prn tx-data))
-        (recur (or (get (:tempids report) :db/current-tx)
-                   last-tx))))
-    (connect-sub! bus topic ch)))
-
 (defn register-simple!
   [{:keys [bus conn history] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[_ & args :as mut] (async/<! ch)
-            db         @conn
-            hent       (d/entity db :page/history)
-            tx-data    (apply mut-fn db args)
-            report     (try (and tx-data (d/transact! conn tx-data))
-                            (catch #?(:cljs js/Error :clj Exception) e
-                              {:error e}))]
+            db                 @conn
+            tx-data            (apply mut-fn db args)
+            _                  (println "Mut " mut)
+            report             (try (and tx-data
+                                         (assoc (d/transact! conn tx-data)
+                                                :mut mut))
+                                    (catch #?(:cljs js/Error :clj Exception) e
+                                      {:error e}))]
+
+        (when (:db-after report)
+          (if-let [txid (get (:tempids report) :db/current-tx)]
+            (do (save-history! bus txid report)
+                #_(println txid mut)
+                (reset! history (cons report @history)))
+            (println "No current-tx?")))
         
-        (when (:tempids report)
-          (reset! history (cons (assoc report :mut (first mut)) @history)))
         
-        #_(prn
-           (for [h @history]
-             (if (map? h)
-               (:db/current-tx (:tempids h))
-               (map #(:db/current-tx (:tempids %)) h))))
-        
-        #_(doseq [h @history]
-          
-            #_(prn (get (:tempids h) :db/current-tx) (:tx-data h)))
         (when-let [e (:error report)]
           (println "Error transacting" e)
           (println "Tx-data")
@@ -123,6 +102,24 @@
   (for [[e a v t a?] (reverse tx-data)]
     [(if a? :db/retract :db/add) e a v]))
 
+
+(def ^:const tx0   0x20000000)
+(def ^:const emax  0x7FFFFFFF)
+(def ^:const txmax 0x7FFFFFFF)
+
+
+(defn publish-tx-report!
+  [the-bus db tx-data tempids]
+  (let [new-entities (set (vals tempids))
+        es           (into #{} (comp (filter (comp not new-entities))
+                                     (map (fn [[e a v t]] e))) tx-data)
+        as           (into #{} (map (fn [[e a v t]] a)) tx-data)]
+    (doseq [e es]
+      (when-not (empty? (d/datoms db :eavt e))
+        (send! the-bus [e (d/entity db e)])))
+    (doseq [a as]
+      (send! the-bus [a db]))))
+
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]
   (let [ch (async/chan)]
@@ -130,13 +127,23 @@
       (let [_                    (async/<! ch)
             [prior-undo & undos] (take-while list? @history)
             [u & more]           (drop-while list? @history)]
-        (prn "Udo"
-             (for [h @history]
-               (if (map? h)
-                 (:mut h)
-                 (map :mut h))))
+        #_(println "Undof"
+                 (for [h @history]
+                   (if (map? h)
+                     (get (:tempids h) :db/current-tx)
+                     (for [s h]
+                       (get (:tempids s) :db/current-tx)))))
         (when u
-          (d/transact! conn (revert-txdata (:tx-data u)))
+          (let [rr (d/transact! conn (revert-txdata (:tx-data u)))]
+            (println "RR Max-tx" (:max-tx (:db-after rr)) "Tempids" (:tempids rr)))
+          #_(let [rr (-> u
+                       (update :db-before update :max-tx inc)
+                       (update :tempids assoc )
+                       )])
+          
+          #_(do (reset! conn (update (:db-before u) :max-tx inc))
+                (publish-tx-report! bus (:db-before u) (:tx-data u) (:tempids u)))
+          
           (reset! history
                   (cons (cons u prior-undo)
                         (concat undos more)))))
@@ -146,18 +153,23 @@
   (let [ch (async/chan)]
     (connect-sub! bus :reify-undo ch)
     (go-loop []
-      (let [_ (async/<! ch)
-            rd (for [h @history]
-                       (if (map? h)
-                         (:mut h)
-                         (map :mut h)))
-            ]
-        (prn "Reify" rd)
-        (send! bus [:insert-data rd])
+      (let [_ (async/<! ch)]
+        (println "UndoR"
+         (for [h @history]
+           (if (map? h)
+             (get (:tempids h) :db/current-tx)
+             (for [s h]
+               (get (:tempids s) :db/current-tx)))))
+        (send! bus [:insert-txdata
+                    (-> (for [h @history]
+                          (if (map? h)
+                            (get (:tempids h) :db/current-tx)
+                            (for [s h]
+                              (get (:tempids s) :db/current-tx))))
+                        (e/->tx)
+                        (assoc :coll/type :undo-preview))])
         (recur))))
   app)
-
-
 
 (defn app
   [conn]
@@ -165,17 +177,8 @@
     (-> {:bus the-bus
          :history (atom ())
          :conn (doto conn
-                 (d/listen! (fn [{:keys [tx-data tempids db-after] :as tx-report}]
-                              (let [new-entities (set (vals tempids))
-                                    es (into #{} (comp
-                                                  (filter (comp not new-entities))
-                                                  (map (fn [[e a v t]] e))) tx-data)
-                                    as (into #{} (map (fn [[e a v t]] a)) tx-data)]
-                                (doseq [e es]
-                                  (when-not (empty? (d/datoms db-after :eavt e))
-                                    (send! the-bus [e (d/entity db-after e)])))
-                                (doseq [a as]
-                                  (send! the-bus [a db-after]))))))}
+                 (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
+                              (publish-tx-report! the-bus db-after tx-data tempids))))}
         (map->App)
         (setup-undo!))))
 

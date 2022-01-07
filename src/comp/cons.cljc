@@ -240,7 +240,7 @@
                                    "H" arrowright)}])))
      (when-let [car (:seq/first node)]
        (let [droop (+ row 1
-                      (or  (:form/indent node) 0)
+                      (or  (:form/indent car) 0)
                       (case (:db/id car)
                         0))]
          (rum/fragment
