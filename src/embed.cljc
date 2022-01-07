@@ -149,6 +149,7 @@
       (sequential? e) (coll-tx :list e)
       :else           (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
+
 (defn ->tx
   [e]
   (merge (meta e) (->tx* e)))

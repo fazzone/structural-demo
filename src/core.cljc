@@ -66,6 +66,8 @@
           :ok
           ch)))))
 
+;; One go-loop per mutation type is stupid because there is no way to do blocking apply 
+;; Is it allowed to reorder them?
 (defn register-simple!
   [{:keys [bus conn history] :as app} topic mut-fn]
   (let [ch (async/chan)]

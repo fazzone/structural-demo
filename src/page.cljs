@@ -43,34 +43,7 @@
 
 (defn test-form-data-tx
   [chain-txdatas]
-  (assoc
-   (e/seq-tx
-    (concat
-     (for [ch chain-txdatas]
-       (assoc ch
-              :coll/type :chain
-              :coll/_contains "bar"))
-     
-     [{:db/ident ::meta-chain
-       :coll/type :chain
-       :coll/_contains "bar"
-       :coll/contains #{"label"
-                        "defaultkeymap"
-                        "inspect"
-                        "evalchain"
-                        "history"
-                        }
-       :seq/first {:db/id "label"
-                   :string/value "Keyboard"}
-       :seq/next {:seq/first "defaultkeymap"
-                  ;; :seq/next {:seq/first "evalchain"}
-                  :seq/next {:seq/first "history"
-                             :seq/next {:seq/first "evalchain"
-                                        :seq/next {:seq/first "inspect"}
-                                        }}
-                  }}]))
-   :db/id "bar"
-   :coll/type :bar))
+  )
 
 
 (def default-keymap
@@ -123,40 +96,71 @@
    "-"         :hide
    "i"         :insert-left
    "S-Q"       :stringify
-   "S-+"       :plus
-   
-   })
+   "S-+"       :plus})
 
 (def init-tx-data
-  (let [txe (test-form-data-tx (concat
-                                (map e/->tx test-form-data-bar)
-                                
-                                #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
-                                #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]
-                                #_[(e/string->tx-all (macro-slurp "src/cmd/mut.cljc"))]
-                                #_[(e/string->tx-all (macro-slurp "src/cmd/nav.cljc"))]))]
-    (concat
-     [{:db/ident ::state
-       :state/bar (:db/id txe)}
-      {:db/ident ::history
-       :db/id "history"
-       :coll/type :vec
-       :seq/first {:string/value "end of history"
-                   :coll/_contains "history"}}
-      {:db/ident ::evalchain
-       :db/id "evalchain"
-       :coll/type :vec
-       :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
-      {:db/ident ::inspect
-       :db/id "inspect"
-       :coll/type :inspect
-       :seq/first {:string/value "No inspect" :coll/_contains "history"}}
-      {:db/ident ::default-keymap
-       :db/id "defaultkeymap"
-       :coll/type :keyboard
-       :keymap/bindings (for [[k m] default-keymap]
-                          {:key/kbd k :key/mutation m})}
-      txe])))
+  (let [chains (map e/->tx test-form-data-bar)
+        undo-placeholders (assoc
+                           (e/->tx (vec
+                                    (range 536870914 536870922  1)
+                                    #_(range 9)))
+                           :coll/type :undo-preview)]
+    [{:db/ident ::state
+      :state/bar "bar"}
+     {:db/ident ::history
+      :db/id "history"
+      :coll/type :vec
+      :seq/first {:string/value "end of history"
+                  :coll/_contains "history"}}
+     {:db/ident ::evalchain
+      :db/id "evalchain"
+      :coll/type :vec
+      :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
+     {:db/ident ::inspect
+      :db/id "inspect"
+      :coll/type :inspect
+      :seq/first {:string/value "No inspect" :coll/_contains "history"}}
+     {:db/ident ::default-keymap
+      :db/id "defaultkeymap"
+      :coll/type :keyboard
+      :keymap/bindings (for [[k m] default-keymap]
+                         {:key/kbd k :key/mutation m})}
+     
+     undo-placeholders
+     
+     (assoc
+      (e/seq-tx
+       (concat
+        (for [ch chains]
+          (assoc ch
+                 :coll/type :chain
+                 :coll/_contains "bar"))
+        
+        [{:db/ident ::meta-chain
+          :coll/type :chain
+          :coll/_contains "bar"
+          :coll/contains #{"label"
+                           "defaultkeymap"
+                           "inspect"
+                           "evalchain"
+                           "history"}
+          :seq/first {:db/id "label"
+                      :string/value "Keyboard"}
+          :seq/next {:seq/first "defaultkeymap"
+                     :seq/next {:seq/first "history"
+                                :seq/next {:seq/first "evalchain"
+                                           :seq/next {:seq/first "inspect"
+                                                      :seq/next {:seq/first (:db/id undo-placeholders)}}}}}}]))
+      :db/id "bar"
+      :coll/type :bar)]))
+
+(comment
+  (concat
+   (map e/->tx test-form-data-bar)
+   #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
+   #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]
+   #_[(e/string->tx-all (macro-slurp "src/cmd/mut.cljc"))]
+   #_[(e/string->tx-all (macro-slurp "src/cmd/nav.cljc"))]))
 
 ;; replace with non-breaking hyphen, lmao
 #_(-> text (gstring/replaceAll "-" "‑"))
@@ -282,7 +286,6 @@
 (defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-
 (defmethod display-coll :chain [chain bus i classes proply]
   [:div.chain
    {:key (:db/id chain)
@@ -303,7 +306,8 @@
          (rum/with-key (:db/id chain-head))))])
 
 (defmethod display-coll :keyboard [k bus i]
-  [:div.display-keyboard
+  "No keyboardn"
+  #_[:div.display-keyboard
    (ck/keyboard-diagram
     k
     #_(d/entity (d/entity-db k) )
@@ -337,13 +341,8 @@
                        (= v (:db/id sel)))))))]]))
 
 (defmethod display-coll :inspect [k bus i]
-  (inspector (d/entity-db k) bus))
-
-(defmethod display-coll :timetravel [tt bus i]
-  [:div [:span.prose-font "Time travel"]
-   (for [e (e/seq->vec (:seq/first tt))]
-     [:div {:key (:db/id e)}
-      "Item # " (pr-str e)])])
+  "No inspect"
+  #_(inspector (d/entity-db k) bus))
 
 (defn token-class
   [e]
@@ -928,7 +927,8 @@
     #_(println "DKL" (d/entity @conn ::default-keymap))
     #_(run! prn (d/touch (d/entity @conn ::default-keymap)))
 
-    (go
+
+    #_(go
       (async/<!
        (async/onto-chan!
         (core/zchan bus)
@@ -944,9 +944,31 @@
       (rum/mount
        #_(debug-component)
        (root-component @conn bus)
-       (.getElementById js/document "root")))))
+       (.getElementById js/document "root")))
+    (rum/mount
+     #_(debug-component)
+     (root-component @conn bus)
+     (.getElementById js/document "root"))))
 
-
-;; create a new toplevel function above the current
-;; write next list/symbol with/without newline with/without going up first
-;; 
+;; Single highlight, in DB
+;; - Mutations find it? With a lookup ref [highlight true]
+;; - Mutations set it? In the tx-data
+;; - fcc renders it?  From the entity
+;; Single highlight outside
+;; - Find? Protocol method
+;; - Set?
+;; -- Actions either:
+;; -- -- Pure movement
+;; -- -- Pure mutation, leaves selection the same
+;; -- -- Create something and select it
+;; -- -- Do something then select something which existed already (deletion)
+;; -- -- What about doing a modification and selecting something which didn't already exist?
+;; -- When you want to move the selection from a mutation:
+;; -- Either the target already exists so you can find it ahead of time
+;; -- Or it does not in which case you must be creating it and can supply a tempid
+;; - Render? Equality check with protocol method
+;; Multi highlight in DB
+;; - Find? Lookup ref [highlight me]
+;; - Set? In the tx-data
+;; - Render? From the entity - but what if cursors overlap?
+;; Multi highlight outside
