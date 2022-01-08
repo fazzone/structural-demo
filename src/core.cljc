@@ -107,12 +107,8 @@
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[_ & args :as mut] (async/<! ch)
-            _ (println "Bustype" (type bus))
-            zzsel              (get-selection bus)
-            _                  (println "Zzzsel" zzsel )
             db                 @conn
             tx-data            (apply mut-fn db args)
-            _                  (println "Mut " mut)
             report             (try (and tx-data
                                          (assoc (d/transact! conn tx-data)
                                                 :mut mut))
