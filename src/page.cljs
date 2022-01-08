@@ -102,25 +102,18 @@
   (let [chains (map e/->tx test-form-data-bar)]
     [{:db/ident ::state
       :state/bar "bar"}
-     {:db/ident ::history
-      :db/id "history"
-      :coll/type :vec
-      :seq/first {:string/value "end of history"
-                  :coll/_contains "history"}}
      {:db/ident ::evalchain
       :db/id "evalchain"
       :coll/type :vec
       :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
      {:db/ident ::inspect
       :db/id "inspect"
-      :coll/type :inspect
-      :seq/first {:string/value "No inspect" :coll/_contains "history"}}
+      :coll/type :inspect}
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
       :coll/type :keyboard
       :keymap/bindings (for [[k m] default-keymap]
                          {:key/kbd k :key/mutation m})}
-     
      (assoc
       (e/seq-tx
        (concat
@@ -135,14 +128,12 @@
           :coll/contains #{"label"
                            "defaultkeymap"
                            "inspect"
-                           "evalchain"
-                           "history"}
+                           "evalchain"}
           :seq/first {:db/id "label"
                       :string/value "Keyboard"}
           :seq/next {:seq/first "defaultkeymap"
-                     :seq/next {:seq/first "history"
-                                :seq/next {:seq/first "evalchain"
-                                           :seq/next {:seq/first "inspect"}}}}}]))
+                     :seq/next {:seq/first "evalchain"
+                                :seq/next {:seq/first "inspect"}}}}]))
       :db/id "bar"
       :coll/type :bar)]))
 
