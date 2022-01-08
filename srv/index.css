@@ -218,15 +218,15 @@ input.edit-box {
     margin-right: 1em;
     padding-left: 1ex;
     overflow-y: scroll;
-    min-width: max-content;
+    /* min-width: max-content; */
     /* width: 100%; */
 }
 
-.chain {
+.hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
-.chain::-webkit-scrollbar {
+.hide-scrollbar::-webkit-scrollbar {
     display: none;
 }
 

@@ -32,7 +32,7 @@
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
-   [macros :refer [macro-slurp]]))
+   [macros :as m]))
 
 (def load-time (js/Date.now))
 
@@ -99,7 +99,12 @@
 (def init-tx-data
   (let [chains (concat
                 (map e/->tx test-form-data-bar)
-                [(e/string->tx-all (macro-slurp "src/embed.cljc"))])]
+                [#_(e/string->tx-all (m/macro-slurp "src/embed.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/embed.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/page.cljs"))])]
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::evalchain
@@ -288,7 +293,7 @@
   (display-undo-preview c b s true))
 
 (defmethod display-coll :chain [chain bus i classes proply]
-  [:div.chain
+  [:div.chain.hide-scrollbar
    {:key (:db/id chain)
     :ref "chain"
     :id (str "c" (:db/id chain))
@@ -299,9 +304,10 @@
          (rum/with-key (:db/id f))))])
 
 (defmethod display-coll :bar [bar bus i c p]
-  [:div
-   (cond-> {:class (str "bar"  (when c " ") c)}
-     c (assoc :ref "selected"))
+  [:div.bar.hide-scrollbar
+   (when c {:ref "selected"})
+   #_(cond-> {:class c}
+       c (assoc :ref "selected"))
    (for [chain-head (e/seq->vec bar)]
      (-> (fcc chain-head bus i p)
          (rum/with-key (:db/id chain-head))))])
