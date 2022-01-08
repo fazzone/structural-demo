@@ -39,12 +39,7 @@
 (def test-form-data-bar
   '[["Chain 1"
      (def thing
-       [[1 (+ 2 3 ^:form/highlight foo  1 2 9) [:a :b :c] "ok"] :x.y/z])]])
-
-(defn test-form-data-tx
-  [chain-txdatas]
-  )
-
+       [1 (+ 2 3 ^:form/highlight foo  ) [:a :c] "ok"])]])
 
 (def default-keymap
   {"f" :flow-right
@@ -53,10 +48,12 @@
    "C-/" :undo
    "S-R" :reify-undo
    
+   "S-_" :uneval
+   
    "a"         :flow-left
    "w"         :float
    "s"         :sink
-   "S-H"       :toplevel
+   ;; "S-H"       :toplevel
    "h"         :parent
    "j"         :next
    "k"         :prev
@@ -65,7 +62,9 @@
    " "         :insert-right
    "S- "       :insert-left
    "d"         :delete-right
-   "Backspace" :delete-left
+   "S-H"       :hoist
+   ;; "Backspace" :delete-left
+   "Backspace" :hoist
    "Enter"     :linebreak
    "C-Enter"   :insert-right-newline
    "Escape"    :select-chain
@@ -99,13 +98,19 @@
    "S-+"       :plus})
 
 (def init-tx-data
-  (let [chains (map e/->tx test-form-data-bar)]
+  (let [chains (concat
+                (map e/->tx test-form-data-bar)
+                [(e/string->tx-all (macro-slurp "src/embed.cljc"))])]
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::evalchain
       :db/id "evalchain"
       :coll/type :vec
       :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
+
+     {:db/ident ::command-chain
+      :db/id "command-chain"
+      :coll/type :vec}
      {:db/ident ::inspect
       :db/id "inspect"
       :coll/type :inspect}
@@ -128,12 +133,14 @@
           :coll/contains #{"label"
                            "defaultkeymap"
                            "inspect"
-                           "evalchain"}
+                           "evalchain"
+                           "command-chain"}
           :seq/first {:db/id "label"
                       :string/value "Keyboard"}
           :seq/next {:seq/first "defaultkeymap"
                      :seq/next {:seq/first "evalchain"
-                                :seq/next {:seq/first "inspect"}}}}]))
+                                :seq/next {:seq/first "command-chain"
+                                           :seq/next {:seq/first "inspect"}}}}}]))
       :db/id "bar"
       :coll/type :bar)]))
 
@@ -234,6 +241,18 @@
      :map "{...}"
      :set "#{...}"
      "<...>")])
+
+(defmethod display-coll :uneval  [c b i s p]
+  [:span.c.unev
+   (when s {:class s :ref "selected"})
+   ;; "#_<<"
+   "#_"
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))
+   ;; ">>"
+   
+   ])
 
 (declare snapshot)
 
@@ -544,7 +563,8 @@
 (defn event->kbd
   [^KeyboardEvent ev]
   (str (when (.-altKey ev) "M-")
-       (when (.-ctrlKey ev ) "C-")
+       (when (.-ctrlKey ev )
+         "C-")
        (when (.-shiftKey ev) "S-")
        (.-key ev)))
 
@@ -616,6 +636,7 @@
   ([] (scroll-to-selected! true))
   ([always]
    (let [el (js/document.querySelector ".selected")
+         
          tl    (some-> el (.closest ".form-card"))
          chain (some-> el (.closest ".chain"))
          bar   (some-> chain (.closest ".bar"))
@@ -638,31 +659,6 @@
                 (or always (not (< hpos hoff (+ w hoff)
                                    (+ hpos bar-width)))))
        (.scrollTo bar #js{:left (scroll-1d bar-width w hpos hoff)})))))
-
-#_(defn scroll-to-selected!
-  ([] (scroll-to-selected! true))
-  ([always]
-   (let [tl    (some-> (js/document.querySelector ".selected")
-                       (.closest ".form-card"))
-         h     (some-> tl (.getBoundingClientRect) (.-height))
-         chain (some-> tl (.closest ".chain"))
-         pos   (some-> chain (.-scrollTop))
-         off   (some-> tl (.-offsetTop))]
-     (when (and chain
-                (or always (not (< pos off (+ off h)
-                                   (+ pos (.-clientHeight chain))))))
-       (let [align-bottom (- off
-                             (- (.-clientHeight chain)
-                                h))
-             top-closer?  (< (js/Math.abs (- pos off))
-                             (js/Math.abs (- pos align-bottom)))
-             [best other] (if top-closer?
-                            [off align-bottom]
-                            [align-bottom off])]
-         (.scrollTo chain #js{:top
-                              (if (< -1 (- pos best) 1)
-                                other
-                                best)}))))))
 
 (defn ensure-selected-in-view! [] (scroll-to-selected! false))
 
@@ -709,7 +705,14 @@
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
-       (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))))))
+       (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))
+       #_(core/register-mutation!
+        :execute
+        (fn [_ db bus]
+          (let [sel (get-selected-form db)]
+            (d/transact! conn )
+            
+            )))))))
 
 (rum/defc example < rum/static
   [init-form muts] 
@@ -912,22 +915,23 @@
 
 
     #_(go
-      (async/<!
-       (async/onto-chan!
-        (core/zchan bus)
-        [[:clone]
-         [:delete-right] [:delete-right] [:delete-right]
-         [:undo] [:undo] [:undo]
-         [:insert-right]
-         [:edit/finish "nice"]
-         [:reify-undo]]
-        false))
-      (println "We did it")
+        (async/<!
+         (async/onto-chan!
+          (core/zchan bus)
+          [[:clone]
+           [:delete-right] [:delete-right] [:delete-right]
+           [:undo] [:undo] [:undo]
+           [:insert-right]
+           [:edit/finish "nice"]
+           [:reify-undo]]
+          false))
+        (println "We did it")
       
-      (rum/mount
-       #_(debug-component)
-       (root-component @conn bus)
-       (.getElementById js/document "root")))
+        (rum/mount
+         #_(debug-component)
+         (root-component @conn bus)
+         (.getElementById js/document "root")))
+
     (rum/mount
      #_(debug-component)
      (root-component @conn bus)
@@ -955,3 +959,16 @@
 ;; - Set? In the tx-data
 ;; - Render? From the entity - but what if cursors overlap?
 ;; Multi highlight outside
+
+
+;; Fix the modeline changing size and reflowing
+;; Implement deletion-chain / reparenting
+;; Implement comma
+;; 
+
+;; Make the mutations all take the selection as the parameter
+;; Make the mutations set the selection with a special tempid
+;; Move all mention of form/highlight to core api methods
+;; Reimplement it as atom holding an entity and see what happens
+
+;; Scroll is not cleanly unmounted on reload?

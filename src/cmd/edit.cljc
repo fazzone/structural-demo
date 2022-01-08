@@ -4,29 +4,40 @@
    [embed :as e]
    [core :refer [get-selected-form move-selection-tx]]))
 
+(defn exactly-one
+  [[x & more :as xs]]
+  (when more
+    (throw (ex-info "More than one" {:xs xs}))
+    #_(println "More than one" xs))
+  x)
+
 (defn form-delete-tx
-  [e]
-  (let [spine (first (:seq/_first e))
-        next  (some-> spine :seq/next)
-        prev  (some-> spine :seq/_next first)]
-    (into [[:db/retractEntity (:db/id e)]
-           [:db/retract (:db/id spine) :seq/first (:db/id e)]]
-          (cond
-            (and prev next)             ; middle element
-            [[:db/retract (:db/id spine) :seq/next (:db/id next)]
-             [:db/add (:db/id prev) :seq/next (:db/id next)]]
+  ([e] (form-delete-tx e true))
+  ([e r?]
+   (let [spine (first (:seq/_first e))
+         next  (some-> spine :seq/next)
+         prev  (some-> spine :seq/_next first)]
+     (into [(if r?
+              [:db/retractEntity (:db/id e)]
+              (let [coll (exactly-one (:coll/_contains e)) ]
+                [:db/retract (:db/id coll) :coll/contains (:db/id e)]))
+            [:db/retract (:db/id spine) :seq/first (:db/id e)]]
+           (cond
+             (and prev next)            ; middle element
+             [[:db/retract (:db/id spine) :seq/next (:db/id next)]
+              [:db/add (:db/id prev) :seq/next (:db/id next)]]
        
-            prev                        ; last element
-            [[:db/retract (:db/id prev) :seq/next (:db/id spine)]
-             [:db/retract (:db/id spine) :seq/next (:db/id next)]]
+             prev                       ; last element
+             [[:db/retract (:db/id prev) :seq/next (:db/id spine)]
+              [:db/retract (:db/id spine) :seq/next (:db/id next)]]
        
-            next                        ; first element
-            [[:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
-             ;; keep our spine, retract next spine - preserve coll/type etc
-             [:db/retractEntity (:db/id next)]
-             (if-let [n (:seq/next next)]
-               [:db/add (:db/id spine) :seq/next (:db/id n)]
-               [:db/retract (:db/id spine) :seq/next (:db/id next)])]))))
+             next                       ; first element
+             [[:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
+              ;; keep our spine, retract next spine - preserve coll/type etc
+              [:db/retractEntity (:db/id next)]
+              (if-let [n (:seq/next next)]
+                [:db/add (:db/id spine) :seq/next (:db/id n)]
+                [:db/retract (:db/id spine) :seq/next (:db/id next)])])))))
 
 ;; overwrite with something that has not existed before
 ;; if you have a tempid, you want this one
@@ -57,8 +68,16 @@
   [e]
   (when-let [parent (some-> (:coll/_contains e) first)]
     (when-not (= :chain (:coll/type parent))
-      (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]]
-            (form-replace-tx parent e)))))
+      (let [{:form/keys [linebreak indent]} parent]
+        (concat
+         [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]]
+         (when linebreak
+           [[:db/retract (:db/id parent) :form/linebreak linebreak]
+            [:db/add (:db/id e) :form/linebreak linebreak]])
+         (when indent
+           [[:db/retract (:db/id parent) :form/indent indent]
+            [:db/add (:db/id e) :form/indent indent]])
+         (form-replace-tx parent e))))))
 
 
 
@@ -79,7 +98,6 @@
   [target new-node]
   (let [spine (first (:seq/_first target))
         coll (first (:coll/_contains target))]
-    #_(prn 'spine (:db/id spine) 'cloll (:db/id coll))
     (when (and spine coll)
       [{:db/id (:db/id spine)
         :seq/first (:db/id new-node)
@@ -89,26 +107,26 @@
        (when-let [next (:seq/next spine)]
          [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
 
-(defn insert-editing-tx
-  ([db ba] (insert-editing-tx db ba nil))
-  ([db before-or-after opts]
-   (let [sel (get-selected-form db)
-         new-node (merge {:db/id "newnode"
-                          :form/editing true
-                          :form/edit-initial ""}
-                         opts)
-         itx (case before-or-after
-               :before (insert-before-tx sel new-node)
-               :after (insert-after-tx sel new-node))]
-     (into [new-node]
-           (concat itx (move-selection-tx (:db/id sel) "newnode"))))))
+(defn form-cons-tx
+  [elem coll]
+  (if-let [f (:seq/first coll)]
+    (insert-before-tx f elem)
+    [[:db/add (:db/id coll) :coll/contains (:db/id elem)]
+     [:db/add (:db/id coll) :seq/first (:db/id elem)]]))
 
-(defn exactly-one
-  [[x & more :as xs]]
-  (when more
-    (throw (ex-info "More than one" {:xs xs}))
-    #_(println "More than one" xs))
-  x)
+(defn insert-editing*
+  [sel inserter]
+  (let [new-node {:db/id "newnode"
+                  :form/editing true
+                  :form/edit-initial ""}]
+     (into [new-node]
+           (concat (inserter sel new-node)
+                   (move-selection-tx (:db/id sel) "newnode")))))
+
+(defn insert-editing-before [sel] (insert-editing* sel insert-before-tx))
+(defn insert-editing-after  [sel] (insert-editing* sel insert-after-tx))
+
+
 
 (defn exchange-with-previous-tx
   [sel]
@@ -149,20 +167,26 @@
                                   (dup-spine us e))))))
 
 (defn insert-duplicate-tx
-  [db]
-  (let [sel (get-selected-form db)
-        new-node (-> (form-duplicate-tx sel)
+  [sel]
+  (let [new-node (-> (form-duplicate-tx sel)
                      (update :db/id #(or % "dup-leaf")))]
     (into [new-node]
           (insert-after-tx sel new-node))))
 
 (defn form-wrap-tx
   [e ct]
-  (into [{:db/id "newnode"
-          :coll/type ct
-          :coll/contains (:db/id e)
-          :seq/first (:db/id e)}]
-        (form-overwrite-tx e "newnode")))
+  (let [{:form/keys [linebreak indent]} e]
+    (into [(cond-> {:db/id "newnode"
+                    :coll/type ct
+                    :coll/contains (:db/id e)
+                    :seq/first (:db/id e)}
+             linebreak (assoc :form/linebreak linebreak)
+             indent (assoc :form/indent indent))
+           (when linebreak
+             [:db/retract (:db/id e) :form/linebreak linebreak])
+           (when indent
+             [:db/retract (:db/id e) :form/indent indent])]
+          (form-overwrite-tx e "newnode"))))
 
 (defn wrap-and-edit-first-tx
   [sel ct]
@@ -185,17 +209,10 @@
   [e]
   [[:db/add (:db/id e) :form/editing true]])
 
-(defn edit-selected-tx
-  [db]
-  (let [sel (get-selected-form db)]
-    (when-not (:coll/type sel)
-     (begin-edit-existing-node-tx sel))))
-
 
 (defn edit-new-wrapped-tx
-  [db ct init opts]
-  (let [sel (get-selected-form db)
-        new-node (merge opts
+  [sel ct init opts]
+  (let [new-node (merge opts
                         {:db/id "newnode"
                          :coll/type ct
                          :coll/contains "inner" 

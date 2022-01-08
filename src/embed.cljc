@@ -15,6 +15,13 @@
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
+(def some-map
+  {:this :is
+   :my :map
+   #_ #_ :ignored :value
+   }
+  )
+
 (def tempid-counter (atom 0) )
 (defn new-tempid [] (swap! tempid-counter dec))
 
@@ -179,6 +186,41 @@
       (:string/value e)
       (:number/value e)))
 
+
+(defn ->string
+  [e]
+  (letfn [(sep [{:form/keys [linebreak indent]}]
+            (str
+             (when linebreak "\n")
+             (when indent (apply str (repeat indent " ")))))]
+    (or (:symbol/value e)
+        (:keyword/value e)
+        (:string/value e)
+        (:number/value e)
+        (when-let [ct (:coll/type e)]
+          (let [[x & xs] (seq->vec e)]
+            (str
+             (case ct :list "(" :vec "[" :map "{" :set "#{")
+             (cond
+               (nil? x) nil
+               
+               (nil? xs) (str (sep x) (->string x))
+               
+               :else
+               (loop [[y & ys] xs
+                      s (str (sep x) (->string x))]
+                 (if (nil? y)
+                   s
+                   (recur ys (str s " " (sep y) (->string y))))))
+             (case ct :list ")" :vec "]" (:set :map) "}")))))))
+
+(defn- ->entity
+  [data]
+  (let [txe (update (->tx data) :db/id #(or % "top"))
+        r (d/with (deref (d/create-conn s/form-schema))
+                  [txe])]
+    (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
+
 (defn roundtrip
   [data]
   (let [tx-entity (update (->tx data)
@@ -191,9 +233,6 @@
 (defn test-roundtrip
   [data]
   (= data (roundtrip data)))
-
-
-
 
 (comment
   (test-roundtrip '( :a :b {:keys [db-after tempids]}))
@@ -208,7 +247,6 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
-
 
 
 

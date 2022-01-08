@@ -83,6 +83,10 @@ span.tk.v  { color: #eee; }
 span.tk.n  { color: #f0c674; }
 span.tk.l  { color: #b5bd68; white-space: pre;}
 
+span.unev span.tk { color: #777; }
+span.unev span.d { color: #777; }
+
+
 .selected {
     /* background-color: #062606; */
     background-color: #055005;
@@ -90,7 +94,6 @@ span.tk.l  { color: #b5bd68; white-space: pre;}
     color: #fff;
     border-radius: 1ex;
 }
-
 
 .selected .d { color: #a6a6a0; }
 .selected > .d { color: #fff; }
@@ -145,6 +148,10 @@ span.form-title {
 .c.dl > .edit-box:nth-last-child(2)              { border-width: 0 0 0 1ch; } 
 .c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; }
 .c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-width: 0 0 0 1ch; } 
+
+/* ??? */
+span.unev > span.tk:first-child { margin-left: -1ch; }
+
 
 
 

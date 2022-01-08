@@ -53,8 +53,8 @@
                      new-state))
    :will-unmount  (fn [{:rum/keys [args] :as state}]
                     (let [[e bus] args]
-                     (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
-                     state))})
+                      (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
+                      state))})
 
 (defn areactive
   ;; mixin for components taking [db bus ...]

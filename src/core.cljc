@@ -220,12 +220,23 @@
         (recur))))
   app)
 
+
+
+
+
 (defn app
   [conn]
   (let [the-bus (context)]
     (-> {:bus the-bus
          :history (atom ())
          :conn (doto conn
+                 #_(d/listen! (fn [{:keys [db-after db-before tx-data tempids] :as report}]
+                              (if-let [txid (get tempids :db/current-tx)]
+                                (do (save-history! the-bus txid report)
+                                    (reset! history (cons report @history)))
+                                (println "No current-tx?"))
+                              (publish-tx-report! the-bus db-after tx-data tempids)))
+                 
                  (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
                               (publish-tx-report! the-bus db-after tx-data tempids))))}
         (map->App)

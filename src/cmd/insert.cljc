@@ -81,7 +81,9 @@
           (move/movement-tx db :move/up))))
 
 (defn finish-edit-and-edit-next-tx
-  [db eid text]
-  (into (accept-edit-tx eid text)
-        (edit/insert-editing-tx db :after "")))
+  [ed text]
+  (into (accept-edit-tx (:db/id ed) text)
+        (edit/insert-editing-after ed)))
+
+
 

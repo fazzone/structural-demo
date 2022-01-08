@@ -3,7 +3,7 @@
 (def form-schema
   {:symbol/value {:db/index true}
    :number/value {}
-   :string/value {}
+   :string/value {:db/index true}
    :keyword/value {:db/index true}
    :whitespace/value {}
    :coll/type {}

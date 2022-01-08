@@ -212,7 +212,8 @@
     (rum/fragment
      (if-let [sv (or (:symbol/value node)
                      (:keyword/value node)
-                     (:number/value node))]
+                     (:number/value node)
+                     (:string/value node))]
        (rum/fragment
         [:text {:x x :y y} (str sv)]
         [:text {:x x :y (+ y half)} label])
