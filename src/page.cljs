@@ -99,12 +99,7 @@
    "S-+"       :plus})
 
 (def init-tx-data
-  (let [chains (map e/->tx test-form-data-bar)
-        undo-placeholders (assoc
-                           (e/->tx (vec
-                                    (range 536870914 536870922  1)
-                                    #_(range 9)))
-                           :coll/type :undo-preview)]
+  (let [chains (map e/->tx test-form-data-bar)]
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::history
@@ -125,8 +120,6 @@
       :coll/type :keyboard
       :keymap/bindings (for [[k m] default-keymap]
                          {:key/kbd k :key/mutation m})}
-     
-     undo-placeholders
      
      (assoc
       (e/seq-tx
@@ -149,8 +142,7 @@
           :seq/next {:seq/first "defaultkeymap"
                      :seq/next {:seq/first "history"
                                 :seq/next {:seq/first "evalchain"
-                                           :seq/next {:seq/first "inspect"
-                                                      :seq/next {:seq/first (:db/id undo-placeholders)}}}}}}]))
+                                           :seq/next {:seq/first "inspect"}}}}}]))
       :db/id "bar"
       :coll/type :bar)]))
 
@@ -307,7 +299,7 @@
 
 (defmethod display-coll :keyboard [k bus i]
   "No keyboardn"
-  #_[:div.display-keyboard
+  [:div.display-keyboard
    (ck/keyboard-diagram
     k
     #_(d/entity (d/entity-db k) )
@@ -342,7 +334,7 @@
 
 (defmethod display-coll :inspect [k bus i]
   "No inspect"
-  #_(inspector (d/entity-db k) bus))
+  (inspector (d/entity-db k) bus))
 
 (defn token-class
   [e]
