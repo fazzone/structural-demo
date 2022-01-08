@@ -63,8 +63,7 @@
    "S- "       :insert-left
    "d"         :delete-right
    "S-H"       :hoist
-   ;; "Backspace" :delete-left
-   "Backspace" :hoist
+   "Backspace" :move-to-deleted-chain
    "Enter"     :linebreak
    "C-Enter"   :insert-right-newline
    "Escape"    :select-chain
