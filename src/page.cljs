@@ -652,6 +652,7 @@
          hpos (some-> bar (.-scrollLeft))
          hoff (some-> chain (.-offsetLeft))]
      (when (and chain 
+                (< h chain-height)
                 (or always (not (< vpos voff (+ h voff)
                                    (+ vpos chain-height)))))
        (.scrollTo chain #js{:top (scroll-1d chain-height h vpos voff)}))

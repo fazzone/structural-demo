@@ -69,15 +69,12 @@
   (when-let [parent (some-> (:coll/_contains e) first)]
     (when-not (= :chain (:coll/type parent))
       (let [{:form/keys [linebreak indent]} parent]
-        (concat
-         [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]]
-         (when linebreak
-           [[:db/retract (:db/id parent) :form/linebreak linebreak]
-            [:db/add (:db/id e) :form/linebreak linebreak]])
-         (when indent
-           [[:db/retract (:db/id parent) :form/indent indent]
-            [:db/add (:db/id e) :form/indent indent]])
-         (form-replace-tx parent e))))))
+        (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]
+               (when linebreak
+                 [:db/add (:db/id e) :form/linebreak linebreak])
+               (when indent
+                 [:db/retract (:db/id parent) :form/indent indent])]
+              (form-replace-tx parent e))))))
 
 
 
