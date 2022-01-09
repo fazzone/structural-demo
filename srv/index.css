@@ -135,25 +135,24 @@ span.form-title {
     border-radius: 1ex;
     border-color: transparent;
 }
-.d  + .tk       { border-width: 0 1ch 0 0; }
-.tk + .c        { margin-left: 1ch; }
+.tk + .tk       { border-left: 0; }
+.d  + .tk       { border-left: 0; }
 .c  + .tk       { margin-left: 1ch; }
 .c  + .edit-box { margin-left: 1ch; }
-.c  + .c        { margin-left: 2ch; }
+.c  + .c        { margin-left: 1ch; }
 .d  + .edit-box { border-width: 0; }
 .edit-box       { border-width: 0 1ch 0 1ch; }
 .edit-box + .c  { margin-left: 1ch; }
 .d + .edit-box  { border-width: 0 1ch 0 0; }
-.c.dl > span:nth-last-child(2)                   { border-width: 0 0 0 1ch; }
-.c.dl > .edit-box:nth-last-child(2)              { border-width: 0 0 0 1ch; } 
+.c.dl > span:nth-last-child(2)                   { border-right: 0; }
+.c.dl > .edit-box:nth-last-child(2)              { border-right: 0; } /* { border-width: 0 0 0 1ch; }  */
 .c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; }
-.c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-width: 0 0 0 1ch; } 
+.c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-right: 0; } /* { border-width: 0 0 0 1ch; }  */
 
 /* ??? */
 span.unev > span.tk:first-child { margin-left: -1ch; }
-
-
-
+span.indent-chars + .tk {border-left: 0; }
+.tk + .indent-chars { margin-left: -1ch; }
 
 /* indentation */
 span.indented {

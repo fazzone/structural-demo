@@ -169,8 +169,10 @@
     (doseq [a as]
       (send! the-bus [a db]))
 
-    (when (not= #{:form/highlight} as)
-      (send! the-bus [:save]))))
+    #_(when (not= #{:form/highlight} as)
+        (send! the-bus [:save]))
+
+    ))
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]

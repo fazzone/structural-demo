@@ -53,7 +53,7 @@
    "S-R" :reify-undo
    
    "S-_" :uneval
-   "."   :save
+   "e"   :save
    
    "a"         :flow-left
    "w"         :float
@@ -84,7 +84,7 @@
    "S-P"       :barf-right
    "Tab"       :indent
    "S-Tab"     :dedent
-   "e"         :eval-sci
+   ;; "e"         :eval-sci
    "S-("       :new-list
    "["         :new-vec
    "S-C"       :new-chain
@@ -107,12 +107,11 @@
   (let [chains (concat
                 (map e/->tx test-form-data-bar)
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                [(assoc (e/string->tx-all (m/macro-slurp  "subtree/input.clj"))
+                        :chain/filename "output.clj")]
                 [(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
-                        :chain/filename "junk.cljc")]
-                [(assoc (e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))
-                        :chain/filename "xd.cljc")]
-                [(assoc (e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))
-                        :chain/filename "lmao.cljc")]
+                        :chain/filename "zz-embed.cljc")]
+                
                 #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
                 )]
     [{:db/ident ::state
@@ -167,7 +166,7 @@
 (declare fcc)
 
 (defn breadcrumbs-portal-id [eid] (str eid "bp"))
-(defn modeline-portal-id [eid] (str eid "mp"))
+(defn modeline-portal-id [eid] (str eid ":uneval nilmp"))
 
 (declare el-bfs)
 (rum/defc top-level-form-component < dbrx/ereactive 
@@ -179,7 +178,13 @@
     (fcc e bus 0 p)]
    [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]])
 
-(defn do-indent
+(defn computed-indent
+  [e indent-prop]
+  (+ indent-prop
+     (or (:form/indent e)
+         0)))
+
+#_(defn do-indent
   [child linebreak? indent-level]
   (if-not linebreak?
     child
@@ -188,11 +193,23 @@
       [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
      child)))
 
-(defn computed-indent
-  [e indent-prop]
-  (+ indent-prop
-     (or (:form/indent e)
-         0)))
+(defn do-indent*
+  [child ip fi linebreak?]
+  #_(println "DI" fi linebreak?)
+  (if (and (or (nil? fi) (zero? fi)) (not linebreak?))
+    child
+    (rum/fragment
+     [:span.indent-chars (when linebreak? "\n")
+      #_[:span.indenter {:style {:padding-left (str ip "ch")
+                                 :background-color "tomato"}}]
+      (when fi
+        #_[:span.indenter
+         {:style {:color "cadetblue"} }
+         (apply str (repeat fi "-"))]
+        [:span.indenter {:style {:margin-left (str fi "ch")
+                                 ;; :background-color "cadetblue"
+                                 }}])]
+     child)))
 
 (defn coll-fragment
   [e indent-prop]
@@ -404,8 +421,12 @@
                           (when (:form/highlight e) "selected")
                           proply))
           (comment "Probably a retracted entity, do nothing"))
-      (do-indent (:form/linebreak e)
-                 (computed-indent e indent-prop))))
+      (do-indent*
+       indent-prop
+       (:form/indent e)
+       (:form/linebreak e))
+      #_(do-indent (:form/linebreak e)
+                   (computed-indent e indent-prop))))
 
 #_(register-sub ::extract-to-new-top-level
               (->mutation
@@ -740,6 +761,8 @@
                                                   :coll/_contains
                                                   first)
                                         file (or (:chain/filename chain) "noname.clj")]
+                                    (println "Do save" chain)
+                                    
                                     (when chain
                                       (reset! save-status {:on (:db/id sel) :status :saving})
                                       (.listen xhr EventType/COMPLETE
@@ -944,7 +967,7 @@
       [[:float] [:delete-left] [:flow-right] [:float]]
       #_[[:last]])])
 
-(defonce the-singleton-db
+#_(defonce the-singleton-db
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
@@ -956,7 +979,7 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
-  (let [{:keys [conn bus]} (setup-app the-singleton-db)] 
+  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)

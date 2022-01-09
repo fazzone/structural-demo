@@ -7,22 +7,19 @@
    [schema :as s]
    [datascript.core :as d]))
 
-
-
 (defn seq-tx
   [xs]
-  (if-let [x (first xs)]
+  (if-let [x                               (first xs)]
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
 (def some-map
   {:this :is
    :my :map
-   #_ #_ :ignored :value
-   }
-  )
+   #_ #_ :ignored :value})
 
 (defonce tempid-counter (atom 0) )
+
 (defn new-tempid [] (swap! tempid-counter dec))
 
 (defn flatten-map
@@ -33,103 +30,91 @@
    []
    m))
 
-(comment
-  (p/parse-string
-   "(defn flatten-map
-  [m]
-  (reduce-kv
-   (fn [a k v]
-     (-> a (conj k) (conj v)))
-   []
-   m))"))
-
-
-
 (defn n->tx
-  [n]
-  (letfn [(coll-tx [coll-type xs]
-            (let [id         (new-tempid)
-                  linebreak? (atom nil)]
-              (cond-> {:db/id id :coll/type coll-type}
-                (seq xs) (merge (seq-tx (for [x     xs
-                                              :when (case (n/tag x)
-                                                      (:comma :whitespace :newline)
-                                                      (do (when (n/linebreak? x)
-                                                            (reset! linebreak? true))
-                                                          false)
-                                                      true)]
-                                          (cond-> (n->tx x)
-                                            true               (assoc :coll/_contains id)
-                                            (deref linebreak?) (assoc :form/linebreak
-                                                                      (do (reset! linebreak? nil)
-                                                                          true)))))))))]
-    (case (n/tag n)
-      (:token :multi-line)
-      (case (np/node-type n)
-        :symbol  {:symbol/value (n/string n)}
-        :keyword {:keyword/value (n/string n)}
-        :string  {:string/value (n/sexpr n)}
-        (if (= nil (n/sexpr n))
-          {:symbol/value "nil"}
-          {:number/value (n/sexpr n)}))
-      
-      :list    (coll-tx :list (n/children n))
-      :vector  (coll-tx :vec (n/children n))
-      :map     (coll-tx :map (n/children n))
-      :set     (coll-tx :set (n/children n))
-      :forms   (coll-tx :vec (n/children n))
-      :deref   (coll-tx :list (cons
-                               (p/parse-string "deref")
-                               (n/children n)))
-      :comma   nil
-      :comment {:string/value (n/string n)}
-      :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
-                     mta                (n/sexpr mta-n)]
-                 (println "Mta-n" (n/string mta-n)
-                          "Mta" mta
-                          "Val" (n/string val)
-                          "More" more
-                          )
-                 (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-                 (cond
-                   (symbol? mta)
-                   (assoc (n->tx val) :tag {:symbol/value mta})
-                  
-                   (map? mta)
-                   (merge (n->tx val) mta)
-                  
-                   (keyword? mta)
-                   (assoc (n->tx val) mta true)
-                  
-                   :else (do
-                           (println "What meat?" mta)
-                           (println "Type" (type mta))
-                           (println "N string" (n/string n))
-                           (throw (ex-info (str "What meta is this") {})))))
-      
-      :reader-macro
-      (coll-tx :map (n/children n))
-      
-      :namespaced-map (coll-tx :map (n/children n))
-      :uneval (coll-tx :uneval (n/children n))
-      
-      :fn (coll-tx :fn (n/children n))
-      (:quote)
-      (coll-tx :list (n/children n))
-      
-      (throw (ex-info  (str "Cannot decode " (n/string n)) {:tag (n/tag n)})))))
+  ([n] (n->tx n 0))
+  ([n i]
+   (letfn [(coll-tx [coll-type xs]
+             (let [id         (new-tempid)
+                   linebreak? (atom nil)
+                   isf        (atom 0)]
+               (cond-> {:db/id id :coll/type coll-type}
+                 (seq xs) (merge (seq-tx (for [x     xs
+                                               :when (case (n/tag x)
+                                                       (:comma :whitespace)
+                                                       (do (swap! isf + (count (n/string x)))
+                                                           false)
+                                                       :newline
+                                                       (do (when (n/linebreak? x)
+                                                             (reset! linebreak? true)
+                                                             (reset! isf 0))
+                                                           false)
+                                                       true)]
+                                           (let [i @isf]
+                                             (reset! isf 0)
+                                             (cond-> (n->tx x)
+                                               true        (assoc :coll/_contains id)
+                                               (< 1 i)     (assoc :form/indent i)
+                                               @linebreak? (assoc :form/linebreak (do (reset! linebreak? false)
+                                                                                      true))))))))))]
+     (case (n/tag n)
+       (:token :multi-line)
+       (case (np/node-type n)
+         :symbol  {:symbol/value (n/string n)}
+         :keyword {:keyword/value (n/string n)}
+         :string  {:string/value (n/sexpr n)}
+         (if (= nil (n/sexpr n))
+           {:symbol/value "nil"}
+           {:number/value (n/sexpr n)}))
+       
+       :list    (coll-tx :list (n/children n))
+       :vector  (coll-tx :vec (n/children n))
+       :map     (coll-tx :map (n/children n))
+       :set     (coll-tx :set (n/children n))
+       :forms   (coll-tx :vec (n/children n))
+       :deref   (coll-tx :deref (n/children n))
+       :comma   nil
+       :comment {:string/value (n/string n)}
+       :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
+                      mta                (n/sexpr mta-n)]
+                  (println "Mta-n" (n/string mta-n)
+                           "Mta" mta
+                           "Val" (n/string val)
+                           "More" more)
+                  (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
+                  (cond
+                    (symbol? mta)
+                    (assoc (n->tx val) :tag {:symbol/value mta})
+                    
+                    (map? mta)
+                    (merge (n->tx val) mta)
+                    
+                    (keyword? mta)
+                    (assoc (n->tx val) mta true)
+                    
+                    :else (do
+                            (println "What meat?" mta)
+                            (println "Type" (type mta))
+                            (println "N string" (n/string n))
+                            (throw (ex-info (str "What meta is this") {})))))
+       
+       :reader-macro
+       (coll-tx :map (n/children n))
+       
+       :namespaced-map (coll-tx :map (n/children n))
+       :uneval         (coll-tx :uneval (n/children n))
+       
+       :fn    (coll-tx :fn (n/children n))
+       :quote (coll-tx :quote (n/children n))
+       
+       (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
+
+
 
 (defn string->tx
   [s]
   (n->tx (p/parse-string s )))
 
-(defn string->tx-all
-  [s]
-  (n->tx
-   (n/forms-node
-    (filter (comp not #{:whitespace :newline} n/tag)
-            (n/children (p/parse-string-all s)))))
-  #_(n->tx (p/parse-string-all s )))
+
 
 (declare ->tx)
 
@@ -166,6 +151,13 @@
      (recur (:seq/next e) (conj a f))
      a)))
 
+(defn seq->seq
+  ([top]
+   ((fn iter [e]
+      (when-let [f (:seq/first e)]
+        (cons f (lazy-seq (iter (:seq/next e))))))
+    top)))
+
 
 
 (defn ->form
@@ -184,16 +176,15 @@
       (:number/value e)))
 
 
+
 (defn ->string
   ([e] (->string e 0))
   ([e i]
    (letfn [(sep [{:form/keys [linebreak indent]}]
-             (str
-              (when linebreak
-                (str "\n"
-                     (let [ci (+ i (or indent 0))]
-                       (when (< 0 ci)
-                         (apply str (repeat ci " "))))))))]
+             (str (when linebreak "\n")
+                  (let [ci (or indent 0)]
+                    (when (< 0 ci)
+                      (apply str (repeat ci " "))))))]
      (or (some-> (:symbol/value e) str)
          (some-> (:keyword/value e) str)
          (some-> (:string/value e) pr-str)
@@ -201,22 +192,44 @@
          (when-let [ct (:coll/type e)]
            (let [[x & xs] (seq->vec e)]
              (str
-              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(")
+              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
               (cond
                 (nil? x) nil
-               
+                
                 (nil? xs) (str (sep x) (->string x (+ 2 i)))
-               
+                
                 :else
-                (loop [[y & ys] xs
+                (loop [p nil
+                       [y & ys] xs
                        s (str (sep x) (->string x (+ 2 i)))]
                   (if (nil? y)
                     s
-                    (recur ys (str s
-                                   (case ct :chain "\n\n" " ")
-                                   (sep y)
-                                   (->string y (+ 2 i)))))))
-              (case ct :list ")" :vec "]" (:set :map) "}" :chain nil :uneval nil :fn ")"))))))))
+                    (let []
+                      (recur y ys (str s
+                                       (case ct :chain "\n\n"
+                                             (when (not (or (:form/linebreak y)
+                                                            (:form/indent y)))
+                                               " "))
+                                       (sep y)
+                                       (->string y (+ 2 i))))))))
+              (case ct :list ")" :vec "]" (:set :map) "}" :fn  ")" (:chain :uneval :quote :deref) nil))))))))
+
+(defn string->tx-all
+  [s]
+  (n->tx
+   (n/forms-node
+    (filter (comp not #{:whitespace :newline} n/tag)
+            (n/children (p/parse-string-all s)))))
+  #_(n->tx (p/parse-string-all s )))
+
+(defn- ->chain
+  [text]
+  (let [txe (assoc (string->tx-all text)
+                   :coll/type :chain)
+        r (d/with (deref (d/create-conn s/form-schema))
+                  [txe])]
+    (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
+
 
 (defn- ->entity
   [data]
@@ -225,19 +238,6 @@
                   [txe])]
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
 
-(defn- ->entities
-  [text]
-  (let [txe (update (string->tx-all text) :db/id #(or % "top"))
-        r (d/with (deref (d/create-conn s/form-schema))
-                  [txe])]
-    (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
-
-
-
-(println
- (->string (->entities "(print \"What the fuc\")")))
-
-(->string (->entities "(print What the fuc)"))
 
 (defn roundtrip
   [data]
