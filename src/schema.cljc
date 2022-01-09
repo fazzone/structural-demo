@@ -33,7 +33,8 @@
     :edit/of {:db/valueType :db.type/ref}
     
     :chain/selection {:db/valueType :db.type/ref}
-
+    :chain/filename {}
+    
     :key/kbd         {:db/unique :db.unique/identity}
     :key/mutation    {}
     :keymap/bindings {:db/valueType :db.type/ref

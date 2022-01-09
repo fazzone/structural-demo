@@ -167,7 +167,10 @@
       (when-not (empty? (d/datoms db :eavt e))
         (send! the-bus [e (d/entity db e)])))
     (doseq [a as]
-      (send! the-bus [a db]))))
+      (send! the-bus [a db]))
+
+    (when (not= #{:form/highlight} as)
+      (send! the-bus [:save]))))
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]

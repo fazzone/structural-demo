@@ -11,7 +11,6 @@
    [clojure.string :as string]
    [rum.core :as rum]
    [cljs.core.async :as async]
-   
    [sci.core :as sci]
    
    [db-reactive :as dbrx]
@@ -29,6 +28,10 @@
    [core :as core
     :refer [get-selected-form
             move-selection-tx]])
+  (:import
+   [goog.net XhrIo]
+   [goog.net EventType])
+  
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
@@ -42,13 +45,15 @@
        [1 (+ 2 3 ^:form/highlight foo  ) [:a :c] "ok"])]])
 
 (def default-keymap
-  {"f" :flow-right
-   "u" :undo
+  {"f"   :flow-right
+   "S-F" :flow-right-coll
+   "u"   :undo
    
    "C-/" :undo
    "S-R" :reify-undo
    
    "S-_" :uneval
+   "."   :save
    
    "a"         :flow-left
    "w"         :float
@@ -82,6 +87,8 @@
    "e"         :eval-sci
    "S-("       :new-list
    "["         :new-vec
+   "S-C"       :new-chain
+   "S-B"       :new-bar
    "1"         :m1
    "2"         :m2
    "3"         :m3
@@ -99,12 +106,15 @@
 (def init-tx-data
   (let [chains (concat
                 (map e/->tx test-form-data-bar)
-                [#_(e/string->tx-all (m/macro-slurp "src/embed.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/embed.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/page.cljs"))])]
+                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                [(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
+                        :chain/filename "junk.cljc")]
+                [(assoc (e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))
+                        :chain/filename "xd.cljc")]
+                [(assoc (e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))
+                        :chain/filename "lmao.cljc")]
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
+                )]
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::evalchain
@@ -116,6 +126,7 @@
       :db/id "command-chain"
       :coll/type :vec}
      {:db/ident ::inspect
+      
       :db/id "inspect"
       :coll/type :inspect}
      {:db/ident ::default-keymap
@@ -148,13 +159,7 @@
       :db/id "bar"
       :coll/type :bar)]))
 
-(comment
-  (concat
-   (map e/->tx test-form-data-bar)
-   #_[(e/string->tx-all (macro-slurp "src/page.cljs"))]
-   #_[(e/string->tx-all (macro-slurp "src/cmd/edit.cljc"))]
-   #_[(e/string->tx-all (macro-slurp "src/cmd/mut.cljc"))]
-   #_[(e/string->tx-all (macro-slurp "src/cmd/nav.cljc"))]))
+
 
 ;; replace with non-breaking hyphen, lmao
 #_(-> text (gstring/replaceAll "-" "‑"))
@@ -374,7 +379,7 @@
          (if-not kns
            (str k)
            (rum/fragment ":" [:span.kn kns] "/" (name k))))))
-   (:string/value e)
+   (some-> e :string/value pr-str)
    (some-> e :number/value str)))
 
 (rum/defc fcc < dbrx/ereactive
@@ -521,14 +526,24 @@
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
 (declare command-compose-feedback)
-(rum/defc modeline-inner < dbrx/ereactive
+(declare save-status)
+(rum/defc modeline-inner < dbrx/ereactive rum/reactive
   [sel bus {:keys [text valid] :as edn-parse-state}]
   [:span {:class (str "modeline modeline-size code-font"
                       (when text " editing")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
    [:span.modeline-echo.modeline-size
-    (when text
-      (pr-str text))]
+    (let [{:keys [on at status file]} (rum/react save-status)]
+     (when (= on (:db/id sel))
+       (case status
+         :saving "Saving"
+         :ok (str file "@" at)
+         :error "Error"
+         "")))]
+   
+   (when text
+      (pr-str text))
+   
    [:span.modeline-content
     (if-not sel
       "(no selection)"
@@ -562,7 +577,7 @@
     [:div.bar-container
      (breadcrumbs-always db bus)
      (fcc (:state/bar state) bus 0 nil)
-     #_(modeline-portal db bus)
+     (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
@@ -633,9 +648,10 @@
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
-    (if (< -1 (- pos best) 1)
-      other
-      best)))
+    best
+    #_(if (< -1 (- pos best) 1)
+        other
+        best)))
 
 (defn scroll-to-selected!
   ([] (scroll-to-selected! true))
@@ -668,6 +684,8 @@
 
 (defn ensure-selected-in-view! [] (scroll-to-selected! false))
 
+(def save-status (atom nil))
+
 (defn setup-app
   ([]
    (setup-app
@@ -698,7 +716,7 @@
                                                 (move/move :move/most-upward))
                                         c  (->> (e/->form et)
                                                 (pr-str))]
-                                    (println "Eval sciNioce" c)
+                                    (println "Eval sci" c)
                                     (try
                                       (let [ans (sci/eval-string* s c)
                                             
@@ -712,13 +730,39 @@
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
        (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))
+       (core/register-mutation! :save
+                                (fn [_ db bus]
+                                  (let [xhr (XhrIo.)
+                                        sel (get-selected-form db)
+                                        chain (-> sel
+                                                  (nav/parents-vec)
+                                                  (peek)
+                                                  :coll/_contains
+                                                  first)
+                                        file (or (:chain/filename chain) "noname.clj")]
+                                    (when chain
+                                      (reset! save-status {:on (:db/id sel) :status :saving})
+                                      (.listen xhr EventType/COMPLETE
+                                               (fn [ev]
+                                                 (reset! save-status {:on (:db/id sel)
+                                                                      :at (:max-tx db)
+                                                                      :status :ok
+                                                                      :file file})))
+                                      (.listen xhr EventType/ERROR
+                                               (fn [_] (println "Save error!")
+                                                 (reset! save-status {:on (:db/id sel) :status :error})))
+                                      (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
+                                             "POST"
+                                             (e/->string chain)
+                                             #js {"Content-Type" "application/json;charset=UTF-8"}))
+                                    nil)))
        #_(core/register-mutation!
-        :execute
-        (fn [_ db bus]
-          (let [sel (get-selected-form db)]
-            (d/transact! conn )
+          :execute
+          (fn [_ db bus]
+            (let [sel (get-selected-form db)]
+              (d/transact! conn )
             
-            )))))))
+              )))))))
 
 (rum/defc example < rum/static
   [init-form muts] 
@@ -900,7 +944,7 @@
       [[:float] [:delete-left] [:flow-right] [:float]]
       #_[[:last]])])
 
-#_(def the-singleton-db
+(defonce the-singleton-db
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
@@ -912,7 +956,7 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
-  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
+  (let [{:keys [conn bus]} (setup-app the-singleton-db)] 
     
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
@@ -978,3 +1022,8 @@
 ;; Reimplement it as atom holding an entity and see what happens
 
 ;; Scroll is not cleanly unmounted on reload?
+
+
+;; Dogfooding
+;; Round trip:
+;; text file -> rewrite clj parser -> db -> string

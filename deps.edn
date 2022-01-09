@@ -7,4 +7,8 @@
   rum/rum {:mvn/version "0.12.6"}
   org.babashka/sci {:mvn/version "0.2.8"}
   nrepl/nrepl {:mvn/version "0.8.3"}
-  rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}}}
+  rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}
+  
+  http-kit/http-kit {:mvn/version "2.5.3"}
+  
+  }}

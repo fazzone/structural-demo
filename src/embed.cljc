@@ -22,7 +22,7 @@
    }
   )
 
-(def tempid-counter (atom 0) )
+(defonce tempid-counter (atom 0) )
 (defn new-tempid [] (swap! tempid-counter dec))
 
 (defn flatten-map
@@ -68,7 +68,7 @@
       (case (np/node-type n)
         :symbol  {:symbol/value (n/string n)}
         :keyword {:keyword/value (n/string n)}
-        :string  {:string/value (n/string n)}
+        :string  {:string/value (n/sexpr n)}
         (if (= nil (n/sexpr n))
           {:symbol/value "nil"}
           {:number/value (n/sexpr n)}))
@@ -113,14 +113,11 @@
       :namespaced-map (coll-tx :map (n/children n))
       :uneval (coll-tx :uneval (n/children n))
       
-      (:fn :quote)
+      :fn (coll-tx :fn (n/children n))
+      (:quote)
       (coll-tx :list (n/children n))
       
       (throw (ex-info  (str "Cannot decode " (n/string n)) {:tag (n/tag n)})))))
-
-#_(n/sexpr (p/parse-string "::bar"))
-(n/children (p/parse-string-all "#_ #_1 2 3"))
-(n/tag (p/parse-string "#_ #_1 2 3"))
 
 (defn string->tx
   [s]
@@ -188,31 +185,38 @@
 
 
 (defn ->string
-  [e]
-  (letfn [(sep [{:form/keys [linebreak indent]}]
-            (str
-             (when linebreak "\n")
-             (when indent (apply str (repeat indent " ")))))]
-    (or (:symbol/value e)
-        (:keyword/value e)
-        (:string/value e)
-        (:number/value e)
-        (when-let [ct (:coll/type e)]
-          (let [[x & xs] (seq->vec e)]
-            (str
-             (case ct :list "(" :vec "[" :map "{" :set "#{")
-             (cond
-               (nil? x) nil
+  ([e] (->string e 0))
+  ([e i]
+   (letfn [(sep [{:form/keys [linebreak indent]}]
+             (str
+              (when linebreak
+                (str "\n"
+                     (let [ci (+ i (or indent 0))]
+                       (when (< 0 ci)
+                         (apply str (repeat ci " "))))))))]
+     (or (some-> (:symbol/value e) str)
+         (some-> (:keyword/value e) str)
+         (some-> (:string/value e) pr-str)
+         (some-> (:number/value e) str)
+         (when-let [ct (:coll/type e)]
+           (let [[x & xs] (seq->vec e)]
+             (str
+              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(")
+              (cond
+                (nil? x) nil
                
-               (nil? xs) (str (sep x) (->string x))
+                (nil? xs) (str (sep x) (->string x (+ 2 i)))
                
-               :else
-               (loop [[y & ys] xs
-                      s (str (sep x) (->string x))]
-                 (if (nil? y)
-                   s
-                   (recur ys (str s " " (sep y) (->string y))))))
-             (case ct :list ")" :vec "]" (:set :map) "}")))))))
+                :else
+                (loop [[y & ys] xs
+                       s (str (sep x) (->string x (+ 2 i)))]
+                  (if (nil? y)
+                    s
+                    (recur ys (str s
+                                   (case ct :chain "\n\n" " ")
+                                   (sep y)
+                                   (->string y (+ 2 i)))))))
+              (case ct :list ")" :vec "]" (:set :map) "}" :chain nil :uneval nil :fn ")"))))))))
 
 (defn- ->entity
   [data]
@@ -220,6 +224,20 @@
         r (d/with (deref (d/create-conn s/form-schema))
                   [txe])]
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
+
+(defn- ->entities
+  [text]
+  (let [txe (update (string->tx-all text) :db/id #(or % "top"))
+        r (d/with (deref (d/create-conn s/form-schema))
+                  [txe])]
+    (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
+
+
+
+(println
+ (->string (->entities "(print \"What the fuc\")")))
+
+(->string (->entities "(print What the fuc)"))
 
 (defn roundtrip
   [data]
