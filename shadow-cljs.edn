@@ -5,4 +5,9 @@
  :builds {:br {:target :browser
                :output-dir "srv/js"
                :modules {:main {:init-fn page/init}}
-               :release {:compiler-options {:optimizations :advanced}}}}}
+               :release {:compiler-options {:optimizations :advanced
+                                            :pretty-print true
+                                            :pseudo-names true}}}
+          :elec {:target :node-script
+                 :output-to "srv/electron-main.js"
+                 :main electron-main/main}}}

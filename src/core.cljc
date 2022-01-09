@@ -1,12 +1,14 @@
 (ns core
   (:require [datascript.core :as d]
             [embed :as e]
+            [insane-sup]
             #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async]))
   #?(:cljs
      (:require-macros
       [cljs.core.async.macros :refer [go
-                                      go-loop]])))
+                                      go-loop]]))
+  )
 
 (defn get-selected-form
   [db]
@@ -167,12 +169,7 @@
       (when-not (empty? (d/datoms db :eavt e))
         (send! the-bus [e (d/entity db e)])))
     (doseq [a as]
-      (send! the-bus [a db]))
-
-    #_(when (not= #{:form/highlight} as)
-        (send! the-bus [:save]))
-
-    ))
+      (send! the-bus [a db]))))
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]
@@ -227,8 +224,6 @@
 
 
 
-
-
 (defn app
   [conn]
   (let [the-bus (context)]
@@ -236,11 +231,11 @@
          :history (atom ())
          :conn (doto conn
                  #_(d/listen! (fn [{:keys [db-after db-before tx-data tempids] :as report}]
-                              (if-let [txid (get tempids :db/current-tx)]
-                                (do (save-history! the-bus txid report)
-                                    (reset! history (cons report @history)))
-                                (println "No current-tx?"))
-                              (publish-tx-report! the-bus db-after tx-data tempids)))
+                                (if-let [txid (get tempids :db/current-tx)]
+                                  (do (save-history! the-bus txid report)
+                                      (reset! history (cons report @history)))
+                                  (println "No current-tx?"))
+                                (publish-tx-report! the-bus db-after tx-data tempids)))
                  
                  (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
                               (publish-tx-report! the-bus db-after tx-data tempids))))}

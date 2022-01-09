@@ -46,7 +46,7 @@ body {
     /* font-family: "Iosevka Term SS03", monospace; */
     font-family: iosevka-term-ss03-light;
     font-size: 12pt;
-    /* line-height: 1.5; */
+    /* line-height: 2.5; */
 }
 
 .top-level-form {
@@ -135,13 +135,22 @@ span.form-title {
     border-radius: 1ex;
     border-color: transparent;
 }
+/* do not double space between two tokens */
 .tk + .tk       { border-left: 0; }
+.tk + .edit-box { border-left: 0; }
+/* allow the highlight to paint on both sides of a selected token */
+.tk + .tk.selected { margin-left: -1ch; padding-left: 1ch; }
+.tk + .edit-box { margin-left: -0.5ch; padding-left: 0.5ch; }
+/* .tk + .edit-box { margin-left: -1ch; padding-left: 1ch; } */
+
+
+
 .d  + .tk       { border-left: 0; }
-.c  + .tk       { margin-left: 1ch; }
 .c  + .edit-box { margin-left: 1ch; }
 .c  + .c        { margin-left: 1ch; }
+.c.pf + .c      { margin-left: 0; }
 .d  + .edit-box { border-width: 0; }
-.edit-box       { border-width: 0 1ch 0 1ch; }
+/* .edit-box       { border-width: 0 1ch 0 1ch; } */
 .edit-box + .c  { margin-left: 1ch; }
 .d + .edit-box  { border-width: 0 1ch 0 0; }
 .c.dl > span:nth-last-child(2)                   { border-right: 0; }
@@ -153,6 +162,9 @@ span.form-title {
 span.unev > span.tk:first-child { margin-left: -1ch; }
 span.indent-chars + .tk {border-left: 0; }
 .tk + .indent-chars { margin-left: -1ch; }
+.pfc + .tk { border-left: 0; }
+.pfc + .c { border-left: 0; }
+
 
 /* indentation */
 span.indented {
@@ -165,6 +177,7 @@ span.indented {
 
 .edit-box {
     min-width: 2ch;
+    border: 0;
     border-color: transparent;
     border-style: solid;
     border-radius: 1ex;
@@ -264,10 +277,9 @@ div.bp {
 }
 
 
-span.indent-chars {
-    white-space: pre;
-    background-color: #000;
-}
+
+.indent-chars { white-space: pre; background-color: transparent; }
+.indent-chars.nl { background-color: #000; }
 
 .chain.selected .indent-chars { background-color: transparent; }
 
@@ -447,6 +459,6 @@ span.key-compose-echo {
 
 }
 
-.alternate-reality .edit-box {
-    background-color: #777;
-}
+.edit-box:not(:focus) { background-color: tomato; }
+.alternate-reality .edit-box { background-color: #777; }
+.alternate-reality .edit-box:not(:focus) { background-color: #777; }

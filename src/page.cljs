@@ -105,12 +105,20 @@
 
 (def init-tx-data
   (let [chains (concat
-                (map e/->tx test-form-data-bar)
-                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 [(assoc (e/string->tx-all (m/macro-slurp  "subtree/input.clj"))
-                        :chain/filename "output.clj")]
-                [(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
-                        :chain/filename "zz-embed.cljc")]
+                          :chain/filename "output.clj")]
+                (map e/->tx test-form-data-bar)
+                
+                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                
+                #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
+                          :chain/filename "zz-embed.cljc")]
+                
+                #_[(e/string->tx-all (m/macro-slurp  "subtree/clojure.core.clj"))]
+                
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
                 )]
@@ -166,7 +174,7 @@
 (declare fcc)
 
 (defn breadcrumbs-portal-id [eid] (str eid "bp"))
-(defn modeline-portal-id [eid] (str eid ":uneval nilmp"))
+(defn modeline-portal-id [eid] (str eid "mp"))
 
 (declare el-bfs)
 (rum/defc top-level-form-component < dbrx/ereactive 
@@ -199,17 +207,18 @@
   (if (and (or (nil? fi) (zero? fi)) (not linebreak?))
     child
     (rum/fragment
-     [:span.indent-chars (when linebreak? "\n")
-      #_[:span.indenter {:style {:padding-left (str ip "ch")
-                                 :background-color "tomato"}}]
-      (when fi
-        #_[:span.indenter
-         {:style {:color "cadetblue"} }
-         (apply str (repeat fi "-"))]
-        [:span.indenter {:style {:margin-left (str fi "ch")
-                                 ;; :background-color "cadetblue"
-                                 }}])]
-     child)))
+       [:span.indent-chars (when linebreak? {:class "nl"})
+        (when linebreak? "\n")
+        #_[:span.indenter {:style {:padding-left (str ip "ch")
+                                   :background-color "tomato"}}]
+        (when fi
+          #_[:span.indenter
+           {:style {:color "cadetblue"} }
+           (apply str (repeat fi "-"))]
+          [:span.indenter {:style {:margin-left (str fi "ch")
+                                   ;; :background-color "cadetblue"
+                                   }}])]
+       child)))
 
 (defn coll-fragment
   [e indent-prop]
@@ -248,10 +257,13 @@
    [:span.d.cl close]])
 
 
-(defmethod display-coll :list [c b i s p] (delimited-coll "(" ")" c b i s p))
-(defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]" c b i s p))
-(defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}" c b i s p))
+
+
+(defmethod display-coll :list [c b i s p] (delimited-coll "(" ")"  c b i s p))
+(defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]"  c b i s p))
+(defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}"  c b i s p))
 (defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
+(defmethod display-coll :fn   [c b i s p] (delimited-coll "#(" ")" c b i s p))
 
 (defmethod display-coll :hidden  [c b i s p]
   [:div {:style {:width "800px"}}
@@ -268,17 +280,40 @@
      :set "#{...}"
      "<...>")])
 
+
+
+
 (defmethod display-coll :uneval  [c b i s p]
   [:span.c.unev
    (when s {:class s :ref "selected"})
-   ;; "#_<<"
    "#_"
    (for [x (e/seq->vec c)]
      (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))
-   ;; ">>"
-   
-   ])
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :deref  [c b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc "@"]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :quote  [c b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc "'"]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :reader-macro  [{:reader-macro/keys [dispatch] :as c} b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc (str "#" dispatch)]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
 
 (declare snapshot)
 
@@ -363,7 +398,8 @@
      [:span.prose-font (str "Inspect #" (:db/id sel))]
      [:div
       (debug/datoms-table-eavt*
-       (concat
+       (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
+       #_(concat
         (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
         (->> (d/datoms (d/entity-db sel) :avet  )
              (filter (fn [[e a v t]]
@@ -371,7 +407,7 @@
 
 (defmethod display-coll :inspect [k bus i]
   "No inspect"
-  (inspector (d/entity-db k) bus))
+  #_(inspector (d/entity-db k) bus))
 
 (defn token-class
   [e]
@@ -424,9 +460,7 @@
       (do-indent*
        indent-prop
        (:form/indent e)
-       (:form/linebreak e))
-      #_(do-indent (:form/linebreak e)
-                   (computed-indent e indent-prop))))
+       (:form/linebreak e))))
 
 #_(register-sub ::extract-to-new-top-level
               (->mutation
@@ -455,12 +489,9 @@
                        (:seq/first e) (conj (:seq/first e))))))))
 
 (def breadcrumbs-max-numeric-label 8)
-(rum/defc parent-path
-  [rpa bus]
-  [:ul.parent-path
-   (for [i (range (count rpa))]
-     (let [parent (nth rpa i)]
-       [:li {:key i}
+(rum/defc parent-path-item
+  [bus i parent]
+  [:li {:key i}
         [:a {:href "#"
              :on-click #(do (.preventDefault %)
                             (core/send! bus [:select (:db/id parent)]))}
@@ -469,7 +500,13 @@
             [:span.inline-tag (str (inc i))])
           (if (= :list (:coll/type parent))
             (or (some-> parent :seq/first :symbol/value) "()")
-            (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]]))])
+            (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
+
+(rum/defc parent-path
+  [rpa bus]
+  [:ul.parent-path
+   (for [i (range (count rpa))]
+     (parent-path-item bus i (nth rpa i)))])
 
 (rum/defc breadcrumbs-always < (dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
@@ -707,6 +744,16 @@
 
 (def save-status (atom nil))
 
+(defn save*
+  [file contents]
+  (let [spit (some-> js/window
+                     (aget "my_electron_bridge")
+                     (aget "spit"))]
+    (when spit
+      (-> (spit file contents)
+          (.then  (fn [] (swap! save-status assoc :status :ok :file file)))
+          (.catch (fn [] (swap! save-status assoc :status :error)))))))
+
 (defn setup-app
   ([]
    (setup-app
@@ -764,20 +811,22 @@
                                     (println "Do save" chain)
                                     
                                     (when chain
-                                      (reset! save-status {:on (:db/id sel) :status :saving})
-                                      (.listen xhr EventType/COMPLETE
-                                               (fn [ev]
-                                                 (reset! save-status {:on (:db/id sel)
-                                                                      :at (:max-tx db)
-                                                                      :status :ok
-                                                                      :file file})))
-                                      (.listen xhr EventType/ERROR
-                                               (fn [_] (println "Save error!")
-                                                 (reset! save-status {:on (:db/id sel) :status :error})))
-                                      (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
-                                             "POST"
-                                             (e/->string chain)
-                                             #js {"Content-Type" "application/json;charset=UTF-8"}))
+                                      (reset! save-status {:at (:max-tx db) :on (:db/id sel) :status :saving})
+                                      (save* file (e/->string chain))
+                                      #_(do
+                                        (.listen xhr EventType/COMPLETE
+                                                 (fn [ev]
+                                                   (reset! save-status {:on (:db/id sel)
+                                                                        :at (:max-tx db)
+                                                                        :status :ok
+                                                                        :file file})))
+                                        (.listen xhr EventType/ERROR
+                                                 (fn [_] (println "Save error!")
+                                                   (reset! save-status {:on (:db/id sel) :status :error})))
+                                        (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
+                                               "POST"
+                                               (e/->string chain)
+                                               #js {"Content-Type" "application/json;charset=UTF-8"})))
                                     nil)))
        #_(core/register-mutation!
           :execute
@@ -1004,7 +1053,8 @@
          #_(debug-component)
          (root-component @conn bus)
          (.getElementById js/document "root")))
-
+    
+    ;; document.write(process.versions['electron'])
     (rum/mount
      #_(debug-component)
      (root-component @conn bus)
@@ -1050,3 +1100,5 @@
 ;; Dogfooding
 ;; Round trip:
 ;; text file -> rewrite clj parser -> db -> string
+
+;; Scroll on settimeout so we don't query the dom and mutate it again immediately

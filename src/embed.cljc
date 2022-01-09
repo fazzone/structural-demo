@@ -76,10 +76,10 @@
        :comment {:string/value (n/string n)}
        :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                       mta                (n/sexpr mta-n)]
-                  (println "Mta-n" (n/string mta-n)
-                           "Mta" mta
-                           "Val" (n/string val)
-                           "More" more)
+                  #_(println "Mta-n" (n/string mta-n)
+                             "Mta" mta
+                             "Val" (n/string val)
+                             "More" more)
                   (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
                   (cond
                     (symbol? mta)
@@ -91,20 +91,35 @@
                     (keyword? mta)
                     (assoc (n->tx val) mta true)
                     
+                    (string? mta)
+                    (assoc (n->tx val) :tag {:string/value mta})
                     :else (do
                             (println "What meat?" mta)
                             (println "Type" (type mta))
                             (println "N string" (n/string n))
                             (throw (ex-info (str "What meta is this") {})))))
        
+
+       
+       ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
+       ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
        :reader-macro
-       (coll-tx :map (n/children n))
+       (let [[rmt & body] (n/children n)]
+         #_(coll-tx :map (n/children n))
+         (-> (coll-tx :reader-macro body)
+             (assoc :reader-macro/dispatch (n/string rmt))))
        
        :namespaced-map (coll-tx :map (n/children n))
        :uneval         (coll-tx :uneval (n/children n))
        
-       :fn    (coll-tx :fn (n/children n))
-       :quote (coll-tx :quote (n/children n))
+       :fn               (coll-tx :fn (n/children n))
+       :quote            (coll-tx :quote (n/children n))
+       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+       :syntax-quote     (coll-tx :syntax-quote (n/children n))
+       :unquote          (coll-tx :unquote (n/children n))
+       :unquote-splicing (coll-tx :unquote-splicing (n/children n))
+       :var              {:symbol/value (n/string n)}
+       :regex            {:regex/value (n/string n)}
        
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
 
@@ -145,7 +160,10 @@
 
 (defn seq->vec
   ([e]
-   (seq->vec e []))
+   ;; #?(:cljs (js/performance.mark "svs"))
+   (let [a (seq->vec e [])]
+     ;; #?(:cljs (js/performance.measure "seq->vec" "svs"))
+     a))
   ([e a]
    (if-let [f (:seq/first e)]
      (recur (:seq/next e) (conj a f))
@@ -213,6 +231,9 @@
                                        (sep y)
                                        (->string y (+ 2 i))))))))
               (case ct :list ")" :vec "]" (:set :map) "}" :fn  ")" (:chain :uneval :quote :deref) nil))))))))
+
+
+
 
 (defn string->tx-all
   [s]

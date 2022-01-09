@@ -28,10 +28,19 @@
   (System/exit 0))
 
 (comment
-  (server/stop!)
-  (server/start!)
+  (shadow/watch :elec))
+(comment
+  (shadow/release :elec))
+(comment
+  (do
+    (server/stop!)
+    (Thread/sleep 223)
+    (server/start!))
   (shadow/watch :br)
-  (shadow/release :br))
+  
+  (do
+    (shadow/release :elec)
+    (shadow/release :br)))
 
 
 

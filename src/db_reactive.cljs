@@ -8,12 +8,32 @@
    [cljs.core.async.macros :refer [go
                                    go-loop]]))
 
+(def hack-cbq (atom []))
+
+(defn flush-cbq
+  []
+  (js/ReactDOM.unstable_batchedUpdates
+   (fn []
+     (doseq [c @hack-cbq]
+       (c))))
+  (reset! hack-cbq []))
+
 (defn update-first-arg!
   [^js/React.Component rc e]
-  (.setState rc (fn setstate-arx [state props]
-                  (let [rst (aget state :rum/state)]
-                    (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                    state))))
+  (let [cs (swap! hack-cbq conj
+                  (fn []
+                    (.setState rc (fn setstate-arx [state props]
+                                    (let [rst (aget state :rum/state)]
+                                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                                      
+                                      state)))))] 
+      (js/window.setTimeout
+       flush-cbq
+       0))
+  #_(.setState rc (fn setstate-arx [state props]
+                    (let [rst (aget state :rum/state)]
+                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                      state))))
 
 (def ereactive
   ;; mixin for components taking [entity bus ...] 
