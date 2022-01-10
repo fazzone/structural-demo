@@ -54,7 +54,7 @@
    
    "S-_" :uneval
    ;; "e"   :save
-
+   "t" :tear
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -105,11 +105,12 @@
 
 (def init-tx-data
   (let [chains (concat
-                [(assoc (e/string->tx-all (m/macro-slurp  "subtree/input.clj"))
-                          :chain/filename "output.clj")]
+
+                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                #_[(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
                 
                 #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
                           :chain/filename "zz-embed.cljc")]
@@ -282,7 +283,6 @@
 
 
 
-
 (defmethod display-coll :uneval  [c b i s p]
   [:span.c.unev
    (when s {:class s :ref "selected"})
@@ -303,6 +303,30 @@
   [:span.c.pf
    (when s {:class s :ref "selected"})
    [:span.pfc "'"]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :syntax-quote  [c b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc "`"]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :unquote  [c b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc "~"]
+   (for [x (e/seq->vec c)]
+     (-> (fcc x b (computed-indent c i) p)
+         (rum/with-key (:db/id x))))])
+
+(defmethod display-coll :unquote-splicing  [c b i s p]
+  [:span.c.pf
+   (when s {:class s :ref "selected"})
+   [:span.pfc "~@"]
    (for [x (e/seq->vec c)]
      (-> (fcc x b (computed-indent c i) p)
          (rum/with-key (:db/id x))))])
@@ -491,22 +515,23 @@
 (def breadcrumbs-max-numeric-label 8)
 (rum/defc parent-path-item
   [bus i parent]
-  [:li {:key i}
-        [:a {:href "#"
-             :on-click #(do (.preventDefault %)
-                            (core/send! bus [:select (:db/id parent)]))}
-         [:span.code-font
-          (when (< i breadcrumbs-max-numeric-label)
-            [:span.inline-tag (str (inc i))])
-          (if (= :list (:coll/type parent))
-            (or (some-> parent :seq/first :symbol/value) "()")
-            (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
+  [:li
+   [:a {:href "#"
+        :on-click #(do (.preventDefault %)
+                       (core/send! bus [:select (:db/id parent)]))}
+    [:span.code-font
+     (when (< i breadcrumbs-max-numeric-label)
+       [:span.inline-tag (str (inc i))])
+     (if (= :list (:coll/type parent))
+       (or (some-> parent :seq/first :symbol/value) "()")
+       (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
 
 (rum/defc parent-path
   [rpa bus]
   [:ul.parent-path
    (for [i (range (count rpa))]
-     (parent-path-item bus i (nth rpa i)))])
+     (-> (parent-path-item bus i (nth rpa i))
+         (rum/with-key i)))])
 
 (rum/defc breadcrumbs-always < (dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
@@ -796,8 +821,12 @@
                                         (core/send! bus [:eval-result (:db/id et) ans]))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
-       (core/register-mutation! :form/highlight (fn [_ _ _] (ensure-selected-in-view!)))
-       (core/register-mutation! :scroll  (fn [_ _ _] (scroll-to-selected!)))
+       (core/register-mutation! :form/highlight (fn [_ _ _]
+                                                  (js/window.setTimeout
+                                                   (fn [] (ensure-selected-in-view!))
+                                                   1)))
+       (core/register-mutation! :scroll  (fn [_ _ _]
+                                           (scroll-to-selected!)))
        (core/register-mutation! :save
                                 (fn [_ db bus]
                                   (let [xhr (XhrIo.)
@@ -1102,3 +1131,7 @@
 ;; text file -> rewrite clj parser -> db -> string
 
 ;; Scroll on settimeout so we don't query the dom and mutate it again immediately
+;; Buffer all of the comments you write and use them as a commit msg
+
+;; keyword/value, symbol/value etc...
+;; REALLY stupid compared to token/type because of multiple queries

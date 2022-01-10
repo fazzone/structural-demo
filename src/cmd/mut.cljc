@@ -1,5 +1,6 @@
 (ns cmd.mut
   (:require
+   [clojure.string :as string]
    [datascript.core :as d]
    [embed :as e]
    [cmd.move :as move]
@@ -241,6 +242,40 @@
     (concat (edit/form-wrap-tx sel :uneval)
             (when dst (move-selection-tx (:db/id sel) (:db/id dst))))))
 
+(defn tear-tx
+  ([sel]
+   (or (tear-tx sel :symbol/value)
+       (tear-tx sel :string/value)
+       (tear-tx sel :keyword/value)))
+  ([sel vt]
+   (when-let [ks (vt sel)]
+     (let [[head & more] (string/split ks #"[./\-]")]
+       (when more
+         (let [new-tail (assoc
+                         (e/seq-tx (for [e more]
+                                     {vt e :coll/_contains "newnode"}))
+                         :db/id "newtail")]
+           (into [new-tail
+                  [:db/add (:db/id sel) vt head]]
+                 (concat
+                  (edit/form-wrap-tx sel :list)
+                  [[:db/add "newnode" :seq/next (:db/id new-tail)]]
+                  (move-selection-tx (:db/id sel) "newnode")))))))))
+
+(defn stitch*
+  [sel vt e]
+  (when-let [head (:seq/first e)]
+    (let [xs (map vt (e/seq->vec e))]
+      (into [[:db/add (:db/id head) vt (string/join "-" xs)]]
+            (concat (edit/form-raise-tx head)
+                    (move-selection-tx (:db/id sel) (:db/id head)))))))
+
+;; T F S T
+(defn stitch-tx
+  [sel vt]
+  (or (stitch* sel vt sel)
+      (stitch* sel vt (edit/exactly-one (:coll/_contains sel)))))
+
 (def dispatch-table
   {:select          nav/select-form-tx
    :flow-right      (fn [db] (move/movement-tx db :move/flow))
@@ -332,6 +367,9 @@
    :insert-txdata         (fn [db c] (insert-txdata (get-selected-form db) c))
    :hoist                 (comp hoist-tx get-selected-form)
    :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
+   :tear                  (comp tear-tx get-selected-form)
+   :stitch                (fn [db]
+                            (stitch-tx (get-selected-form db) :symbol/value))
    })
 
 
