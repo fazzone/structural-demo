@@ -1,9 +1,8 @@
-# Setup
+See https://fazzone.github.io/structural-demo/
+
+Or run locally:
 ```
 $ npm install
-```
-# Run
-```
 $ clj
+$ open http://localhost:8087
 ```
-Then open localhost:8087
