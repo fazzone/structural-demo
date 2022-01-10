@@ -9,7 +9,7 @@
 
 (defn seq-tx
   [xs]
-  (if-let [x                               (first xs)]
+  (if-let [x (first xs)]
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
@@ -153,7 +153,6 @@
       (sequential? e) (coll-tx :list e)
       :else           (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
-
 (defn ->tx
   [e]
   (merge (meta e) (->tx* e)))
@@ -286,6 +285,7 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
 
 
 

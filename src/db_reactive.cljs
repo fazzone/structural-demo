@@ -27,13 +27,13 @@
                                       (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
                                       
                                       state)))))] 
-      (js/window.setTimeout
-       flush-cbq
-       0))
+    (js/window.setTimeout
+     flush-cbq
+     0))
   #_(.setState rc (fn setstate-arx [state props]
-                    (let [rst (aget state :rum/state)]
-                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                      state))))
+                  (let [rst (aget state :rum/state)]
+                    (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                    state))))
 
 (def ereactive
   ;; mixin for components taking [entity bus ...] 

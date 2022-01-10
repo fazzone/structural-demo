@@ -1,7 +1,6 @@
 (ns core
   (:require [datascript.core :as d]
             [embed :as e]
-            [insane-sup]
             #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async]))
   #?(:cljs
@@ -126,7 +125,7 @@
         
         
         (when-let [e (:error report)]
-          (println "Error transacting" e)
+          (println (str "Error transacting " (pr-str mut)) e)
           (println "Tx-data")
           (run! prn tx-data))
         (recur (or (get (:tempids report) :db/current-tx)
