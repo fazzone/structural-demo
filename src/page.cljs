@@ -8,6 +8,7 @@
    [goog.string :as gstring]
    [goog.functions :as gf]
    [datascript.core :as d]
+   [clojure.datafy :as datafy]
    [clojure.string :as string]
    [rum.core :as rum]
    [cljs.core.async :as async]
@@ -24,6 +25,7 @@
    [cmd.edit :as edit]
    [cmd.mut :as mut]
    [cmd.invar :as invar]
+   [df.github :as dfg]
    
    [core :as core
     :refer [get-selected-form
@@ -42,7 +44,12 @@
 (def test-form-data-bar
   '[["Chain 1"
      (def thing
-       [1 (+ 2 3 ^:form/highlight foo  ) [:a :c] "ok"])]])
+       [1 (+ 2 3 ^:form/highlight foo  ) [:a :c] "ok"])
+     
+     (defn hn-test
+       []
+       (ingest (then (nav stories :topstories (:topstories stories))
+                     (fn [x] (nav x x (first x))))))]])
 
 (def default-keymap
   {"f"   :flow-right
@@ -117,7 +124,7 @@
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 
-                [(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
+                #_[(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
                 
                 #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
                           :chain/filename "zz-embed.cljc")]
@@ -826,17 +833,23 @@
     (doto (d/create-conn s/schema)
       (d/transact! init-tx-data))))
   ([conn]
-   (let [a (core/app conn)
-         s (sci/init {})
-         
-         chain->io (atom {})
-         
-         io (js/IntersectionObserver.
-             (fn [a b c d e]
-               (js/console.log "IO" a))
-             #js {:root       js/document.body
-                  :rootMargin "0px"
-                  :threshold  (array 0 0.2 0.4 0.6 0.8 1)})]
+   (let [a  (core/app conn)
+         scivar-sel (sci/new-var "zsel")
+         scivar-ingest (sci/new-var "ingest")
+         s  (sci/init {:namespaces {'d {'datoms d/datoms
+                                        'touch  d/touch}}
+                       :bindings   {'sel    (reify IDeref
+                                              (-deref [_] (get-selected-form @conn)))
+                                    'jcl    (fn [z] (js/console.log z))
+                                    'datafy datafy/datafy
+                                    'nav    datafy/nav
+                                    'fetch  (fn [z f]
+                                              (-> z (js/fetch) (.then f)))
+                                    'then (fn [p f] (.then (js/Promise.resolve p) f))
+                                    'stories dfg/stories
+                                    'ingest scivar-ingest
+                                    'zsel scivar-sel}})
+         ]
      (doseq [[m f] mut/dispatch-table]
        (core/register-simple! a m f))
      (doto a
@@ -848,18 +861,28 @@
                                 (fn [_ db bus]
                                   (let [et (->> (get-selected-form db)
                                                 (move/move :move/most-upward))
-                                        c  (->> (e/->form et)
-                                                (pr-str))]
-                                    (println "Eval sci" c)
+                                        c   (e/->string et)
+                                        #_(->> (e/->form et)
+                                               (pr-str))]
+                                    (println "Eval sci" c scivar-sel)
+                                    
                                     (try
-                                      (let [ans (sci/eval-string* s c)
+                                      (let [_ (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
+                                            _ (sci/alter-var-root scivar-ingest
+                                                                  (constantly (fn [z]
+                                                                                (.then (js/Promise.resolve z)
+                                                                                       (fn [ar]
+                                                                                         (js/console.log "PARse" ar)
+                                                                                         (core/send! bus [:ingest-result (:db/id et) ar])
+                                                                                         ::ok)))))
+                                            ans (sci/eval-string* s c)
                                             
-                                            #_(sci/eval-string c
-                                                               {:namespaces {'d {'datoms d/datoms
-                                                                                 'touch d/touch}}
-                                                                :bindings {'db db
-                                                                           'sel (get-selected-form db)}})]
-                                        (core/send! bus [:eval-result (:db/id et) ans]))
+                                            #_ (sci/eval-string c
+                                                                )]
+                                        (.then (js/Promise.resolve ans)
+                                               (fn [ar]
+                                                 (when (not= ::ok ar)
+                                                   (core/send! bus [:eval-result (:db/id et) ar])))))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _]
@@ -870,14 +893,14 @@
                                            (scroll-to-selected!)))
        (core/register-mutation! :save
                                 (fn [_ db bus]
-                                  (let [xhr (XhrIo.)
-                                        sel (get-selected-form db)
+                                  (let [xhr   (XhrIo.)
+                                        sel   (get-selected-form db)
                                         chain (-> sel
                                                   (nav/parents-vec)
                                                   (peek)
                                                   :coll/_contains
                                                   first)
-                                        file (or (:chain/filename chain) "noname.clj")]
+                                        file  (or (:chain/filename chain) "noname.clj")]
                                     (println "Do save" chain)
                                     
                                     (when chain
@@ -886,10 +909,10 @@
                                       #_(do
                                         (.listen xhr EventType/COMPLETE
                                                  (fn [ev]
-                                                   (reset! save-status {:on (:db/id sel)
-                                                                        :at (:max-tx db)
+                                                   (reset! save-status {:on     (:db/id sel)
+                                                                        :at     (:max-tx db)
                                                                         :status :ok
-                                                                        :file file})))
+                                                                        :file   file})))
                                         (.listen xhr EventType/ERROR
                                                  (fn [_] (println "Save error!")
                                                    (reset! save-status {:on (:db/id sel) :status :error})))
@@ -1103,6 +1126,24 @@
         _ (unsub)
         _ (pub "M@")]))
 
+#_(defn stupid-github-crap
+  []
+  (-> (js/fetch "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
+      (.then #(.json %))
+      (.then #(do (js/console.log %) %))
+      (.then (fn [ref]
+               (println (js->clj ref))
+               (-> (js/fetch (-> ref js->clj (get "object") (get "url")))
+                   (.then #(.json %))
+                   (.then (fn [commit]
+                            (js/console.log commit)
+                            (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
+                                (.then #(.json %))
+                                (.then (fn [tree]
+                                         (js/console.log tree)
+                                         ))
+                                ))))))))
+
 (defn  ^:dev/after-load init []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
@@ -1117,8 +1158,11 @@
     (reset! keyboard-bus bus)
     #_(println "DKL" (d/entity @conn ::default-keymap))
     #_(run! prn (d/touch (d/entity @conn ::default-keymap)))
+    
+    #_(stupid-github-crap)
+    
 
-
+    
     #_(go
         (async/<!
          (async/onto-chan!

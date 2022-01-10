@@ -82,8 +82,11 @@
                     (some-> (:number/value e) str))
                 @text)
         form-eid (:db/id e)]
-    [:input.edit-box.code-font
-     {:type        :text
+    [#_:input.edit-box.code-font
+     :textarea.edit-box.code-font
+     {
+      ;; :type        :text
+      :wrap :off
       :ref         "the-input"
       :value       (or value "")
       :style       {:width (str (max 1 (count value)) "ch")}

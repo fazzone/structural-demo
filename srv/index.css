@@ -180,14 +180,23 @@ span.indented {
 .edit-box {
     min-width: 2ch;
     border: 0;
-    /* border-color: transparent; */
+    border-color: transparent;
     border-style: solid;
     border-radius: 1ex;
     padding: 0;
 }
-input.edit-box {
+
+.edit-box {
     background-color: #000;
     color: #fff;
+}
+
+textarea.edit-box {
+    resize: none;
+    height: 2ex;
+    overflow: hidden;
+    padding: 0;
+    vertical-align: text-top;
 }
 
 .form-card {

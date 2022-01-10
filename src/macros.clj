@@ -14,4 +14,3 @@
   (e/string->tx-all
    (clojure.core/slurp a)))
 
-

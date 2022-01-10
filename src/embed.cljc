@@ -154,7 +154,10 @@
       (map? e)        (coll-tx :map (flatten-map e))
       (set? e)        (coll-tx :set e)
       (sequential? e) (coll-tx :list e)
-      :else           (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
+      
+      #?@(:cljs [(instance? js/Date e) {:string/value (str e)}
+                 (instance? js/URL e) {:string/value (str e)}])
+      :else (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
 (defn ->tx
   [e]
@@ -191,7 +194,7 @@
                 :map  (apply array-map elems)
                 :set  (set elems))
               (case ct :list () :vec [] :map {}))))
-      (:keyword/value e)
+      (:keyword/value (keyword e))
       (:string/value e)
       (:number/value e)))
 
