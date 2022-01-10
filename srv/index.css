@@ -85,7 +85,7 @@ span.tk.l  { color: #b5bd68; white-space: pre;}
 
 span.unev span.tk { color: #777; }
 span.unev span.d { color: #777; }
-
+span.unev span.kn { color: #777; }
 
 .selected {
     /* background-color: #062606; */
@@ -149,6 +149,7 @@ span.form-title {
 .c  + .edit-box { margin-left: 1ch; }
 .c  + .c        { margin-left: 1ch; }
 .c.pf + .c      { margin-left: 0; }
+.c.pf + .c.pf   { margin-left: 1ch; }
 .d  + .edit-box { border-width: 0; }
 /* .edit-box       { border-width: 0 1ch 0 1ch; } */
 .edit-box + .c  { margin-left: 1ch; }
@@ -164,6 +165,7 @@ span.indent-chars + .tk {border-left: 0; }
 .tk + .indent-chars { margin-left: -1ch; }
 .pfc + .tk { border-left: 0; }
 .pfc + .c { border-left: 0; }
+.c.pf > span:last-child { border-right: 0; } 
 
 
 /* indentation */
@@ -178,7 +180,7 @@ span.indented {
 .edit-box {
     min-width: 2ch;
     border: 0;
-    border-color: transparent;
+    /* border-color: transparent; */
     border-style: solid;
     border-radius: 1ex;
     padding: 0;
@@ -278,8 +280,15 @@ div.bp {
 
 
 
-.indent-chars { white-space: pre; background-color: transparent; }
-.indent-chars.nl { background-color: #000; }
+.indent-chars { white-space: pre;
+                background-color: transparent; }
+/* .indent-chars.nl { background-color: #000; } */
+.c.dl.selected > .indent-chars.nl {
+    /* background-color: #000; */
+    /* border-radius: 1ex; */
+} 
+
+.top-level-form > .c { display: block; }
 
 .chain.selected .indent-chars { background-color: transparent; }
 
@@ -303,7 +312,7 @@ span.indenter {
 .modeline-size {
     height: 3ex;
     line-height: 3ex;
-    margin-bottom: 1ex;
+    margin-bottom: 0.5ex;
 }
 span.modeline.editing {
     background-color: #2a4a2a;
@@ -425,8 +434,8 @@ span.key-compose-echo {
 /* combination outer&inner do not take up space */
 .inline-tag-outer {
     position: relative;
-    color: #fff;
-    font-size: 80%;
+    color: #777;
+    /* font-size: 80%; */
     top: -0.4ex;
     left: -0.8ex;
 }
@@ -459,6 +468,8 @@ span.key-compose-echo {
 
 }
 
-.edit-box:not(:focus) { background-color: tomato; }
+.edit-box:not(:focus) {
+    background-color: tomato;
+}
 .alternate-reality .edit-box { background-color: #777; }
 .alternate-reality .edit-box:not(:focus) { background-color: #777; }

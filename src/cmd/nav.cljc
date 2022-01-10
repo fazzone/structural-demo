@@ -10,12 +10,15 @@
   (move-selection-tx (:db/id (get-selected-form db))
                      eid))
 
-(defn parents-vec
+(defn parents-seq
   [e]
   (->> e
        (iterate (partial move/move :move/up))
-       (take-while some?)
-       (vec)))
+       (take-while some?)))
+
+(defn parents-vec
+  [e]
+  (vec (parents-seq e)))
 
 (defn hop-target
   [chain]

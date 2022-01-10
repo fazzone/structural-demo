@@ -1,10 +1,11 @@
 (ns embed
   (:require
+   [schema :as s]
    [rewrite-clj.parser :as p]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]
    [rewrite-clj.node.protocols :as np]
-   [schema :as s]
+   [clojure.string :as string]
    [datascript.core :as d]))
 
 (defn seq-tx
@@ -81,23 +82,25 @@
                              "Val" (n/string val)
                              "More" more)
                   (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-                  (cond
-                    (symbol? mta)
-                    (assoc (n->tx val) :tag {:symbol/value mta})
+                  (n->tx val)
+                  #_(cond
+                      (symbol? mta)
+                      (assoc (n->tx val) :tag {:symbol/value mta})
                     
-                    (map? mta)
-                    (merge (n->tx val) mta)
+                      (map? mta)
+                      (merge (n->tx val) mta)
                     
-                    (keyword? mta)
-                    (assoc (n->tx val) mta true)
+                      (keyword? mta)
+                      (assoc (n->tx val) mta true)
                     
-                    (string? mta)
-                    (assoc (n->tx val) :tag {:string/value mta})
-                    :else (do
-                            (println "What meat?" mta)
-                            (println "Type" (type mta))
-                            (println "N string" (n/string n))
-                            (throw (ex-info (str "What meta is this") {})))))
+                      (string? mta)
+                      (assoc (n->tx val) :tag {:string/value mta})
+                    
+                      :else (do
+                              (println "What meat?" mta)
+                              (println "Type" (type mta))
+                              (println "N string" (n/string n))
+                              (throw (ex-info (str "What meta is this") {})))))
        
 
        
@@ -142,7 +145,7 @@
                                           (assoc (->tx x) :coll/_contains id)))))))]
     (cond 
       (symbol? e)     {:symbol/value (str e)}
-      (keyword? e)    {:keyword/value e}
+      (keyword? e)    {:keyword/value (str e)}
       (string? e)     {:string/value e}
       (number? e)     {:number/value e}
       (boolean? e)    {:symbol/value (str e)}
@@ -242,7 +245,7 @@
             (n/children (p/parse-string-all s)))))
   #_(n->tx (p/parse-string-all s )))
 
-(defn- ->chain
+(defn ->chain
   [text]
   (let [txe (assoc (string->tx-all text)
                    :coll/type :chain)
@@ -251,7 +254,7 @@
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
 
 
-(defn- ->entity
+(defn ->entity
   [data]
   (let [txe (update (->tx data) :db/id #(or % "top"))
         r (d/with (deref (d/create-conn s/form-schema))
@@ -285,6 +288,10 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
+
+
 
 
 

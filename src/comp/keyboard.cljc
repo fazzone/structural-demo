@@ -77,8 +77,18 @@
    :slurp-right {:label [:span {:style {:color "tomato"}} "push)→"]}
    :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
    
+   :tear {:label ["-tear-"]
+          #_ #_:symbol
+          [:div {:style {:font-size   "130%"
+                         :margin-left "0.0ex"
+                         :margin-top  "-0.2ex"}}
+           "\u2702"]}
+   
    :hop-left  {:label "<-hop"}
    :hop-right {:label "hop->"}
+   
+   :find-next {:label "next"}
+   :undo {:label "undo"}
    
    :insert-left  {:label "ins<-"}
    :insert-right {:label "->ins"}

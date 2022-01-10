@@ -49,12 +49,18 @@
    "S-F" :flow-right-coll
    "u"   :undo
    
+   "n"   :find-next
+   "S-N" :find-first
+   
    "C-/" :undo
    "S-R" :reify-undo
    
    "S-_" :uneval
    ;; "e"   :save
-   "t" :tear
+   "t"   :tear
+   
+   "S-@" :new-deref
+   
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -110,7 +116,8 @@
                 (map e/->tx test-form-data-bar)
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                #_[(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
+                
+                [(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
                 
                 #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
                           :chain/filename "zz-embed.cljc")]
@@ -182,7 +189,9 @@
   [e bus p]
   [:div.form-card {:ref "top-level"}
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
-   [:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
+   
+   #_[:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
+   
    [:div.top-level-form.code-font
     (fcc e bus 0 p)]
    [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]])
@@ -244,7 +253,7 @@
     
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
-    #_(when-let [p (get proply (:db/id e))]
+    (when-let [p (get proply (:db/id e))]
         [:span.inline-tag-outer
          [:span.inline-tag-inner
           (str p)]])
@@ -260,11 +269,12 @@
 
 
 
-(defmethod display-coll :list [c b i s p] (delimited-coll "(" ")"  c b i s p))
-(defmethod display-coll :vec  [c b i s p] (delimited-coll "[" "]"  c b i s p))
-(defmethod display-coll :map  [c b i s p] (delimited-coll "{" "}"  c b i s p))
+(defmethod display-coll :list [c b i s p] (delimited-coll  "(" ")" c b i s p))
+(defmethod display-coll :vec  [c b i s p] (delimited-coll  "[" "]" c b i s p))
+(defmethod display-coll :map  [c b i s p] (delimited-coll  "{" "}" c b i s p))
 (defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
 (defmethod display-coll :fn   [c b i s p] (delimited-coll "#(" ")" c b i s p))
+(defmethod display-coll :tear [c b i s p] (delimited-coll  "«" "»" c b i s p))
 
 (defmethod display-coll :hidden  [c b i s p]
   [:div {:style {:width "800px"}}
@@ -437,9 +447,14 @@
   [e]
   (or (when-let [s (:symbol/value e)]
         (case s
-          ("defn" "let" "when" "and" "or" "if"
-           "when-not" "if-not" "def" "cond" "case") "m"
-          ("first") "s"
+          ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
+           "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
+           "if-let" "when-let" "recur" "try" "catch" "nil") "m"
+          ("first" "map" "filter" "apply" "reset!" "swap!"
+           "get" "assoc" "update" "cons" "conj" "seq" "next"
+           "prn" "println" "into" "set" "vector"
+           "take" "drop" "take-while" "dorp-while" "reduce"
+           "concat") "s"
           "v"))
       (when (:keyword/value e) "k")
       (when (:string/value e) "l")
@@ -450,12 +465,12 @@
   (or
    (some-> e :symbol/value str)
    (when-let [k (:keyword/value e)]
-     (if (string? k)
-       k
-       (let [kns (namespace k)]
-         (if-not kns
-           (str k)
-           (rum/fragment ":" [:span.kn kns] "/" (name k))))))
+     (let [is (string/index-of k "/")]
+         (if (> 0 is)
+           k
+           (rum/fragment
+            [:span.kn (subs k 0 is)]
+            (subs k is)))))
    (some-> e :string/value pr-str)
    (some-> e :number/value str)))
 
@@ -479,7 +494,12 @@
                           bus
                           (+ 2 indent-prop)
                           (when (:form/highlight e) "selected")
-                          proply))
+                          proply
+                          #_(if-not (:form/highlight e)
+                              proply
+                              (zipmap
+                               (map :db/id (next (mut/get-numeric-movement-vec e)))
+                               (range 2 9)))))
           (comment "Probably a retracted entity, do nothing"))
       (do-indent*
        indent-prop
@@ -608,6 +628,26 @@
          (for [i (range  breadcrumbs-max-numeric-label)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
+(defn search*
+  [db sa text]
+  ;; U+10FFFF
+  (d/index-range db sa text (str text "\udbff\udfff")))
+
+(defn stupid-symbol-search
+  [db sa text]
+  (println "Text" (count text) (pr-str text))
+  (when (< 1 (count text))
+    [:ul.search
+     (for [[v [[e] :as ds]] (->> (search* db sa text)
+                                 (group-by #(nth % 2)))]
+       [:li {:key e}
+        (count ds)
+        "x "
+        " - " e
+        (fcc (d/entity db e) core/blackhole 0 nil)
+       
+        #_" " #_(pr-str (into #{} (map first) ds))])]))
+
 (declare command-compose-feedback)
 (declare save-status)
 (rum/defc modeline-inner < dbrx/ereactive rum/reactive
@@ -617,15 +657,16 @@
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
    [:span.modeline-echo.modeline-size
     (let [{:keys [on at status file]} (rum/react save-status)]
-     (when (= on (:db/id sel))
-       (case status
-         :saving "Saving"
-         :ok (str file "@" at)
-         :error "Error"
-         "")))]
+      (when (= on (:db/id sel))
+        (case status
+          :saving "Saving"
+          :ok (str file "@" at)
+          :error "Error"
+          "")))]
    
    (when text
-      (pr-str text))
+     (stupid-symbol-search (d/entity-db sel) :keyword/value (str ":" text))
+     #_(pr-str text))
    
    [:span.modeline-content
     (if-not sel
@@ -658,7 +699,7 @@
   [db bus]
   (let [state (d/entity db ::state)]
     [:div.bar-container
-     (breadcrumbs-always db bus)
+     #_(breadcrumbs-always db bus)
      (fcc (:state/bar state) bus 0 nil)
      (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -759,11 +800,11 @@
                 (< h chain-height)
                 (or always (not (< vpos voff (+ h voff)
                                    (+ vpos chain-height)))))
-       (.scrollTo chain #js{:top (scroll-1d chain-height h vpos voff)}))
+       (.scrollTo chain #js{:top (int (scroll-1d chain-height h vpos voff))}))
      (when (and bar 
                 (or always (not (< hpos hoff (+ w hoff)
                                    (+ hpos bar-width)))))
-       (.scrollTo bar #js{:left (scroll-1d bar-width w hpos hoff)})))))
+       (.scrollTo bar #js{:left (int (scroll-1d bar-width w hpos hoff))})))))
 
 (defn ensure-selected-in-view! [] (scroll-to-selected! false))
 
@@ -1049,6 +1090,19 @@
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
+(letfn [(pubsub []
+          (let [subs (js/Set.)]
+            {:sub (fn [f]
+                    (.add subs f)
+                    (fn [] (.delete subs f)))
+             :pub (fn [m]
+                    (.forEach subs (fn [f] (f m))))}))]
+  (let [{:keys [pub sub]} (pubsub)
+        unsub (sub (fn [m] (println "Messg" m)))
+        _ (pub "Message")
+        _ (unsub)
+        _ (pub "M@")]))
+
 (defn  ^:dev/after-load init []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
@@ -1135,3 +1189,7 @@
 
 ;; keyword/value, symbol/value etc...
 ;; REALLY stupid compared to token/type because of multiple queries
+
+;; Derefs, syntax quotes, etc - give them seq/first but make them not collections?
+;; Have to change stuff to check seq/first before coll/type...
+;; But if we check coll/type don't we always check seq/first anyway so it doesn't matter?

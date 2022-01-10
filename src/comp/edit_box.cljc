@@ -36,6 +36,8 @@
                         
                         :else
                         [:edit/finish-and-edit-next-node text])
+    
+    "1" [:e1]
     nil))
 
 

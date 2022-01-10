@@ -13,8 +13,9 @@
 
 (defn select-form-tx
   [db eid]
-  (move-selection-tx (:db/id (get-selected-form db))
-                     eid))
+  (when eid
+   (move-selection-tx (:db/id (get-selected-form db))
+                      eid)))
 
 ;; second movement type is plan B in case we are asked to delete first/last of chain 
 (defn move-and-delete-tx
@@ -71,30 +72,73 @@
       (empty? front)        out
       (= limit (count out)) out
       :else                 (let [e (first front)]
-                              #_(when (:coll/type e)
-                                (println "Bfs" limit e (next front)))
                               (recur (cond-> out
                                        (:coll/type e) (conj e))
                                      (cond-> (subvec front 1)
                                        (:seq/next e)  (conj (:seq/next e))
                                        (:seq/first e) (conj (:seq/first e))))))))
 
-#_(defn select-1based-nth-breadthfirst-descendant
-  [sel n]
-  (let [rpa (el-bfs sel 8)]
-    (when (< 0 n (inc (count rpa)))
-      (move-selection-tx (:db/id sel)
-                         (:db/id (nth rpa (dec n)))))))
+#_(defn lazy-bfs
+  [top limit]
+  ((fn iter [i [e :as front]]
+     (when (and (some? e) (> limit i))
+       (cond->> (lazy-seq (iter (cond-> i (:coll/type e) inc)
+                                (cond-> (subvec front 1)
+                                  (:seq/next e)  (conj (:seq/next e))
+                                  (:seq/first e) (conj (:seq/first e)))))
+         (:coll/type e) (cons e)))))
+  0 top)
+
+(defn lazy-bfs
+  [top]
+  ((fn iter [[e :as front]]
+     (when (some? e)
+       (cond->> (lazy-seq (iter (cond-> (subvec front 1)
+                                  (:seq/next e)  (conj (:seq/next e))
+                                  (:seq/first e) (conj (:seq/first e)))))
+         (:coll/type e) (cons e))))
+   [top]))
+
+#_(defn no-double-colls
+  [nmv]
+  (loop [[x y :as xs] nmv
+         stacked? false
+         out []]
+    (if (nil? x)
+      out
+      (recur (next xs)
+             (= (:db/id y) (:db/id (:seq/first x)))
+             (cond-> out (not stacked?) (conj x))))))
+
+(defn no-double-colls
+  [nmv]
+  ((fn iter [[x y :as xs] firsts]
+     (when x
+       (let [fid (:db/id (:seq/first x))
+             add? (not (contains? firsts (:db/id x)))]
+         (cond->> (lazy-seq (iter (next xs) (conj firsts fid)))
+           add? (cons x)))))
+   nmv #{}))
+
+
+(comment
+  (run! prn
+        (map e/->form
+             (no-double-colls-lazy (lazy-bfs (e/->entity
+                                         '(defn bar [{:keys [a b]}]))))))
+
+  (map :db/id (lazy-bfs (e/->entity '[:a :b :c [[[:dd [:bv [:ok]]]]]])))
+  
+  )
+
+
 
 (defn get-numeric-movement-vec
   [sel]
-  (if (move/move :move/up sel)
-    (do
-      #_(println "Reverse parents")
-      (reverse (nav/parents-vec sel)))
-    (do
-      #_(println "El-bfs")
-      (el-bfs sel 8))))
+  (let [children (next (take 8 (no-double-colls (lazy-bfs sel))))]
+    (if (move/move :move/up sel)
+      (into [(peek (nav/parents-vec sel))] children)
+      (into [nil] children))))
 
 (defn numeric-movement
   [sel n]
@@ -242,42 +286,98 @@
     (concat (edit/form-wrap-tx sel :uneval)
             (when dst (move-selection-tx (:db/id sel) (:db/id dst))))))
 
-(defn tear-tx
-  ([sel]
-   (or (tear-tx sel :symbol/value)
-       (tear-tx sel :string/value)
-       (tear-tx sel :keyword/value)))
-  ([sel vt]
-   (when-let [ks (vt sel)]
-     (let [[head & more] (string/split ks #"[./\-]")]
-       (when more
-         (let [new-tail (assoc
-                         (e/seq-tx (for [e more]
-                                     {vt e :coll/_contains "newnode"}))
-                         :db/id "newtail")]
-           (into [new-tail
-                  [:db/add (:db/id sel) vt head]]
-                 (concat
-                  (edit/form-wrap-tx sel :list)
-                  [[:db/add "newnode" :seq/next (:db/id new-tail)]]
-                  (move-selection-tx (:db/id sel) "newnode")))))))))
 
+
+;; This is junk because of retracting the highlight properly
 (defn stitch*
   [sel vt e]
   (when-let [head (:seq/first e)]
-    (let [xs (map vt (e/seq->vec e))]
+    (let [xs (keep vt (tree-seq :coll/type e/seq->vec e)
+                   #_(e/seq->vec e))]
       (into [[:db/add (:db/id head) vt (string/join "-" xs)]]
             (concat (edit/form-raise-tx head)
                     (move-selection-tx (:db/id sel) (:db/id head)))))))
 
-;; T F S T
-(defn stitch-tx
-  [sel vt]
-  (or (stitch* sel vt sel)
-      (stitch* sel vt (edit/exactly-one (:coll/_contains sel)))))
+(defn restitch
+  [sel c]
+  (some->> (nav/parents-seq c)
+           (filter (comp #{:tear} :coll/type))
+           (first)
+           (stitch* sel :symbol/value)))
+
+(defn tear-str
+  [s]
+  (let [[head & more :as sp] (string/split s #"[./\-]")]
+    (when more sp)))
+
+(defn tear*
+  ([sel]
+   (or (tear* sel :symbol/value)
+       (tear* sel :string/value)
+       (tear* sel :keyword/value)))
+  ([sel vt]
+   (when-let [vs (vt sel)]
+     (let [[head & more] (string/split vs #"[./\-]")]
+       (into [[:db/add (:db/id sel) vt head]
+              (when more
+                [:db/add "newnode" :seq/next "newtail"])
+              (when more
+                (-> (for [e more]
+                      {vt e :coll/_contains "newnode"})
+                    (e/seq-tx)
+                    (assoc :db/id "newtail")))]
+            (concat
+             (edit/form-wrap-tx sel :tear)
+             (move-selection-tx (:db/id sel) "newnode")))))))
+(defn tear-tx
+  [sel]
+  (or (restitch sel sel)
+      (tear* sel)))
+
+
+
+(defn find-next*
+  [me ir]
+  (loop [[[e a v t] & more] ir]
+    (cond
+      (nil? e)            nil
+      (and more (= e me)) (first (first more))
+      :else (recur more))))
+
+(defn find-next-tx
+  ([sel]
+   (or (find-next-tx sel :symbol/value)
+       (find-next-tx sel :keyword/value)
+       (find-next-tx sel :string/value)))
+  ([sel vt]
+   (when-let [text (vt sel)]
+     (let [db  (d/entity-db sel)
+           ln  (str text "\udbff\udfff")
+           ir  (d/index-range db vt text ln)
+           fnf (find-next* (:db/id sel) ir)]
+      (select-form-tx db
+                      (or fnf
+                          (when (next ir)
+                            (first (first ir)))))))))
+
+(defn find-first-tx
+  ([sel]
+   (or (find-first-tx sel :symbol/value)
+       (find-first-tx sel :keyword/value)
+       (find-first-tx sel :string/value)))
+  ([sel vt]
+   (when-let [text (vt sel)]
+     (let [ln  (str text "\udbff\udfff")
+           ir  (d/index-range (d/entity-db sel) vt text ln)
+           dst (apply min (map first ir))]
+       (when (and dst (not= dst (:db/id sel)))
+         (move-selection-tx (:db/id sel) dst))))))
 
 (def dispatch-table
   {:select          nav/select-form-tx
+   :find-next (comp find-next-tx get-selected-form)
+   :find-first (comp find-first-tx get-selected-form)
+   
    :flow-right      (fn [db] (move/movement-tx db :move/flow))
    :flow-left       (fn [db] (move/movement-tx db :move/back-flow))
    :flow-right-coll (fn [db]
@@ -344,7 +444,11 @@
    :barf-right   (fn [db] (edit/barf-right-tx (get-selected-form db)))
    :new-list     (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {}))
    :new-vec      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :vec "" {}))
-   :new-chain    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :chain "" {}))
+   :new-deref    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :deref "" {}))
+   :new-quote    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
+   :new-syntax-quote    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
+   :new-unquote    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
+
    :new-bar      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :bar "" {}))
 
    :m1                    (fn [db] (numeric-movement (get-selected-form db) 0))
@@ -368,8 +472,9 @@
    :hoist                 (comp hoist-tx get-selected-form)
    :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
    :tear                  (comp tear-tx get-selected-form)
-   :stitch                (fn [db]
-                            (stitch-tx (get-selected-form db) :symbol/value))
-   })
+
+   
+   :e1 (fn [db]
+         (println "E one!" ))})
 
 
