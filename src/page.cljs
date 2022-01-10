@@ -53,8 +53,8 @@
    "S-R" :reify-undo
    
    "S-_" :uneval
-   "e"   :save
-   
+   ;; "e"   :save
+
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -84,7 +84,7 @@
    "S-P"       :barf-right
    "Tab"       :indent
    "S-Tab"     :dedent
-   ;; "e"         :eval-sci
+   "e"         :eval-sci
    "S-("       :new-list
    "["         :new-vec
    "S-C"       :new-chain
@@ -109,7 +109,7 @@
                           :chain/filename "output.clj")]
                 (map e/->tx test-form-data-bar)
                 
-                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 
                 #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
                           :chain/filename "zz-embed.cljc")]
