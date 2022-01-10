@@ -31,6 +31,22 @@
    []
    m))
 
+(defn seq->vec
+  ([e]
+   ;; #?(:cljs (js/performance.mark "svs"))
+   (let [a (seq->vec e [])]
+     ;; #?(:cljs (js/performance.measure "seq->vec" "svs"))
+     a))
+  ([e a]
+   (if-let [f (:seq/first e)]
+     (recur (:seq/next e) (conj a f))
+     a)))
+
+(comment
+ [cljs.core.async.macros :refer [go
+                                 go-loop]]
+ [macros :as m])
+
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]
@@ -50,13 +66,18 @@
                                                              (reset! isf 0))
                                                            false)
                                                        true)]
-                                           (let [i @isf]
+                                           (let [my-indent       @isf
+                                                 expected-indent (if @linebreak?
+                                                                   my-indent
+                                                                   1)
+                                                 delta           (- expected-indent my-indent)]
                                              (reset! isf 0)
-                                             (cond-> (n->tx x)
-                                               true        (assoc :coll/_contains id)
-                                               (< 1 i)     (assoc :form/indent i)
-                                               @linebreak? (assoc :form/linebreak (do (reset! linebreak? false)
-                                                                                      true))))))))))]
+                                             (println 'lb @linebreak? 'atleast i 'actually my-indent 'delta delta  (n/string x))
+                                             (cond-> (n->tx x (+ 2 my-indent))
+                                               true           (assoc :coll/_contains id)
+                                               (not= 0 delta) (assoc :form/indent delta)
+                                               @linebreak?    (assoc :form/linebreak (do (reset! linebreak? false)
+                                                                                                              true))))))))))]
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
@@ -86,25 +107,21 @@
                   #_(cond
                       (symbol? mta)
                       (assoc (n->tx val) :tag {:symbol/value mta})
-                    
+                      
                       (map? mta)
                       (merge (n->tx val) mta)
-                    
+                      
                       (keyword? mta)
                       (assoc (n->tx val) mta true)
-                    
+                      
                       (string? mta)
                       (assoc (n->tx val) :tag {:string/value mta})
-                    
+                      
                       :else (do
                               (println "What meat?" mta)
                               (println "Type" (type mta))
                               (println "N string" (n/string n))
                               (throw (ex-info (str "What meta is this") {})))))
-       
-
-       
-       ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
        :reader-macro
        (let [[rmt & body] (n/children n)]
@@ -117,7 +134,7 @@
        
        :fn               (coll-tx :fn (n/children n))
        :quote            (coll-tx :quote (n/children n))
-       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))
@@ -125,6 +142,54 @@
        :regex            {:regex/value (n/string n)}
        
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
+
+(declare ->form)
+;; start the collection at 0 expected indent
+;; -- open paren
+;; we expect that things inside will be nested 2 more than our current indent
+;; 
+(defn ->string
+  ([e] (->string e 0))
+  ([e i]
+   (letfn [(sep [{:as j :form/keys [linebreak indent]}]
+             (println "Sep" i indent j)
+             (str (when linebreak "\n")
+                  (let [ci (if-not indent
+                             0
+                             (+ i indent))]
+                    (when (< 0 ci)
+                      (apply str (repeat ci " "))))))]
+     (or (some-> (:symbol/value e) (str))
+         (some-> (:keyword/value e) str)
+         (some-> (:string/value e) pr-str)
+         (some-> (:number/value e) str)
+         (when-let [ct           (:coll/type e)]
+           (let [outer-indent (or (:form/indent e) 0)
+                 next-indent  outer-indent
+
+                 [x & xs] (seq->vec e)]
+             (str
+              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
+              (cond
+                (nil? x)  nil
+                (nil? xs) (str (sep x) (->string x next-indent))
+                :else     (loop [p        nil
+                                 [y & ys] xs
+                                 s        (str (sep x) (->string x next-indent))]
+                            (if (nil? y)
+                              s
+                              (let []
+                                (recur y ys (str s
+                                                 (case ct :chain "\n\n"
+                                                       (when (not (or (:form/linebreak y)
+                                                                      (:form/indent y)))
+                                                         " "))
+                                                 (sep y)
+                                                 (->string y next-indent)))))))
+              (case ct :list ")" :vec "]" (:set :map) "}" :fn ")" (:chain :uneval :quote :deref) nil))))))))
+
+
+
 
 
 
@@ -163,16 +228,7 @@
   [e]
   (merge (meta e) (->tx* e)))
 
-(defn seq->vec
-  ([e]
-   ;; #?(:cljs (js/performance.mark "svs"))
-   (let [a (seq->vec e [])]
-     ;; #?(:cljs (js/performance.measure "seq->vec" "svs"))
-     a))
-  ([e a]
-   (if-let [f (:seq/first e)]
-     (recur (:seq/next e) (conj a f))
-     a)))
+
 
 (defn seq->seq
   ([top]
@@ -200,42 +256,7 @@
 
 
 
-(defn ->string
-  ([e] (->string e 0))
-  ([e i]
-   (letfn [(sep [{:form/keys [linebreak indent]}]
-             (str (when linebreak "\n")
-                  (let [ci (or indent 0)]
-                    (when (< 0 ci)
-                      (apply str (repeat ci " "))))))]
-     (or (some-> (:symbol/value e) str)
-         (some-> (:keyword/value e) str)
-         (some-> (:string/value e) pr-str)
-         (some-> (:number/value e) str)
-         (when-let [ct (:coll/type e)]
-           (let [[x & xs] (seq->vec e)]
-             (str
-              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
-              (cond
-                (nil? x) nil
-                
-                (nil? xs) (str (sep x) (->string x (+ 2 i)))
-                
-                :else
-                (loop [p nil
-                       [y & ys] xs
-                       s (str (sep x) (->string x (+ 2 i)))]
-                  (if (nil? y)
-                    s
-                    (let []
-                      (recur y ys (str s
-                                       (case ct :chain "\n\n"
-                                             (when (not (or (:form/linebreak y)
-                                                            (:form/indent y)))
-                                               " "))
-                                       (sep y)
-                                       (->string y (+ 2 i))))))))
-              (case ct :list ")" :vec "]" (:set :map) "}" :fn  ")" (:chain :uneval :quote :deref) nil))))))))
+
 
 
 
@@ -300,3 +321,17 @@
 
 
 
+;; (:require-macros
+;;  [cljs.core.async.macros :refer [go
+;;                                  go-loop]]
+;;  [macros :as m])
+
+(println
+ (->string
+  (->chain
+   "(defn get-selected-form
+  [db]
+  (d/entity db [:form/highlight true]))"
+   
+
+   )))
