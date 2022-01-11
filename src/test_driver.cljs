@@ -22,9 +22,8 @@
 (defonce refs (atom {}))
 
 (defn main []
-  (js/console.log "Ok(")
-  (.then (.launch pt #js {:headless false
-                          :defaultViewport #js {:width 1280 :height 1024}})
+  (.then (.launch pt #js {:headless true
+                          :defaultViewport #js {:width 3840 :height 2160}})
          (fn [^js browser]
            (swap! refs assoc :browser browser)
            (.then (.newPage browser)
@@ -33,4 +32,8 @@
                     (.then (.goto page "http://localhost:8087")
                            (fn [e]
                              (swap! refs :thisreturn e)
-                             (js/console.log "Finisherer"))))))))
+                             (js/console.log "Finisherer")
+                             (.then (.screenshot page #js {:path "example.png"})
+                                    (fn [s]
+                                      (.then (.close browser)
+                                             (fn [c] (println "Closed"))))))))))))

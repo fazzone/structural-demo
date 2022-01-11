@@ -1,6 +1,8 @@
 {:source-paths ["src"]
  :dependencies []
  :dev-http {8087 "srv"}
+ :nrepl false
+ 
  ;; :js-options {:js-package-dirs ["node_modules"]}
  :builds {:br {:target :browser
                :output-dir "srv/js"

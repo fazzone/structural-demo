@@ -25,6 +25,11 @@ jobs:
           npm ci
       - name: Clj
         shell: bash
-        run: |
-          clojure
+        run: "clojure -X user/release-cljs-and-exit && node -i srv/td/test_driver.js"
+      - name: upload screenshot
+        uses: actions/upload-artifact@v2
+        with:
+          name: my-artifact
+          path: example.png
+
           
