@@ -5,8 +5,23 @@
             [clojure.java.io :as io]))
 
 (def shadow-config (edn/read-string (slurp "shadow-cljs.edn")))
-
 (def ptr-script (-> shadow-config :builds :ptr :output-to))
+
+
+(def npm-ci (p/process ["npm" "ci"]))
+
+(binding [*in* (-> npm-ci :out io/reader)]
+  (loop []
+    (when-let [line (read-line)]
+      (println "[npm]  " line)
+      (recur))))
+
+(when-not (zero? (:exit @npm-ci))
+  (println "!!! Npm failed")
+  (println (slurp (:err npm-ci)))
+  (println "!!! Npm failed")
+  (System/exit 1))
+
 
 (defn io-prepl []
   (deps/clojure 
@@ -33,12 +48,12 @@
     (when-let [line (read-line)]
       (if (not= "{" (subs line 0 1))
         (do
-          (println "[clj] " line)
+          (println "[clj]  " line)
           (recur))
         (let [v (edn/read-string line)]
           (case (:tag v)
             :ret (:val v)
-            :out (do (print "[clj] " (:val v))
+            :out (do (print "[clj]  " (:val v))
                      (recur))
             (do (prn 'clj-error v)
                 (recur))))))))
