@@ -43,40 +43,45 @@
   #_(setup-server)
   (js/console.log "asdf"))
 
+(comment
+  (str "file://" (js/process.cwd) "/srv/index.html"
+       (str "?"
+            (binding [*print-meta* true]
+              (-> test-params
+                  (pr-str)
+                  (js/Buffer.from "utf-8")
+                  (.toString "base64"))))))
+
 (defn main []
   (println "Start main")
   #_(go)
   (.then (.launch pt #js {:headless true
-                            :defaultViewport #js {:width 1280 :height 1024}})
-           (fn [^js browser]
-             (swap! refs assoc :browser browser)
-             (.then (.newPage browser)
-                    (fn [^js page]
-                      (swap! refs assoc :page page)
-                      (.then (.evaluate page (fn [ps] (set! js/window.mytestparams ps))
-                                        (clj->js
-                                         {:Does :This
-                                          :Work [1 2 3 4]}))
-                             
-                             (fn [qqq]
-                               (.on page "console" (fn [^ js e] (js/console.log "[page]" (.text e))))
-                               (.then (.goto page
-                                             #_(str "file://" (js/process.cwd) "/srv/index.html"
-                                                    (str "?"
-                                                         (binding [*print-meta* true]
-                                                           (-> test-params
-                                                               (pr-str)
-                                                               (js/Buffer.from "utf-8")
-                                                               (.toString "base64")))))
-                                             "http://localhost:8087")
-                                      (fn [e]
-                                        (swap! refs :thisreturn e)
-                                        (js/console.log "Finisherer")
-                                        (let [op  "artifact/screenshot/example.png"]
-                                         (.then (.screenshot page #js {:path op :fullPage true})
-                                                (fn [s]
-                                                  (println "Wrote " op)
-                                                  (.then (.close browser)
-                                                         (fn [c]
-                                                           (println "Closed browser ")
-                                                           (js/process.exit 0)))))))))))))))
+                          :defaultViewport #js {:width 1280 :height 1024}})
+         (fn [^js browser]
+           (swap! refs assoc :browser browser)
+           (.then (.newPage browser)
+                  (fn [^js page]
+                    (swap! refs assoc :page page)
+                    (.then (.evaluate page (fn [ps] (set! js/window.mytestparams ps))
+                                      (clj->js
+                                       {:Does :This
+                                        :Work [1 2 3 4]}))
+                           (fn [qqq]
+                             (.on page "console" (fn [^ js e] (js/console.log "[page]" (.text e))))
+                             (-> (.start (.-tracing page)
+                                         #js {:path "artifact/screenshot/profile.json"})
+                                 (.then (fn [_]
+                                          (-> (.goto page "http://localhost:8087")
+                                              (.then (fn [e]
+                                                       (-> (.stop (.-tracing page))
+                                                           (.then (fn [_]
+                                                                    (swap! refs :thisreturn e)
+                                                                    (js/console.log "Finisherer")
+                                                                    (let [op  "artifact/screenshot/example.png"]
+                                                                      (-> (.screenshot page #js {:path op :fullPage true})
+                                                                          (.then (fn [s]
+                                                                                   (println "Wrote " op)
+                                                                                   (-> (.close browser)
+                                                                                       (.then (fn [c]
+                                                                                                (println "Closed browser ")
+                                                                                                (js/process.exit 0))))))))))))))))))))))))

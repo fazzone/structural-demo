@@ -32,36 +32,36 @@
    {:in nil
     :out nil}))
 
-(def the-prepl (io-prepl))
+(when true
 
-(def input-writer (io/writer (:in the-prepl)))
-(def output-reader (-> the-prepl :out io/reader))
+  (def the-prepl (io-prepl))
+  (def input-writer (io/writer (:in the-prepl)))
+  (def output-reader (-> the-prepl :out io/reader))
 
+  (binding [*out* input-writer]
+    (prn '(user/release-cljs!)))
 
-
-(binding [*out* input-writer]
-  (prn '(user/release-cljs!)))
-
-;; wait for shadow to finish
-(binding [*in* output-reader]
-  (loop []
-    (when-let [line (read-line)]
-      (if (not= "{" (subs line 0 1))
-        (do
-          (println "[clj]  " line)
-          (recur))
-        (let [v (edn/read-string line)]
-          (case (:tag v)
-            :ret (:val v)
-            :out (do (print "[clj]  " (:val v))
-                     (recur))
-            (do (prn 'clj-error v)
-                (recur))))))))
+  ;; wait for shadow to finish
+  (binding [*in* output-reader]
+    (loop []
+      (when-let [line (read-line)]
+        (if (not= "{" (subs line 0 1))
+          (do
+            (println "[clj]  " line)
+            (recur))
+          (let [v (edn/read-string line)]
+            (case (:tag v)
+              :ret (:val v)
+              :out (do (print "[clj]  " (:val v))
+                       (recur))
+              (do (prn 'clj-error v)
+                  (recur)))))))))
 
 (doseq [od ["artifact/screenshot/whatever"]]
  (io/make-parents (io/file od)))
 
-(def puppeteer (p/process ["node" ptr-script]))
+(def puppeteer (p/process ["node" ptr-script]
+                          {:err :inherit}))
 
 (binding [*in* (-> puppeteer :out io/reader)]
   (loop []
