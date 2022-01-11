@@ -1,10 +1,7 @@
 (ns test-driver
   (:require
    ["puppeteer" :as pt]
-   
-   )
-  
-  )
+   ["process" :as process]))
 
 
 ;; const puppeteer = require('puppeteer');
@@ -23,17 +20,20 @@
 
 (defn main []
   (.then (.launch pt #js {:headless true
-                          :defaultViewport #js {:width 3840 :height 2160}})
+                          :defaultViewport #js {:width 1280 :height 1024}})
          (fn [^js browser]
            (swap! refs assoc :browser browser)
            (.then (.newPage browser)
                   (fn [^js page]
                     (swap! refs assoc :page page)
-                    (.then (.goto page "http://localhost:8087")
+                    (.then (.goto page
+                                  (str "file://" (js/process.cwd) "/srv/index.html")
+                                  #_"http://localhost:8087")
                            (fn [e]
                              (swap! refs :thisreturn e)
                              (js/console.log "Finisherer")
-                             (.then (.screenshot page #js {:path "example.png"})
+                             (.then (.screenshot page #js {:path "example.png"
+                                                           :fullPage true})
                                     (fn [s]
                                       (.then (.close browser)
                                              (fn [c] (println "Closed"))))))))))))
