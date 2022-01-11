@@ -223,6 +223,9 @@ textarea.edit-box {
 
 .bar-container {
     height: 100%;
+    
+    display: flex;
+    flex-direction: column;
 }
 .bar {
     height: 100%;
@@ -484,3 +487,14 @@ span.key-compose-echo {
 }
 .alternate-reality .edit-box { background-color: #777; }
 .alternate-reality .edit-box:not(:focus) { background-color: #777; }
+
+
+
+div.bottom-text {
+}
+
+ul.search {
+    margin: 0;
+    padding: 0;
+    min-height: 24ex;
+} 

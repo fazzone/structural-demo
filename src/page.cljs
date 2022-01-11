@@ -396,10 +396,11 @@
     :ref "chain"
     :id (str "c" (:db/id chain))
     :class classes}
-   #_(str "Chain" (:db/id chain))
+   
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus proply)
-         (rum/with-key (:db/id f))))])
+         (rum/with-key (:db/id f))))
+   #_(str "End Chain" (:db/id chain))])
 
 (defmethod display-coll :bar [bar bus i c p]
   [:div.bar.hide-scrollbar
@@ -501,12 +502,12 @@
                           bus
                           (+ 2 indent-prop)
                           (when (:form/highlight e) "selected")
-                          proply
-                          #_(if-not (:form/highlight e)
-                              proply
-                              (zipmap
-                               (map :db/id (next (mut/get-numeric-movement-vec e)))
-                               (range 2 9)))))
+                          #_proply
+                          (if-not (:form/highlight e)
+                            proply
+                            (zipmap
+                             (map :db/id (next (mut/get-numeric-movement-vec e)))
+                             (range 2 9)))))
           (comment "Probably a retracted entity, do nothing"))
       (do-indent*
        indent-prop
@@ -643,17 +644,19 @@
 (defn stupid-symbol-search
   [db sa text]
   (println "Text" (count text) (pr-str text))
-  (when (< 1 (count text))
-    [:ul.search
+  [:ul.search
+   ( do ;; when (< 1 (count text))
      (for [[v [[e] :as ds]] (->> (search* db sa text)
-                                 (group-by #(nth % 2)))]
+                                 (group-by #(nth % 2))
+                                 (sort-by (comp -count second))
+                                 (take 8))]
        [:li {:key e}
         (count ds)
         "x "
         " - " e
         (fcc (d/entity db e) core/blackhole 0 nil)
-       
-        #_" " #_(pr-str (into #{} (map first) ds))])]))
+      
+        #_" " #_(pr-str (into #{} (map first) ds))]))])
 
 (declare command-compose-feedback)
 (declare save-status)
@@ -672,7 +675,7 @@
           "")))]
    
    (when text
-     (stupid-symbol-search (d/entity-db sel) :keyword/value (str ":" text))
+     (stupid-symbol-search (d/entity-db sel) :symbol/value text)
      #_(pr-str text))
    
    [:span.modeline-content
@@ -699,7 +702,7 @@
            bus
            (when (:form/editing sel)
              (rum/react eb/editbox-ednparse-state)))
-          (rum/portal nn)))))
+          #_(rum/portal nn)))))
 
 (declare setup-app)
 (rum/defc root-component
@@ -708,7 +711,9 @@
     [:div.bar-container
      #_(breadcrumbs-always db bus)
      (fcc (:state/bar state) bus 0 nil)
-     (modeline-portal db bus)
+     
+     [:div.bottom-text
+      (modeline-portal db bus)]
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
