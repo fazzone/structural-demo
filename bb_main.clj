@@ -19,8 +19,10 @@
 
 (def the-prepl (io-prepl))
 
-(def input-writer (io/writer (:in the-prepl)))        
+(def input-writer (io/writer (:in the-prepl)))
 (def output-reader (-> the-prepl :out io/reader))
+
+
 
 (binding [*out* input-writer]
   (prn '(user/release-cljs!)))
@@ -38,7 +40,8 @@
             :ret (:val v)
             :out (do (print "[clj] " (:val v))
                      (recur))
-            :else (recur)))))))
+            (do (prn 'clj-error v)
+                (recur))))))))
 
 (def puppeteer (p/process ["node" ptr-script]))
 
