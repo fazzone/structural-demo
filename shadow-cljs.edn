@@ -10,4 +10,9 @@
                                             :pseudo-names true}}}
           :elec {:target :node-script
                  :output-to "srv/electron-main.js"
-                 :main electron-main/main}}}
+                 :main electron-main/main}
+          :ptr {:target :node-script
+                :output-to "srv/td/test-driver.js"
+                :main test-driver/main
+                }
+          }}
