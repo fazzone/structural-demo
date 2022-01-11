@@ -15,8 +15,7 @@
     "-e" "@user/shadow-server"
     "-e" "(s/io-prepl)"]
    {:in nil
-    :out nil
-    :err nil}))
+    :out nil}))
 
 (def the-prepl (io-prepl))
 
