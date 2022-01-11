@@ -43,3 +43,12 @@
   (shadow/release :elec)
   (shadow/release :ptr)
   (System/exit 0))
+
+(defn release-cljs!
+  []
+  (future-cancel shadow-watch)
+  @shadow-server
+  (shadow/release :br)
+  (shadow/release :elec)
+  (shadow/release :ptr)
+  :ok)
