@@ -16,7 +16,7 @@ jobs:
         with:
           cli: 1.10.3.855
       - name: Install node
-      - uses: actions/setup-node@v2
+        uses: actions/setup-node@v2
         with:
           node-version: '16'
       - name: Npm ci
