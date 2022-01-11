@@ -26,5 +26,5 @@ jobs:
       - name: Clj
         shell: bash
         run: |
-          clj
+          clojure
           
