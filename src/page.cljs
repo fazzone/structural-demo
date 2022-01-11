@@ -484,34 +484,36 @@
 (rum/defc fcc < dbrx/ereactive
   [e bus indent-prop proply]
   #_(when proply (prn "FccProply" (:db/id e) proply))
-  (-> (or (when (:form/editing e)
-            (eb/edit-box e bus))
-          (when-let [tc (token-class e)]
-            [:span (cond-> {:key (:db/id e)
-                            :class (if (:form/highlight e)
-                                     (str tc " tk selected")
-                                     (str tc " tk"))
-                            :on-click (fn [ev]
-                                        (.stopPropagation ev)
-                                        (core/send! bus [:select (:db/id e)]))}
-                     (:form/highlight e) (assoc :ref "selected"))
-             (token-text e)])
-          (when (:coll/type e)
-            (display-coll e
-                          bus
-                          (+ 2 indent-prop)
-                          (when (:form/highlight e) "selected")
-                          proply
-                          #_(if-not (:form/highlight e)
+  (cond-> (or (when (:form/editing e)
+                (eb/edit-box e bus))
+              (when-let [tc (token-class e)]
+                [:span (cond-> {:key (:db/id e)
+                                :class (if (:form/highlight e)
+                                         (str tc " tk selected")
+                                         (str tc " tk"))
+                                :on-click (fn [ev]
+                                            (.stopPropagation ev)
+                                            (core/send! bus [:select (:db/id e)]))}
+                         (:form/highlight e) (assoc :ref "selected"))
+                 (token-text e)])
+              (when (:coll/type e)
+                (display-coll e
+                              bus
+                              (+ 2 indent-prop)
+                              (when (:form/highlight e) "selected")
                               proply
-                              (zipmap
-                               (map :db/id (next (mut/get-numeric-movement-vec e)))
-                               (range 2 9)))))
-          (comment "Probably a retracted entity, do nothing"))
-      (do-indent*
-       indent-prop
-       (:form/indent e)
-       (:form/linebreak e))))
+                              #_(if-not (:form/highlight e)
+                                  proply
+                                  (zipmap
+                                   (map :db/id (next (mut/get-numeric-movement-vec e)))
+                                   (range 2 9)))))
+              (comment "Probably a retracted entity, do nothing"))
+    
+    (not (= :noindent proply))
+    (do-indent*
+     indent-prop
+     (:form/indent e)
+     (:form/linebreak e))))
 
 #_(register-sub ::extract-to-new-top-level
               (->mutation
@@ -638,22 +640,27 @@
 (defn search*
   [db sa text]
   ;; U+10FFFF
-  (d/index-range db sa text (str text "\udbff\udfff")))
+  (let [ir (d/index-range db sa text (str text "\udbff\udfff"))]
+    (run! prn ir)
+    ir
+    ))
 
 (defn stupid-symbol-search
   [db sa text]
   (println "Text" (count text) (pr-str text))
-  (when (< 1 (count text))
-    [:ul.search
+  (when (pos? (count text))
+    [:div.search
      (for [[v [[e] :as ds]] (->> (search* db sa text)
-                                 (group-by #(nth % 2)))]
-       [:li {:key e}
-        (count ds)
-        "x "
-        " - " e
-        (fcc (d/entity db e) core/blackhole 0 nil)
-       
-        #_" " #_(pr-str (into #{} (map first) ds))])]))
+                                 (group-by #(nth % 2))
+                                 (sort-by (comp - count second))
+                                 (take 5))
+           k (range 3)]
+       (case k
+         0 (let [ent (d/entity db e)]
+             [:span.tk {:key e :class (token-class ent)}
+              (token-text ent)])
+         1 [:span {:key (str "sr" e)} "x" (count ds)]
+         2 [:span {:key (str "id" e)} (pr-str (take 5 (map first ds ))) ]))]))
 
 (declare command-compose-feedback)
 (declare save-status)
@@ -662,7 +669,10 @@
   [:span {:class (str "modeline modeline-size code-font"
                       (when text " editing")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
-   [:span.modeline-echo.modeline-size
+   [:span.modeline-echo
+    {:class (if text
+              "modeline-search"
+              "modeline-fixed")}
     (let [{:keys [on at status file]} (rum/react save-status)]
       (when (= on (:db/id sel))
         (case status
@@ -671,22 +681,20 @@
           :error "Error"
           "")))]
    
-   (when text
-     (stupid-symbol-search (d/entity-db sel) :keyword/value (str ":" text))
-     #_(pr-str text))
-   
-   [:span.modeline-content
-    (if-not sel
-      "(no selection)"
-      (str "#" (:db/id sel)
-           " "
-           #_(pr-str
-              (apply max
-                     (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
-                           :when (not= :form/highlight a)]
-                       t)))
-           (:coll/type sel)))
-    (command-compose-feedback)]])
+   (if text
+     (stupid-symbol-search (d/entity-db sel) :symbol/value text)
+     [:span.modeline-content.modeline-size.modeline-fixed
+      (if-not sel
+        "(no selection)"
+        (str "#" (:db/id sel)
+             " "
+             #_(pr-str
+                (apply max
+                       (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
+                             :when (not= :form/highlight a)]
+                         t)))
+             (:coll/type sel)))
+      (command-compose-feedback)])])
 
 (rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]
@@ -779,7 +787,8 @@
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
-    best
+    (when-not (< -3 (- pos best) 3)
+     (int best))
     #_(if (< -1 (- pos best) 1)
         other
         best)))
@@ -838,9 +847,7 @@
          scivar-ingest (sci/new-var "ingest")
          s  (sci/init {:namespaces {'d {'datoms d/datoms
                                         'touch  d/touch}}
-                       :bindings   {'sel    (reify IDeref
-                                              (-deref [_] (get-selected-form @conn)))
-                                    'jcl    (fn [z] (js/console.log z))
+                       :bindings   {'jcl    (fn [z] (js/console.log z))
                                     'datafy datafy/datafy
                                     'nav    datafy/nav
                                     'fetch  (fn [z f]
@@ -848,7 +855,8 @@
                                     'then (fn [p f] (.then (js/Promise.resolve p) f))
                                     ;; 'stories dfg/stories
                                     'ingest scivar-ingest
-                                    'zsel scivar-sel}})
+                                    'sel scivar-sel
+                                    '->seq e/seq->seq}})
          ]
      (doseq [[m f] mut/dispatch-table]
        (core/register-simple! a m f))
@@ -1237,3 +1245,7 @@
 ;; Derefs, syntax quotes, etc - give them seq/first but make them not collections?
 ;; Have to change stuff to check seq/first before coll/type...
 ;; But if we check coll/type don't we always check seq/first anyway so it doesn't matter?
+
+;; Insert within chain should automatically give ()s
+
+;; Fix scrolling
