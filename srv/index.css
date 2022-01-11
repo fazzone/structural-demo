@@ -488,6 +488,12 @@ span.key-compose-echo {
 .alternate-reality .edit-box:not(:focus) { background-color: #777; }
 
 .search {
-    display: grid;
-    grid-template-columns: 1fr 8ch 1fr;
+    /* display: grid; */
+    /* grid-template-columns: 1fr 8ch 1fr; */
+}
+
+.search li {
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
 }

@@ -115,13 +115,10 @@
   [sel inserter]
   (let [new-node {:db/id "newnode"
                   :form/editing true
-                  :form/edit-initial ""}]
-     (into [new-node]
-           (concat (inserter sel new-node)
-                   (move-selection-tx (:db/id sel) "newnode")))))
-
-(defn insert-editing-before [sel] (insert-editing* sel insert-before-tx))
-(defn insert-editing-after  [sel] (insert-editing* sel insert-after-tx))
+                  :form/edit-initial ""}] 
+    (into [new-node]
+          (concat (inserter sel new-node)
+                  (move-selection-tx (:db/id sel) "newnode")))))
 
 
 
@@ -207,8 +204,8 @@
   [[:db/add (:db/id e) :form/editing true]])
 
 
-(defn edit-new-wrapped-tx
-  [sel ct init opts]
+(defn edit-new-wrapped*
+  [inserter sel ct init opts]
   (let [new-node (merge opts
                         {:db/id "newnode"
                          :coll/type ct
@@ -218,8 +215,12 @@
                                      :form/edit-initial (or init  "")
                                      :form/editing true}})]
     (into [new-node]
-          (concat (insert-after-tx sel new-node)
+          (concat (inserter sel new-node)
                   (move-selection-tx (:db/id sel) "inner")))))
+
+(defn edit-new-wrapped-tx
+  [sel ct init opts]
+  (edit-new-wrapped* insert-after-tx sel ct init opts))
 
 (defn move-last*
   [e]
@@ -291,3 +292,20 @@
          [:db/retract (:db/id penult) :seq/next (:db/id last-cons)])
        (if next
          [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))
+
+
+
+
+
+
+(defn insert-editing-before [sel]
+  (let [parent (exactly-one (:coll/_contains sel))]
+    (if (= :chain (:coll/type parent))
+      (edit-new-wrapped* insert-before-tx sel :list "" nil)
+      (insert-editing* sel insert-before-tx))))
+
+(defn insert-editing-after [sel]
+  (let [parent (exactly-one (:coll/_contains sel))]
+       (if (= :chain (:coll/type parent))
+         (edit-new-wrapped* insert-after-tx sel :list "" nil)
+         (insert-editing* sel insert-after-tx))))

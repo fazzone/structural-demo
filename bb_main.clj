@@ -2,10 +2,9 @@
   (:require [babashka.deps :as deps]
             [babashka.process :as p]
             [clojure.string :as string]
+            [babashka.fs :as fs]
             [clojure.edn :as edn]
             [clojure.java.io :as io]))
-
-(println "What")
 
 (def shadow-config (edn/read-string (slurp "shadow-cljs.edn")))
 (def ptr-script (-> shadow-config :builds :ptr :output-to))
@@ -18,17 +17,18 @@
      "PUPPETEER_SKIP_DOWNLOAD" "1"}))
 
 (defn npm-install []
-  (let [npm-ci (p/process ["npm" "ci"] {:extra-env puppeteer-env})]
-    (binding [*in* (-> npm-ci :out io/reader)]
-      (loop []
-        (when-let [line (read-line)]
-          (println "[npm]  " line)
-          (recur))))
-    (when-not (zero? (:exit @npm-ci))
-      (println "!!! Npm failed")
-      (println (slurp (:err npm-ci)))
-      (println "!!! Npm failed")
-      (System/exit 1))))
+  (when-not (fs/exists? "node_modules")
+   (let [npm-ci (p/process ["npm" "ci"] {:extra-env puppeteer-env})]
+     (binding [*in* (-> npm-ci :out io/reader)]
+       (loop []
+         (when-let [line (read-line)]
+           (println "[npm]  " line)
+           (recur))))
+     (when-not (zero? (:exit @npm-ci))
+       (println "!!! Npm failed")
+       (println (slurp (:err npm-ci)))
+       (println "!!! Npm failed")
+       (System/exit 1)))))
 
 (defn start-interactive
   []
@@ -84,8 +84,17 @@
     (let [exit (:exit @puppeteer)]
       (println "OK"))))
 
+(defn install-electron
+  []
+  (when-not (fs/exists? "node_modules/electron")
+    @(p/process ["npm" "i" "electron"] {:out :inherit})))
+
 (defn run-electron
   []
+  (install-electron)
+  (compile-and-host-cljs)
   (p/process
    [(string/trim (slurp (:out (p/process ["node" "-e" "console.log(require('electron'))"]))))
     electron-main]))
+
+#_(run-electron)

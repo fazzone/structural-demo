@@ -682,7 +682,8 @@
           "")))]
    
    (if text
-     (stupid-symbol-search (d/entity-db sel) :symbol/value text)
+     #_(stupid-symbol-search (d/entity-db sel) :symbol/value text)
+     (stupid-symbol-search sel :symbol/value text)
      [:span.modeline-content.modeline-size.modeline-fixed
       (if-not sel
         "(no selection)"
@@ -1249,3 +1250,8 @@
 ;; Insert within chain should automatically give ()s
 
 ;; Fix scrolling
+
+;; If you want to re-use the exact same db state for undos and inverse mutations:
+;; -- You need to increment max-tx and use that as a unique identifier for a state
+;; -- You cannot store historical tx-reports because they might be backwards
+;; --
