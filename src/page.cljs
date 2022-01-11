@@ -25,7 +25,7 @@
    [cmd.edit :as edit]
    [cmd.mut :as mut]
    [cmd.invar :as invar]
-   [df.github :as dfg]
+   #_[df.github :as dfg]
    
    [core :as core
     :refer [get-selected-form
@@ -851,7 +851,7 @@
                                     'fetch  (fn [z f]
                                               (-> z (js/fetch) (.then f)))
                                     'then (fn [p f] (.then (js/Promise.resolve p) f))
-                                    'stories dfg/stories
+                                    ;; 'stories dfg/stories
                                     'ingest scivar-ingest
                                     'zsel scivar-sel}})
          ]
