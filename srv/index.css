@@ -148,7 +148,7 @@ span.form-title {
 .d  + .tk       { border-left: 0; }
 .c  + .edit-box { margin-left: 1ch; }
 .c  + .c        { margin-left: 1ch; }
-.c.pf + .c      { margin-left: 0; }
+/* .c.pf + .c      { margin-left: 0; } */
 .c.pf + .c.pf   { margin-left: 1ch; }
 .d  + .edit-box { border-width: 0; }
 /* .edit-box       { border-width: 0 1ch 0 1ch; } */
@@ -290,7 +290,9 @@ div.bp {
 
 
 .indent-chars { white-space: pre;
-                background-color: transparent; }
+                background-color: transparent;}
+.indent-chars.outer { background-color: cadetblue; }
+
 /* .indent-chars.nl { background-color: #000; } */
 .c.dl.selected > .indent-chars.nl {
     /* background-color: #000; */
