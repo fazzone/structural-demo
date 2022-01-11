@@ -345,12 +345,13 @@
    (when-let [text (vt sel)]
      (let [db  (d/entity-db sel)
            ln  (str text "\udbff\udfff")
-           ir  (d/index-range db vt text ln)
+           ir  (filter (fn [[e a v t]] (= v text)) (d/index-range db vt text ln))
            fnf (find-next* (:db/id sel) ir)]
-      (select-form-tx db
-                      (or fnf
-                          (when (next ir)
-                            (first (first ir)))))))))
+
+       (select-form-tx db
+                       (or fnf
+                           (when (next ir)
+                             (first (first ir)))))))))
 
 (defn find-first-tx
   ([sel]
