@@ -72,10 +72,11 @@
                                       (fn [e]
                                         (swap! refs :thisreturn e)
                                         (js/console.log "Finisherer")
-                                        (.then (.screenshot page #js {:path "artifact/screenshot/example.png"
-                                                                      :fullPage true})
-                                               (fn [s]
-                                                 (.then (.close browser)
-                                                        (fn [c]
-                                                          (println "Closed")
-                                                          (js/process.exit 0))))))))))))))
+                                        (let [op  "artifact/screenshot/example.png"]
+                                         (.then (.screenshot page #js {:path op :fullPage true})
+                                                (fn [s]
+                                                  (println "Wrote " op)
+                                                  (.then (.close browser)
+                                                         (fn [c]
+                                                           (println "Closed browser ")
+                                                           (js/process.exit 0)))))))))))))))
