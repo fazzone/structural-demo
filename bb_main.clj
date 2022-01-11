@@ -58,6 +58,9 @@
             (do (prn 'clj-error v)
                 (recur))))))))
 
+(doseq [od ["artifact/screenshot"]]
+ (io/make-parents (io/file od)))
+
 (def puppeteer (p/process ["node" ptr-script]))
 
 (binding [*in* (-> puppeteer :out io/reader)]
