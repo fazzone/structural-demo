@@ -19,26 +19,11 @@ jobs:
           tar -xvzf bb.tar.gz
           chmod +x bb
           ./bb bb_main.clj
-      # - name: Install clojure tools
-      #   uses: DeLaGuardo/setup-clojure@3.7
-      #   with:
-      #     cli: 1.10.3.855
-      # - name: Install node
-      #   uses: actions/setup-node@v2
-      #   with:
-      #     node-version: '16'
-      # - name: Npm ci
-      #   shell: bash
-      #   run: |
-      #     npm ci
-      # - name: Clj
-      #   shell: bash
-      #   run: "clojure -X user/release-cljs-and-exit && node -i srv/td/test-driver.js"
-      # - name: upload screenshot
-      #   uses: actions/upload-artifact@v2
-      #   with:
-      #     name: my-artifact
-      #     path: example.png
+      - name: upload screenshot
+        uses: actions/upload-artifact@v2
+        with:
+          name: screenshot
+          path: artifact/screenshot
 
 
           
