@@ -9,12 +9,14 @@
 (def ptr-script (-> shadow-config :builds :ptr :output-to))
 
 (defn io-prepl []
-  (p/process 
-   ["clojure" "-M"
+  (deps/clojure 
+   ["-M"
     "-e" "(require '[clojure.core.server :as s])"
     "-e" "@user/shadow-server"
     "-e" "(s/io-prepl)"]
-   {:shutdown p/destroy-tree}))
+   {:in nil
+    :out nil
+    :err nil}))
 
 (def the-prepl (io-prepl))
 
