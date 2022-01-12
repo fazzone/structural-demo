@@ -40,6 +40,8 @@
                                    go-loop]]
    [macros :as m]))
 
+(rum.core/set-warn-on-interpretation! true)
+
 (def load-time (js/Date.now))
 
 (def test-form-data-bar
@@ -231,20 +233,21 @@
   [child ip fi linebreak?]
   #_(println "DI" fi linebreak?)
   (if (and (or (nil? fi) (zero? fi)) (not linebreak?))
-    child
+    ^:inline child
     (rum/fragment
-       [:span.indent-chars (when linebreak? {:class "nl"})
-        (when linebreak? "\n")
-        #_[:span.indenter {:style {:padding-left (str ip "ch")
-                                   :background-color "tomato"}}]
-        (when fi
-          #_[:span.indenter
+     
+     [:span.indent-chars (if-not linebreak? {} {:class "nl"})
+      (when linebreak? "\n")
+      #_[:span.indenter {:style {:padding-left (str ip "ch")
+                                 :background-color "tomato"}}]
+      (when fi
+        #_[:span.indenter
            {:style {:color "cadetblue"} }
            (apply str (repeat fi "-"))]
-          [:span.indenter {:style {:margin-left (str fi "ch")
-                                   ;; :background-color "cadetblue"
-                                   }}])]
-       child)))
+        [:span.indenter {:style {:margin-left (str fi "ch")
+                                 ;; :background-color "cadetblue"
+                                 }}])]
+     child)))
 
 (defn coll-fragment
   [e indent-prop]
@@ -282,11 +285,9 @@
     
     open]
    (for [x (e/seq->vec e)]
-     (-> (fcc x bus (computed-indent e indent) proply)
-         (rum/with-key (:db/id x))))
+       (-> (fcc x bus (computed-indent e indent) proply)
+           (rum/with-key (:db/id x))))
    [:span.d.cl close]])
-
-
 
 
 (defmethod display-coll :list [c b i s p] (delimited-coll  "(" ")" c b i s p))
@@ -371,7 +372,7 @@
 
 (declare snapshot)
 
-(defn display-undo-preview
+(rum/defc display-undo-preview
   [c b s top?]
   [:ul.undo-preview
    (when s {:class s :ref "selected"})
@@ -568,10 +569,11 @@
         :on-click #(do (.preventDefault %)
                        (core/send! bus [:select (:db/id parent)]))}
     [:span.code-font
+     {}
      (when (< i breadcrumbs-max-numeric-label)
        [:span.inline-tag (str (inc i))])
      (if (= :list (:coll/type parent))
-       (or (some-> parent :seq/first :symbol/value) "()")
+       (or (str (some-> parent :seq/first :symbol/value)) "()")
        (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
 
 (rum/defc parent-path
@@ -690,7 +692,7 @@
 (declare command-compose-feedback)
 (declare save-status)
 (rum/defc modeline-inner < dbrx/ereactive rum/reactive
-  [sel bus {:keys [text valid] :as edn-parse-state}]
+  [sel bus {:keys [^String text valid] :as edn-parse-state}]
   [:span {:class (str "modeline code-font"
                       (if text " editing modeline-search" " modeline-fixed")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
@@ -722,8 +724,7 @@
                        (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
                              :when (not= :form/highlight a)]
                          t)))
-             (:coll/type sel)))
-      (command-compose-feedback)])])
+             (:coll/type sel)))])])
 
 (rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]
@@ -1011,6 +1012,7 @@
             
               )))))))
 
+
 (rum/defc example < rum/static
   [init-form muts] 
   (let [conn (d/create-conn s/schema)
@@ -1072,10 +1074,10 @@
                   (cc/svg-viewbox (:state/bar (d/entity (:db-after other) ::state)) core/blackhole)
                   (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
               #_(pr-str input-tx)
-              [:div   ;; :details[:summary "txdata"]
+              [:div ;; :details[:summary "txdata"]
                (debug/datoms-table-eavt* tx-data)]
               #_[:div
-               (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
+                 (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
 
 (defn some-random-mutations
   [n]
@@ -1121,8 +1123,8 @@
 
 (rum/defc player-mutation-view < rum/reactive
   [a]
-  (when-let [v (rum/react a)]
-    [:pre v]))
+  (let [v (rum/react a)]
+    (when v [:pre ^String v])))
 
 (rum/defc player
   [init-form muts]
@@ -1277,7 +1279,7 @@
       (reset! keyboard-bus bus)
       #_(stupid-github-crap)
     
-      #_(go
+      (go
         (async/<!
          (async/onto-chan!
           (core/zchan bus)
@@ -1293,7 +1295,10 @@
            [:prev] [:prev] [:prev] [:prev]
            [:split]
            [:parent]
-           [:splice]]
+           [:splice]
+           [:flow-right] [:flow-right] [:flow-right] [:flow-right]
+           [:flow-left] [:flow-left] [:flow-left] [:flow-left] [:flow-left]
+           [:reify-undo]]
           #_[[:clone]
              [:delete-right] [:delete-right] [:delete-right]
              [:undo] [:undo] [:undo]
