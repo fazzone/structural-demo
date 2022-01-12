@@ -261,7 +261,10 @@
   [sel]
   (let [top-level (peek (nav/parents-vec sel))]
       (into (edit/form-delete-tx sel false)
-            (edit/insert-before-tx top-level sel))))
+            (concat (edit/insert-before-tx top-level sel)
+                    (some->> (move/move :move/backward-up sel)
+                             (:db/id)
+                             (move-selection-tx (:db/id sel)))))))
 
 (defn move-to-deleted-chain
   [sel]
@@ -326,8 +329,6 @@
   (or (restitch sel sel)
       (tear* sel)))
 
-
-
 (defn find-next*
   [me ir]
   (loop [[[e a v t] & more] ir]
@@ -365,6 +366,36 @@
            dst (apply min (map first ir))]
        (when (and dst (not= dst (:db/id sel)))
          (move-selection-tx (:db/id sel) dst))))))
+
+(defn make-alias-tx
+  [sel]
+  (let [top-level (peek (nav/parents-vec sel))
+        tempid "alias"
+        new-node {:db/id tempid
+                  :coll/type :alias
+                  :alias/of (:db/id sel)}]
+    (into [new-node]
+          (concat
+           (edit/insert-before-tx top-level new-node)
+           (move-selection-tx (:db/id sel) tempid)))))
+
+(defn drag*
+  [chain-mover sel]
+  (let [top-level   (peek (nav/parents-vec sel))
+        chain       (some-> top-level :coll/_contains edit/exactly-one)
+        other-chain (move/move chain-mover chain)
+        target      (or (:chain/selection other-chain)
+                        (:seq/first other-chain))
+        target-tl   (peek (nav/parents-vec target))]
+    (when target-tl
+      (into (edit/form-delete-tx sel false)
+            (concat (edit/insert-before-tx target-tl sel)
+                    (some->> (move/move :move/backward-up sel)
+                             (:db/id)
+                             (move-selection-tx (:db/id sel))))))))
+
+(def drag-left-tx  (partial drag* :move/prev-sibling))
+(def drag-right-tx (partial drag* :move/next-sibling))
 
 (def dispatch-table
   {:select     nav/select-form-tx
@@ -468,7 +499,9 @@
    :tear                  (comp tear-tx get-selected-form)
 
    
-   :e1 (fn [db]
-         (println "E one!" ))})
+   :alias      (comp make-alias-tx get-selected-form)
+   :drag-left  (comp drag-left-tx get-selected-form)
+   :drag-right (comp drag-right-tx get-selected-form)
+   })
 
 

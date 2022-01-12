@@ -25,7 +25,8 @@
    [cmd.edit :as edit]
    [cmd.mut :as mut]
    [cmd.invar :as invar]
-   #_[df.github :as dfg]
+   [df.github :as dfg]
+   [df.async :as a]
    
    [core :as core
     :refer [get-selected-form
@@ -55,6 +56,10 @@
   {"f"   :flow-right
    "S-F" :flow-right-coll
    "u"   :undo
+   "S-A" :alias
+   
+   "S-Z" :drag-left
+   "S-X" :drag-right
    
    "n"   :find-next
    "S-N" :find-first
@@ -201,7 +206,7 @@
    
    [:div.top-level-form.code-font
     (fcc e bus 0 p)]
-   [:div.modeline-size {:id (modeline-portal-id (:db/id e))}]])
+   [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
 
 (defn computed-indent
   [e indent-prop]
@@ -251,6 +256,8 @@
 (defmethod display-coll :default [c _ _ _]
   [:code (pr-str c)])
 
+(def render-counter (atom 0))
+
 (defn delimited-coll
   [open close e bus indent classes proply]
   #_(when proply (println "DC" e proply))
@@ -260,12 +267,14 @@
     
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
-    (when-let [p (get proply (:db/id e))]
-        [:span.inline-tag-outer
-         [:span.inline-tag-inner
-          (str p)]])
+    #_(when-let [p (get proply (:db/id e))]
+      [:span.inline-tag-outer
+       [:span.inline-tag-inner
+        (str p)]])
     
-    #_[:span.inline-tag (str (:db/id e))]
+    #_[:span.inline-tag
+     (str (swap! render-counter inc))
+     #_(str (:db/id e))]
     
     open]
    (for [x (e/seq->vec e)]
@@ -423,8 +432,12 @@
     (ck/kkc {} "F")]])
 
 
-(defmethod display-coll :alias [{:alias/keys [of]} b i s]
-  (fcc of core/blackhole i))
+(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
+  (println "DCA" c)
+  [:div.alias
+   (when s {:class s :ref "selected"})
+   [:div.prose-font "Alias " (:db/id c) " of " (:db/id of)]
+   (fcc of b i s)])
 
 (defmethod display-coll :eval-result [c b i s]
   [:div.eval-result-outer
@@ -637,13 +650,19 @@
          (for [i (range  breadcrumbs-max-numeric-label)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
+(comment
+  (let [a (f 1 2 3)]
+    (when thing (q a)))
+  
+  (when thing
+    (let [a (f 1 2 3)]
+      (q a)))
+  )
+
 (defn search*
   [db sa text]
   ;; U+10FFFF
-  (let [ir (d/index-range db sa text (str text "\udbff\udfff"))]
-    (run! prn ir)
-    ir
-    ))
+  (d/index-range db sa text (str text "\udbff\udfff")))
 
 (defn stupid-symbol-search
   [db sa text]
@@ -666,13 +685,12 @@
 (declare save-status)
 (rum/defc modeline-inner < dbrx/ereactive rum/reactive
   [sel bus {:keys [text valid] :as edn-parse-state}]
-  [:span {:class (str "modeline modeline-size code-font"
-                      (when text " editing")
+  [:span {:class (str "modeline code-font"
+                      (if text " editing modeline-search" " modeline-fixed")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
+   ""
    [:span.modeline-echo
-    {:class (if text
-              "modeline-search"
-              "modeline-fixed")}
+    {}
     (let [{:keys [on at status file]} (rum/react save-status)]
       (when (= on (:db/id sel))
         (case status
@@ -682,9 +700,8 @@
           "")))]
    
    (if text
-     #_(stupid-symbol-search (d/entity-db sel) :symbol/value text)
-     (stupid-symbol-search sel :symbol/value text)
-     [:span.modeline-content.modeline-size.modeline-fixed
+     (stupid-symbol-search (d/entity-db sel) :symbol/value text)
+     [:span.modeline-content
       (if-not sel
         "(no selection)"
         (str "#" (:db/id sel)
@@ -748,15 +765,16 @@
                   (and compose (nil? mut)))
           (.preventDefault ev)
           (.stopPropagation ev))
-        (if-not mut
-          (reset! key-compose-state initial-compose-state)
-          (cond
-            (vector? mut) (do (reset! key-compose-state initial-compose-state)
-                              (core/send! @keyboard-bus
-                                          (with-meta mut {:kbd (string/join " " next-kbd)})))
-            (map? mut) (reset! key-compose-state {:bindings mut :compose next-kbd})
-            :else (do (println "Bad key entry" mut)
-                      (reset! key-compose-state initial-compose-state))))))))
+        
+        #_(if-not mut
+            (reset! key-compose-state initial-compose-state)
+            (cond
+              (vector? mut) (do (reset! key-compose-state initial-compose-state)
+                                (core/send! @keyboard-bus
+                                            (with-meta mut {:kbd (string/join " " next-kbd)})))
+              (map? mut) (reset! key-compose-state {:bindings mut :compose next-kbd})
+              :else (do (println "Bad key entry" mut)
+                        (reset! key-compose-state initial-compose-state))))))))
 
 
 (defonce global-keydown
@@ -782,14 +800,17 @@
 
 (defn scroll-1d
   [size h pos off]
+  (println "S1D" size h pos off)
   (let [align-bottom (- off (- size h))
         top-closer?  (< (js/Math.abs (- pos off))
                         (js/Math.abs (- pos align-bottom)))
+        ;; _ (println "Top closer?")
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
+    #_(println "Delta" (- pos best) "Hysteresis" (< -3 (- pos best) 3))
     (when-not (< -3 (- pos best) 3)
-     (int best))
+      (int best))
     #_(if (< -1 (- pos best) 1)
         other
         best)))
@@ -797,7 +818,9 @@
 (defn scroll-to-selected!
   ([] (scroll-to-selected! true))
   ([always]
-   (let [el (js/document.querySelector ".selected")
+   (let [#_ #_el (js/document.querySelector ".selected")
+         [el & more] (js/document.querySelectorAll ".selected")
+         _ (prn "More" more)
          
          tl    (some-> el (.closest ".form-card"))
          chain (some-> el (.closest ".chain"))
@@ -806,13 +829,27 @@
          chain-height (some-> chain (.-clientHeight))
          bar-width    (some-> bar (.-clientWidth))
          
-         h    (some-> tl (.getBoundingClientRect) (.-height))
+         h    (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
          vpos (some-> chain (.-scrollTop))
          voff (some-> tl (.-offsetTop))
          
-         w    (some-> chain (.getBoundingClientRect) (.-width))
+         w    (some-> chain (.getBoundingClientRect) (.-width) (js/Math.ceil))
          hpos (some-> bar (.-scrollLeft))
          hoff (some-> chain (.-offsetLeft))]
+     
+     #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
+     #_(println "================================Scroll"
+              "\nChain-height" chain-height
+              "\nBar-width" bar-width
+              "\nh" h
+              "vpos" vpos
+              "voff" voff
+              "\nw" w
+              "hpos" hpos
+              "hoff" hoff
+              "\nCan fit?" (< h chain-height)
+              "\nAlready visible?" (not (< vpos voff (+ h voff)
+                                           (+ vpos chain-height))))
      (when (and chain 
                 (< h chain-height)
                 (or always (not (< vpos voff (+ h voff)
@@ -823,7 +860,9 @@
                                    (+ hpos bar-width)))))
        (.scrollTo bar #js{:left (int (scroll-1d bar-width w hpos hoff))})))))
 
-(defn ensure-selected-in-view! [] (scroll-to-selected! false))
+(defn ensure-selected-in-view! []
+  (println "ESIV")
+  (scroll-to-selected! false))
 
 (def save-status (atom nil))
 
@@ -854,7 +893,7 @@
                                     'fetch  (fn [z f]
                                               (-> z (js/fetch) (.then f)))
                                     'then (fn [p f] (.then (js/Promise.resolve p) f))
-                                    ;; 'stories dfg/stories
+                                    'stories dfg/stories
                                     'ingest scivar-ingest
                                     'sel scivar-sel
                                     '->seq e/seq->seq}})
@@ -1153,6 +1192,40 @@
                                          ))
                                 ))))))))
 
+(defn fetch-json
+  [u]
+  (-> (js/fetch u)
+      (.then #(.json %))
+      (.then #(js->clj % :keywordize-keys true))))
+
+
+#_(defn stupid-github-crap
+  []
+  (-> (js/fetch "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
+      (.then #(.json %))
+      (.then #(do (js/console.log %) %))
+      (.then (fn [ref]
+               (println (js->clj ref))
+               (-> (js/fetch (-> ref js->clj (get "object") (get "url")))
+                   (.then #(.json %))
+                   (.then (fn [commit]
+                            (js/console.log commit)
+                            (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
+                                (.then #(.json %))
+                                (.then (fn [tree]
+                                         (js/console.log tree)
+                                         ))
+                                ))))))))
+
+
+(defn stupid-github-crap
+  []
+  (a/let [ref    (fetch-json "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
+          commit (fetch-json (-> ref :object :url)) 
+          tree   (fetch-json (-> commit :tree :url))]
+    
+    #_(cljs.pprint/pprint tree))) 
+
 (defn  ^:dev/after-load init []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
@@ -1161,40 +1234,38 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
+  
+  #_(stupid-github-crap)
+  
   (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
     
-    (println "Reset keyhboard bus" bus)
-    (reset! keyboard-bus bus)
-    #_(println "DKL" (d/entity @conn ::default-keymap))
-    #_(run! prn (d/touch (d/entity @conn ::default-keymap)))
+      (println "Reset keyhboard bus" bus)
+      (reset! keyboard-bus bus)
+      #_(stupid-github-crap)
     
-    #_(stupid-github-crap)
-    
-
-    
-    #_(go
-        (async/<!
-         (async/onto-chan!
-          (core/zchan bus)
-          [[:clone]
-           [:delete-right] [:delete-right] [:delete-right]
-           [:undo] [:undo] [:undo]
-           [:insert-right]
-           [:edit/finish "nice"]
-           [:reify-undo]]
-          false))
-        (println "We did it")
+      #_(go
+          (async/<!
+           (async/onto-chan!
+            (core/zchan bus)
+            [[:clone]
+             [:delete-right] [:delete-right] [:delete-right]
+             [:undo] [:undo] [:undo]
+             [:insert-right]
+             [:edit/finish "nice"]
+             [:reify-undo]]
+            false))
+          (println "We did it")
       
-        (rum/mount
-         #_(debug-component)
-         (root-component @conn bus)
-         (.getElementById js/document "root")))
+          (rum/mount
+           #_(debug-component)
+           (root-component @conn bus)
+           (.getElementById js/document "root")))
     
-    ;; document.write(process.versions['electron'])
-    (rum/mount
-     #_(debug-component)
-     (root-component @conn bus)
-     (.getElementById js/document "root"))))
+      ;; document.write(process.versions['electron'])
+      (rum/mount
+       #_(debug-component)
+       (root-component @conn bus)
+       (.getElementById js/document "root"))))
 
 ;; Single highlight, in DB
 ;; - Mutations find it? With a lookup ref [highlight true]
@@ -1255,3 +1326,12 @@
 ;; -- You need to increment max-tx and use that as a unique identifier for a state
 ;; -- You cannot store historical tx-reports because they might be backwards
 ;; --
+
+;; Highlight the inactive chain/selections...
+;; COW clone?????
+
+;; Aliases are a huge problem for scrolling because how do you know what to center?
+;; Suppose I alias the same form and put one copy at each corner of the screen, then what?
+;; The best it can really do is pick the one under the alias with the highest db/id
+;; Even if it does then, then how do you implement go-to-next-alias?
+;; That's not even to mention the fact that it FORCES queryselectorall?
