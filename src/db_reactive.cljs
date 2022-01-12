@@ -76,7 +76,7 @@
                       (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
                       state))
    :did-mount (fn [state]
-                (js/console.log (rum/dom-node state))
+                #_(js/console.log (rum/dom-node state))
                 state
                 )
    })

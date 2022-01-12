@@ -163,16 +163,26 @@
   [e]
   (merge (meta e) (->tx* e)))
 
-(defn seq->vec
-  ([e]
-   ;; #?(:cljs (js/performance.mark "svs"))
-   (let [a (seq->vec e [])]
-     ;; #?(:cljs (js/performance.measure "seq->vec" "svs"))
-     a))
-  ([e a]
-   (if-let [f (:seq/first e)]
-     (recur (:seq/next e) (conj a f))
-     a)))
+#?(:clj
+   (defn seq->vec
+     ([e]
+      a)
+     ([e a]
+      (if-let [f (:seq/first e)]
+        (recur (:seq/next e) (conj a f))
+        a))))
+
+#?(:cljs
+   (defn seq->vec
+     [e]
+     (let [out #js []
+           f :seq/first
+           n :seq/next]
+       (loop [q e]
+         (if-some [ff (f q)]
+           (do (.push out ff)
+               (recur (n q)))
+           out)))))
 
 (defn seq->seq
   ([top]

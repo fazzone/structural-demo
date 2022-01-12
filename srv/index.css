@@ -55,8 +55,10 @@ body {
     /* white-space: nowrap; */
 }
 .top-level-form.code-font {
-    color: #a6a6a0;
+    /* color: #a6a6a0; */
+    color: #777;
 }
+.d { }
 
 /* span.flex { */
 /*     display: flex; */
@@ -92,6 +94,9 @@ span.unev span.kn { color: #777; }
     border-color: #055005;
     color: #fff;
     border-radius: 1ex;
+    /* transition-delay: 8ms; */
+    /* transition: background-color 100ms cubic-bezier(1,-0.01,.65,.97); */
+    /* transition: background-color 200ms linear; */
 }
 
 .selected .d { color: #a6a6a0; }

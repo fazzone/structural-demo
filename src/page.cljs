@@ -128,7 +128,7 @@
 (def init-tx-data
   (let [chains (concat
 
-                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
@@ -140,9 +140,9 @@
                 
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/clojure.core.clj"))]
                 
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
                 )]
@@ -272,13 +272,13 @@
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
     
     #_(when-let [p (get proply (:db/id e))]
-      [:span.inline-tag-outer
-       [:span.inline-tag-inner
-        (str p)]])
+        [:span.inline-tag-outer
+         [:span.inline-tag-inner
+          (str p)]])
     
     #_[:span.inline-tag.debug
-     #_(str (swap! render-counter inc))
-     (str (:db/id e))]
+       (str (swap! render-counter inc))
+       #_(str (:db/id e))]
     
     open]
    (for [x (e/seq->vec e)]
@@ -712,6 +712,12 @@
         "(no selection)"
         (str "#" (:db/id sel)
              " "
+             "\u2460"
+             "\u2779"
+
+             "\u2474"
+             "\u24fa"
+                                       
              #_(pr-str
                 (apply max
                        (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
@@ -804,6 +810,7 @@
        " "
        (pr-str bindings)])))
 
+(def ^:const scroll-hysteresis-px 32)
 (defn scroll-1d
   [size h pos off]
   #_(println "S1D" size h pos off)
@@ -814,8 +821,12 @@
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
-    #_(println "Delta" (- pos best) "Hysteresis" (< -3 (- pos best) 3))
-    (when-not (< -3 (- pos best) 3)
+    #_(println "Delta" (- pos best) "Hysteresis(" scroll-hysteresis-px ") "  (< (- scroll-hysteresis-px)
+               (- pos best)
+               scroll-hysteresis-px))
+    (if-not (< (- scroll-hysteresis-px)
+               (- pos best)
+               scroll-hysteresis-px)
       (int best))
     #_(if (< -1 (- pos best) 1)
         other
@@ -824,7 +835,7 @@
 (defn scroll-to-selected!
   ([] (scroll-to-selected! true))
   ([always]
-   (let [#_ #_el (js/document.querySelector ".selected")
+   (let [#_          #_el (js/document.querySelector ".selected")
          [el & more] (js/document.querySelectorAll ".selected")
          ;; _ (prn "More" more)
          
@@ -835,39 +846,55 @@
          chain-height (some-> chain (.-clientHeight))
          bar-width    (some-> bar (.-clientWidth))
          
-         h    (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
+         ;; fit the entire toplevel if we can, otherwise just the selection 
+         tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
+         elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
+         vst  (if (< tlh chain-height) tl el)
+         h    (if (< tlh chain-height) tlh elh)
          vpos (some-> chain (.-scrollTop))
-         voff (some-> tl (.-offsetTop))
+         voff (some-> vst (.-offsetTop))
+         
+         new-chain-top (and tl
+                            chain
+                            (< h chain-height)
+                            
+                            (or always
+                                (not (< vpos voff (+ h voff)
+                                        (+ vpos chain-height))))
+                            (scroll-1d chain-height h vpos voff))
          
          w    (some-> chain (.getBoundingClientRect) (.-width) (js/Math.ceil))
          hpos (some-> bar (.-scrollLeft))
-         hoff (some-> chain (.-offsetLeft))]
-     
+         hoff (some-> chain (.-offsetLeft))
+         
+         new-bar-left (and bar 
+                           (or always
+                               (not (< hpos hoff (+ w hoff)
+                                       (+ hpos bar-width))))
+                           (scroll-1d bar-width w hpos hoff))]
      #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
      #_(println "================================Scroll"
-              "\nChain-height" chain-height
-              "\nBar-width" bar-width
-              "\nh" h
-              "vpos" vpos
-              "voff" voff
-              "\nw" w
-              "hpos" hpos
-              "hoff" hoff
-              "\nCan fit?" (< h chain-height)
-              "\nAlready visible?" (not (< vpos voff (+ h voff)
-                                           (+ vpos chain-height))))
-     (when (and chain 
-                (< h chain-height)
-                (or always (not (< vpos voff (+ h voff)
-                                   (+ vpos chain-height)))))
-       (.scrollTo chain #js{:top (int (scroll-1d chain-height h vpos voff))}))
-     (when (and bar 
-                (or always (not (< hpos hoff (+ w hoff)
-                                   (+ hpos bar-width)))))
-       (.scrollTo bar #js{:left (int (scroll-1d bar-width w hpos hoff))})))))
+                "\nChain-height" chain-height
+                "\nBar-width" bar-width
+                "\nTLH" h
+                "vpos" vpos
+                "voff" voff
+                "\nCHW" w
+                "hpos" hpos
+                "hoff" hoff
+                "\nCan fit?" (< h chain-height)
+                "\nAlready visible?" (not (< vpos voff (+ h voff)
+                                             (+ vpos chain-height)))
+                "\nAlways scroll?" always)
+     (when (> h chain-height)
+       (println "Too bigby " (- h chain-height) h chain-height))
+     
+     
+     (when new-chain-top (.scrollTo chain #js{:top new-chain-top}))
+     (when new-bar-left  (.scrollTo bar   #js{:left new-bar-left})))))
 
 (defn ensure-selected-in-view! []
-  #_(println "ESIV")
+  (println "ESIV")
   (scroll-to-selected! false))
 
 (def save-status (atom nil))
@@ -939,10 +966,8 @@
                                                    (core/send! bus [:eval-result (:db/id et) ar])))))
                                       (catch :default e
                                         (js/console.log "SCI exception" e))))))
-       (core/register-mutation! :form/highlight (fn [_ _ _]
-                                                  (js/window.setTimeout
-                                                   (fn [] (ensure-selected-in-view!))
-                                                   1)))
+       (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :scroll  (fn [_ _ _]
                                            (scroll-to-selected!)))
        (core/register-mutation! :save
@@ -961,19 +986,19 @@
                                       (reset! save-status {:at (:max-tx db) :on (:db/id sel) :status :saving})
                                       (save* file (e/->string chain))
                                       #_(do
-                                        (.listen xhr EventType/COMPLETE
-                                                 (fn [ev]
-                                                   (reset! save-status {:on     (:db/id sel)
-                                                                        :at     (:max-tx db)
-                                                                        :status :ok
-                                                                        :file   file})))
-                                        (.listen xhr EventType/ERROR
-                                                 (fn [_] (println "Save error!")
-                                                   (reset! save-status {:on (:db/id sel) :status :error})))
-                                        (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
-                                               "POST"
-                                               (e/->string chain)
-                                               #js {"Content-Type" "application/json;charset=UTF-8"})))
+                                          (.listen xhr EventType/COMPLETE
+                                                   (fn [ev]
+                                                     (reset! save-status {:on     (:db/id sel)
+                                                                          :at     (:max-tx db)
+                                                                          :status :ok
+                                                                          :file   file})))
+                                          (.listen xhr EventType/ERROR
+                                                   (fn [_] (println "Save error!")
+                                                     (reset! save-status {:on (:db/id sel) :status :error})))
+                                          (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
+                                                 "POST"
+                                                 (e/->string chain)
+                                                 #js {"Content-Type" "application/json;charset=UTF-8"})))
                                     nil)))
        #_(core/register-mutation!
           :execute
@@ -1249,7 +1274,7 @@
       (reset! keyboard-bus bus)
       #_(stupid-github-crap)
     
-      (go
+      #_(go
         (async/<!
          (async/onto-chan!
           (core/zchan bus)
@@ -1354,3 +1379,18 @@
 ;; The best it can really do is pick the one under the alias with the highest db/id
 ;; Even if it does then, then how do you implement go-to-next-alias?
 ;; That's not even to mention the fact that it FORCES queryselectorall?
+
+
+;; C-1   reparents the form to register 1
+;; --    yanks from register 1
+;; --    duplicates register 1 at cursor
+;; --    executes register 1  
+
+;; C-1    taken by chrome
+;; S-1    inserting special forms
+;; M-1    - 
+;; C-S-1  -
+;; C-M-1  -
+;;
+
+;; Fulltext index all the strings and commit messages?
