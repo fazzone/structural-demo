@@ -54,7 +54,7 @@
                     (let [[e _ & old-props] (:rum/args old-state)
                           [_ _ & new-props] (:rum/args new-state)]
                       #_(println " " (:db/id e) "Old props" old-props
-                               "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
+                                 "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
                       (cond
                         (not= old-props new-props) true
                         (some? @nupdate)           (not (reset! nupdate false)))))
@@ -63,18 +63,23 @@
                           [new-e bus]     (-> new-state :rum/args)
                           old-eid         (:db/id old-e)
                           new-eid         (:db/id new-e)]
-                     (when-not (identical? bus old-bus)
-                       (throw (ex-info "The bus cannot change" {})))
-                     (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
-                       (throw (ex-info "The chan cannot change" {})))
-                     (when-not (= old-eid new-eid)
-                       (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
-                       (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
-                     new-state))
+                      (when-not (identical? bus old-bus)
+                        (throw (ex-info "The bus cannot change" {})))
+                      (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
+                        (throw (ex-info "The chan cannot change" {})))
+                      (when-not (= old-eid new-eid)
+                        (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
+                        (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
+                      new-state))
    :will-unmount  (fn [{:rum/keys [args] :as state}]
                     (let [[e bus] args]
                       (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
-                      state))})
+                      state))
+   :did-mount (fn [state]
+                (js/console.log (rum/dom-node state))
+                state
+                )
+   })
 
 (defn areactive
   ;; mixin for components taking [db bus ...]

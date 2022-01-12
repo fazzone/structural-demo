@@ -259,19 +259,30 @@
 
 (defn hoist-tx
   [sel]
-  (let [top-level (peek (nav/parents-vec sel))]
-      (into (edit/form-delete-tx sel false)
-            (concat (edit/insert-before-tx top-level sel)
-                    (some->> (move/move :move/backward-up sel)
-                             (:db/id)
-                             (move-selection-tx (:db/id sel)))))))
+  (let [ps (nav/parents-vec sel)]
+    (when (< 1 (count ps))
+     (into (edit/form-unlink-tx sel)
+           (concat (edit/insert-before-tx (peek ps) sel)
+                   (some->> (move/move :move/backward-up sel)
+                            (:db/id)
+                            (move-selection-tx (:db/id sel))))))))
+
+(defn gobble-tx
+  [sel]
+  (when-let [gt (some->> sel
+                         (nav/parents-vec)
+                         (peek)
+                         (move/move :move/prev-sibling))]
+    (into (edit/form-unlink-tx gt)
+          (concat (edit/insert-after-tx sel gt)
+                  (move-selection-tx (:db/id sel) (:db/id gt))))))
 
 (defn move-to-deleted-chain
   [sel]
   (when-let [dch (d/entity (d/entity-db sel) :page/command-chain)]
     (when-let [nsel (move/move :move/backward-up sel)]
       (concat
-       (edit/form-delete-tx sel false)
+       (edit/form-unlink-tx sel)
        (edit/form-cons-tx sel dch)
        (move-selection-tx (:db/id sel) (:db/id nsel))))))
 
@@ -388,7 +399,7 @@
                         (:seq/first other-chain))
         target-tl   (peek (nav/parents-vec target))]
     (when target-tl
-      (into (edit/form-delete-tx sel false)
+      (into (edit/form-unlink-tx sel)
             (concat (edit/insert-before-tx target-tl sel)
                     (some->> (move/move :move/backward-up sel)
                              (:db/id)
@@ -495,6 +506,7 @@
    :insert-data           (fn [db c] (insert-data (get-selected-form db) c))
    :insert-txdata         (fn [db c] (insert-txdata (get-selected-form db) c))
    :hoist                 (comp hoist-tx get-selected-form)
+   :gobble                (comp gobble-tx get-selected-form)
    :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
    :tear                  (comp tear-tx get-selected-form)
 
@@ -502,6 +514,8 @@
    :alias      (comp make-alias-tx get-selected-form)
    :drag-left  (comp drag-left-tx get-selected-form)
    :drag-right (comp drag-right-tx get-selected-form)
-   })
 
+
+   :split  (comp edit/form-split-tx get-selected-form)
+   :splice (comp edit/form-splice-tx get-selected-form)})
 

@@ -164,6 +164,9 @@
         es           (into #{} (comp (filter (comp not new-entities))
                                      (map (fn [[e a v t]] e))) tx-data)
         as           (into #{} (map (fn [[e a v t]] a)) tx-data)]
+    #_(println "Actual tx-data:")
+    #_(run! prn tx-data)
+    #_(println "Tempids" tempids)
     (doseq [e es]
       (when-not (empty? (d/datoms db :eavt e))
         (send! the-bus [e (d/entity db e)])))

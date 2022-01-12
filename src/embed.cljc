@@ -181,8 +181,6 @@
         (cons f (lazy-seq (iter (:seq/next e))))))
     top)))
 
-
-
 (defn ->form
   [e]
   (or (some-> (:symbol/value e) symbol)

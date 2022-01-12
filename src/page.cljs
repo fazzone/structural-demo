@@ -57,6 +57,10 @@
    "S-F" :flow-right-coll
    "u"   :undo
    "S-A" :alias
+   "g" :gobble
+   
+   "S-S" :split
+   "M-s" :splice
    
    "S-Z" :drag-left
    "S-X" :drag-right
@@ -124,7 +128,7 @@
 (def init-tx-data
   (let [chains (concat
 
-                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
@@ -272,9 +276,9 @@
        [:span.inline-tag-inner
         (str p)]])
     
-    #_[:span.inline-tag
-     (str (swap! render-counter inc))
-     #_(str (:db/id e))]
+    #_[:span.inline-tag.debug
+     #_(str (swap! render-counter inc))
+     (str (:db/id e))]
     
     open]
    (for [x (e/seq->vec e)]
@@ -482,17 +486,19 @@
 
 (defn token-text
   [e]
-  (or
-   (some-> e :symbol/value str)
-   (when-let [k (:keyword/value e)]
-     (let [is (string/index-of k "/")]
-         (if (> 0 is)
-           k
-           (rum/fragment
-            [:span.kn (subs k 0 is)]
-            (subs k is)))))
-   (some-> e :string/value pr-str)
-   (some-> e :number/value str)))
+  (->>
+   (or
+    (some-> e :symbol/value str)
+    (when-let [k (:keyword/value e)]
+      (let [is (string/index-of k "/")]
+        (if (> 0 is)
+          k
+          (rum/fragment
+           [:span.kn (subs k 0 is)]
+           (subs k is)))))
+    (some-> e :string/value pr-str)
+    (some-> e :number/value str))
+   #_(rum/fragment [:span.inline-tag.debug (str (:db/id e))])))
 
 (rum/defc fcc < dbrx/ereactive
   [e bus indent-prop proply]
@@ -800,7 +806,7 @@
 
 (defn scroll-1d
   [size h pos off]
-  (println "S1D" size h pos off)
+  #_(println "S1D" size h pos off)
   (let [align-bottom (- off (- size h))
         top-closer?  (< (js/Math.abs (- pos off))
                         (js/Math.abs (- pos align-bottom)))
@@ -820,7 +826,7 @@
   ([always]
    (let [#_ #_el (js/document.querySelector ".selected")
          [el & more] (js/document.querySelectorAll ".selected")
-         _ (prn "More" more)
+         ;; _ (prn "More" more)
          
          tl    (some-> el (.closest ".form-card"))
          chain (some-> el (.closest ".chain"))
@@ -861,7 +867,7 @@
        (.scrollTo bar #js{:left (int (scroll-1d bar-width w hpos hoff))})))))
 
 (defn ensure-selected-in-view! []
-  (println "ESIV")
+  #_(println "ESIV")
   (scroll-to-selected! false))
 
 (def save-status (atom nil))
@@ -1243,23 +1249,36 @@
       (reset! keyboard-bus bus)
       #_(stupid-github-crap)
     
-      #_(go
-          (async/<!
-           (async/onto-chan!
-            (core/zchan bus)
-            [[:clone]
+      (go
+        (async/<!
+         (async/onto-chan!
+          (core/zchan bus)
+          [[:parent]
+           [:parent] [:parent]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:insert-right] [:edit/finish "a"]
+           [:prev] [:prev] [:prev] [:prev]
+           [:split]
+           [:parent]
+           [:splice]]
+          #_[[:clone]
              [:delete-right] [:delete-right] [:delete-right]
              [:undo] [:undo] [:undo]
              [:insert-right]
              [:edit/finish "nice"]
              [:reify-undo]]
-            false))
-          (println "We did it")
-      
-          (rum/mount
-           #_(debug-component)
-           (root-component @conn bus)
-           (.getElementById js/document "root")))
+          false))
+        (println "We did it")
+        
+        (rum/mount
+         #_(debug-component)
+         (root-component @conn bus)
+         (.getElementById js/document "root")))
     
       ;; document.write(process.versions['electron'])
       (rum/mount

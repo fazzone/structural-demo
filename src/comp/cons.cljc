@@ -208,7 +208,7 @@
         x      (* width col)
         y      (* height row)
         label  (str "#" (:db/id node) "-" (count taken))]
-    (println "Oncell* " (:db/id node))
+    #_(println "Oncell* " (:db/id node))
     (rum/fragment
      (if-let [sv (or (:symbol/value node)
                      (:keyword/value node)

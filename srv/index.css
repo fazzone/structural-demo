@@ -499,3 +499,6 @@ span.key-compose-echo {
     white-space: nowrap;
     overflow: hidden;
 }
+
+
+.chain:first-child { padding-top: 200px; }

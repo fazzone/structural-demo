@@ -7,12 +7,13 @@
 (defn exactly-one
   [[x & more :as xs]]
   (when more
-    (throw (ex-info "More than one" {:xs xs}))
+    (throw (ex-info (str "More than one: " (pr-str (map :db/id xs)))
+                    {:xs xs}))
     #_(println "More than one" xs))
   x)
 
-(defn form-delete-tx
-  ([e] (form-delete-tx e true))
+(defn form-delete*
+  ([e] (form-delete* e true))
   ([e r?]
    (let [spine (first (:seq/_first e))
          next  (some-> spine :seq/next)
@@ -38,6 +39,9 @@
               (if-let [n (:seq/next next)]
                 [:db/add (:db/id spine) :seq/next (:db/id n)]
                 [:db/retract (:db/id spine) :seq/next (:db/id next)])])))))
+
+(defn form-delete-tx [e] (form-delete* e true))
+(defn form-unlink-tx [e] (form-delete* e false))
 
 ;; overwrite with something that has not existed before
 ;; if you have a tempid, you want this one
@@ -124,6 +128,7 @@
 
 (defn exchange-with-previous-tx
   [sel]
+  (println "XWP" (:db/id sel))
   (let [spine  (exactly-one (:seq/_first sel))
         prev   (some-> spine :seq/_next exactly-one)
         next   (some-> spine :seq/next)
@@ -293,11 +298,6 @@
        (if next
          [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))
 
-
-
-
-
-
 (defn insert-editing-before [sel]
   (let [parent (exactly-one (:coll/_contains sel))]
     (if (= :chain (:coll/type parent))
@@ -309,3 +309,69 @@
        (if (= :chain (:coll/type parent))
          (edit-new-wrapped* insert-after-tx sel :list "" nil)
          (insert-editing* sel insert-after-tx))))
+
+(defn form-split-tx
+  [e]
+  ;; split the parent, making sel the first of a new coll of the same type 
+  (let [spine (some-> e :seq/_first exactly-one)
+        coll  (some-> e :coll/_contains exactly-one)
+        prev  (some-> spine :seq/_next exactly-one)
+        tail  (e/seq->vec spine)
+        newc  {:db/id          "newc"
+               :seq/first      (:db/id e)
+               :coll/type      (:coll/type coll)
+               :coll/_contains (:db/id coll)}]
+    (when coll
+      (into [newc
+             [:db/add (:db/id spine) :seq/first "newc"]]
+            (concat
+             (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
+             (for [t tail] [:db/add     "newc"        :coll/contains (:db/id t)])
+             (when-let [sn (:seq/next spine)]
+               [[:db/retract (:db/id spine) :seq/next (:db/id sn)]
+                [:db/add     "newc"         :seq/next (:db/id sn)]]))))))
+
+(defn form-splice-tx
+  ([e]
+   (form-splice-tx e e))
+  ([e from]
+   (let [spine     (some-> e :seq/_first exactly-one)
+         coll      (some-> e :coll/_contains exactly-one)
+         prev      (some-> spine :seq/_next exactly-one)
+         next      (some-> spine :seq/next)
+         elems     (e/seq->vec e)
+         last-cons (loop [s e]
+                     (if-let [n (:seq/next s)]
+                       (recur n)
+                       s))]
+     (println "Splice" (:db/id e) (:db/id from))
+     (cond
+       (= :chain (:coll/type e)) (do (println "Cannot splice chain") nil)
+       (nil? (:coll/type e))     (do
+                                   (println "Go up" (:db/id e) "=>" (:db/id coll))
+                                   (recur coll (or from e)))
+       :else
+       (let [tx
+             (into [[:db/retractEntity (:db/id e)]
+                    (when-let [f (:seq/first e)] [:db/add (:db/id spine) :seq/first (:db/id f)])
+                    (when-let [n (:seq/next  e)] [:db/add (:db/id spine) :seq/next  (:db/id n)])
+                    (when next
+                      [:db/add (:db/id last-cons) :seq/next (:db/id next)])]
+                   (concat
+                    (for [x elems] [:db/add (:db/id coll) :coll/contains (:db/id x)])
+                    (move-selection-tx (:db/id from) (:db/id (or (when (not= (:db/id from) (:db/id e)) from)
+                                                                 (:seq/first e)
+                                                                 prev
+                                                                 coll)))))
+             #_ (into [
+                       (if prev
+                         [:db/add (:db/id prev) :seq/next (:db/id (:seq/first coll))]
+                         [:db/add (:db/id coll) :seq/first (:db/id (:seq/first coll))])
+                       (if next
+                         [:db/id (:db/id last-cons) :seq/next (:db/id next)])]
+                      (concat
+                       (for [x elems] [:db/retract (:db/id x) :coll/contains (:db/id x)])
+                       (for [x elems] [:db/add (:db/id coll) :coll/contains (:db/id x)])))]
+         (println "Splice tx")
+         (run! prn tx)
+         tx)))))
