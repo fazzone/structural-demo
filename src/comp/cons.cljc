@@ -210,10 +210,7 @@
         label  (str "#" (:db/id node) "-" (count taken))]
     #_(println "Oncell* " (:db/id node))
     (rum/fragment
-     (if-let [sv (or (:symbol/value node)
-                     (:keyword/value node)
-                     (:number/value node)
-                     (:string/value node))]
+     (if-let [sv (:token/value node)]
        (rum/fragment
         [:text {:x x :y y} (str sv)]
         [:text {:x x :y (+ y half)} label])

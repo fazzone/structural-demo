@@ -60,12 +60,16 @@
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
-         :symbol  {:symbol/value (n/string n)}
-         :keyword {:keyword/value (n/string n)}
-         :string  {:string/value (n/sexpr n)}
-         (if (= nil (n/sexpr n))
-           {:symbol/value "nil"}
-           {:number/value (n/sexpr n)}))
+         :symbol  {:token/type :symbol :token/value (n/string n)}
+         :keyword {:token/type :keyword :token/value (n/string n)}
+         :string  {:token/type :string :token/value (n/sexpr n)}
+         (let [v (n/sexpr n)]
+           (cond
+             (nil? v)    {:token/type :symbol :token/value "nil"}
+             (number? v) {:token/type :number :token/value (n/sexpr n)}
+             (true? v)   {:token/type :symbol :token/value "true"}
+             (false? v)  {:token/type :symbol :token/value "false"}
+             :else       (throw (ex-info (str "What token is this? " (pr-str n)) {})))))
        
        :list    (coll-tx :list (n/children n))
        :vector  (coll-tx :vec (n/children n))
@@ -74,7 +78,7 @@
        :forms   (coll-tx :vec (n/children n))
        :deref   (coll-tx :deref (n/children n))
        :comma   nil
-       :comment {:string/value (n/string n)}
+       :comment {:token/type :string :token/value (n/string n)}
        :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                       mta                (n/sexpr mta-n)]
                   #_(println "Mta-n" (n/string mta-n)
@@ -83,24 +87,7 @@
                              "More" more)
                   (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
                   (n->tx val)
-                  #_(cond
-                      (symbol? mta)
-                      (assoc (n->tx val) :tag {:symbol/value mta})
-                    
-                      (map? mta)
-                      (merge (n->tx val) mta)
-                    
-                      (keyword? mta)
-                      (assoc (n->tx val) mta true)
-                    
-                      (string? mta)
-                      (assoc (n->tx val) :tag {:string/value mta})
-                    
-                      :else (do
-                              (println "What meat?" mta)
-                              (println "Type" (type mta))
-                              (println "N string" (n/string n))
-                              (throw (ex-info (str "What meta is this") {})))))
+                  )
        
 
        
@@ -121,8 +108,8 @@
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))
-       :var              {:symbol/value (n/string n)}
-       :regex            {:regex/value (n/string n)}
+       :var              {:token/type :string :token/value (n/string n)}
+       :regex            {:token/type :regex :token/value (n/string n)}
        
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
 
@@ -144,19 +131,19 @@
                 (seq xs) (merge (seq-tx (for [x xs]
                                           (assoc (->tx x) :coll/_contains id)))))))]
     (cond 
-      (symbol? e)     {:symbol/value (str e)}
-      (keyword? e)    {:keyword/value (str e)}
-      (string? e)     {:string/value e}
-      (number? e)     {:number/value e}
-      (boolean? e)    {:symbol/value (str e)}
+      (symbol? e)     {:token/type :symbol :token/value (str e)}
+      (keyword? e)    {:token/type :keyword :token/value (str e)}
+      (string? e)     {:token/type :string :token/value e}
+      (number? e)     {:token/type :number :token/value e}
+      (boolean? e)    {:token/type :symbol :token/value (str e)}
       (list? e)       (coll-tx :list e)
       (vector? e)     (coll-tx :vec e)
       (map? e)        (coll-tx :map (flatten-map e))
       (set? e)        (coll-tx :set e)
       (sequential? e) (coll-tx :list e)
       
-      #?@(:cljs [(instance? js/Date e) {:string/value (str e)}
-                 (instance? js/URL e) {:string/value (str e)}])
+      #?@(:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
+                 (instance? js/URL e)  {:token/type :string :token/value (str e)}])
       :else (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
 (defn ->tx
@@ -193,8 +180,7 @@
 
 (defn ->form
   [e]
-  (or (some-> (:symbol/value e) symbol)
-      (when-let [ct (:coll/type e)]
+  (or (when-let [ct (:coll/type e)]
         (let [elems (some->> (seq->vec e) (map ->form))]
           (or (case ct
                 :list elems
@@ -202,9 +188,11 @@
                 :map  (apply array-map elems)
                 :set  (set elems))
               (case ct :list () :vec [] :map {}))))
-      (:keyword/value (keyword e))
-      (:string/value e)
-      (:number/value e)))
+      (case (:token/type e)
+        :symbol (symbol (:token/value e))
+        :keyword (keyword (:token/value e))
+        :number (:token/value e)
+        :string (:token/value e))))
 
 
 
@@ -216,34 +204,37 @@
                   (let [ci (or indent 0)]
                     (when (< 0 ci)
                       (apply str (repeat ci " "))))))]
-     (or (some-> (:symbol/value e) str)
-         (some-> (:keyword/value e) str)
-         (some-> (:string/value e) pr-str)
-         (some-> (:number/value e) str)
-         (when-let [ct (:coll/type e)]
-           (let [[x & xs] (seq->vec e)]
-             (str
-              (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
-              (cond
-                (nil? x) nil
-                
-                (nil? xs) (str (sep x) (->string x (+ 2 i)))
-                
-                :else
-                (loop [p nil
-                       [y & ys] xs
-                       s (str (sep x) (->string x (+ 2 i)))]
-                  (if (nil? y)
-                    s
-                    (let []
-                      (recur y ys (str s
-                                       (case ct :chain "\n\n"
-                                             (when (not (or (:form/linebreak y)
-                                                            (:form/indent y)))
-                                               " "))
-                                       (sep y)
-                                       (->string y (+ 2 i))))))))
-              (case ct :list ")" :vec "]" (:set :map) "}" :fn  ")" (:chain :uneval :quote :deref) nil))))))))
+     (or
+      (when-let [tt (:token/type e)]
+        (case tt
+          :symbol  (str (:token/value e))
+          :keyword (str (:token/value e))
+          :string  (pr-str (:token/value e))
+          :number  (str (:token/value e))))
+      (when-let [ct (:coll/type e)]
+        (let [[x & xs] (seq->vec e)]
+          (str
+           (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
+           (cond
+             (nil? x) nil
+             
+             (nil? xs) (str (sep x) (->string x (+ 2 i)))
+             
+             :else
+             (loop [p        nil
+                    [y & ys] xs
+                    s        (str (sep x) (->string x (+ 2 i)))]
+               (if (nil? y)
+                 s
+                 (let []
+                   (recur y ys (str s
+                                    (case ct :chain "\n\n"
+                                          (when (not (or (:form/linebreak y)
+                                                         (:form/indent y)))
+                                            " "))
+                                    (sep y)
+                                    (->string y (+ 2 i))))))))
+           (case ct :list ")" :vec "]" (:set :map) "}" :fn ")" (:chain :uneval :quote :deref) nil))))))))
 
 
 

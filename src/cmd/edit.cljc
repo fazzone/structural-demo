@@ -155,13 +155,11 @@
               (cond-> {:seq/first (assoc (form-duplicate-tx x) :coll/_contains parent )}
                 (:seq/next head) (assoc :seq/next (dup-spine parent (:seq/next head))))))]
     (cond 
-      (:symbol/value e)  {:symbol/value (:symbol/value e)}
-      (:keyword/value e) {:keyword/value (:keyword/value e)}
-      (:string/value e)  {:string/value (:string/value e)}
-      (:number/value e)  {:number/value (:number/value e)}
-      (:coll/type e)     (let [us (e/new-tempid)]
+      (:token/type e) {:token/type (:token/type e)
+                       :token/value (:token/value e)}
+      (:coll/type e)  (let [us (e/new-tempid)]
                            (merge (cond-> {:db/id us :coll/type (:coll/type e)}
-                                    (some? (:form/indent e)) (assoc :form/indent (:form/indent e))
+                                    (some? (:form/indent e))    (assoc :form/indent (:form/indent e))
                                     (some? (:form/linebreak e)) (assoc :form/linebreak (:form/linebreak e)))
                                   (dup-spine us e))))))
 

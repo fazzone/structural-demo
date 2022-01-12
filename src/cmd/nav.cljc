@@ -61,21 +61,5 @@
   (when-let [prev-sel (:chain/selection chain)]
     (select-form-tx db (:db/id prev-sel))))
 
-#_(register-sub ::select-chain
-              (->mutation (fn [db]
-                            (let [sel (get-selected-form db)]
-                              (if (= :chain (:coll/type sel))
-                                (restore-chain-selection-tx db sel)
-                                (select-chain-tx db sel))))))
 
-#_(defn drag*
-  [db mover]
-  (let [sel (get-selected-form db)]
-    (when-not (= :chain (:coll/type sel))
-      (when-let [target (some-> sel parents-vec peek :coll/_contains first mover hop-target)]
-        (let [newnode {:db/id "dragnew" :string/value "Drag new node"}]
-          (concat
-           [newnode]
-           (edit/insert-before-tx target newnode)
-           
-           #_(edit/form-replace-tx newnode sel)))))))
+

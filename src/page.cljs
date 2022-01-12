@@ -153,7 +153,7 @@
      {:db/ident ::evalchain
       :db/id "evalchain"
       :coll/type :vec
-      :seq/first {:string/value "No more evals" :coll/_contains "evalchain"}}
+      :seq/first {:token/type :string :token/value "No more evals" :coll/_contains "evalchain"}}
 
      {:db/ident ::command-chain
       :db/id "command-chain"
@@ -184,7 +184,8 @@
                            "evalchain"
                            "command-chain"}
           :seq/first {:db/id "label"
-                      :string/value "Keyboard"}
+                      :token/type :string
+                      :token/value "Keyboard"}
           :seq/next {:seq/first "defaultkeymap"
                      :seq/next {:seq/first "evalchain"
                                 :seq/next {:seq/first "command-chain"
@@ -385,7 +386,7 @@
 
 (rum/defc snapshot < dbrx/ereactive
   [e bus]
-  (let [tx (:number/value e)
+  (let [tx (int (:token/value e))
         r  (core/get-history bus tx)]
     (if-not tx
       (display-undo-preview e bus (when (:form/highlight e) "selected") nil)
@@ -469,53 +470,55 @@
   #_(inspector (d/entity-db k) bus))
 
 (defn token-class
-  [e]
-  (or (when-let [s (:symbol/value e)]
-        (case s
-          ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
-           "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
-           "if-let" "when-let" "recur" "try" "catch" "nil") "m"
-          ("first" "map" "filter" "apply" "reset!" "swap!"
-           "get" "assoc" "update" "cons" "conj" "seq" "next"
-           "prn" "println" "into" "set" "vector"
-           "take" "drop" "take-while" "dorp-while" "reduce"
-           "concat") "s"
-          "v"))
-      (when (:keyword/value e) "k")
-      (when (:string/value e) "l")
-      (when (:number/value e) "n")))
+  [t v]
+  (case t
+    :symbol  (case v
+               ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
+                "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
+                "if-let" "when-let" "recur" "try" "catch" "nil")
+               "m"
+               ("first" "map" "filter" "apply" "reset!" "swap!"
+                "get" "assoc" "update" "cons" "conj" "seq" "next"
+                "prn" "println" "into" "set" "vector"
+                "take" "drop" "take-while" "dorp-while" "reduce"
+                "concat")
+               "s"
+               "v")
+    :keyword "k"
+    :string  "l"
+    :number  "n"))
 
 (defn token-text
-  [e]
-  (->>
-   (or
-    (some-> e :symbol/value str)
-    (when-let [k (:keyword/value e)]
-      (let [is (string/index-of k "/")]
-        (if (> 0 is)
-          k
-          (rum/fragment
-           [:span.kn (subs k 0 is)]
-           (subs k is)))))
-    (some-> e :string/value pr-str)
-    (some-> e :number/value str))
-   #_(rum/fragment [:span.inline-tag.debug (str (:db/id e))])))
+  [t ^String v]
+  (case t
+    :symbol v
+    :keyword  v #_(let [is (string/index-of k "/")]
+                    (if (> 0 is)
+                      k
+                      (rum/fragment
+                       [:span.kn (subs k 0 is)]
+                       (subs k is))))
+    :string (pr-str v)
+    :number (str v)))
 
 (rum/defc fcc < dbrx/ereactive
   [e bus indent-prop proply]
   #_(when proply (prn "FccProply" (:db/id e) proply))
   (cond-> (or (when (:form/editing e)
                 (eb/edit-box e bus))
-              (when-let [tc (token-class e)]
-                [:span (cond-> {:key (:db/id e)
-                                :class (if (:form/highlight e)
-                                         (str tc " tk selected")
-                                         (str tc " tk"))
-                                :on-click (fn [ev]
-                                            (.stopPropagation ev)
-                                            (core/send! bus [:select (:db/id e)]))}
-                         (:form/highlight e) (assoc :ref "selected"))
-                 (token-text e)])
+              (when-let [tt (:token/type e)]
+                (let [tv (:token/value e)
+                      tc (token-class tt tv)
+                      it (token-text tt tv)]
+                 [:span (cond-> {:key (:db/id e)
+                                 :class (if (:form/highlight e)
+                                          (str tc " tk selected")
+                                          (str tc " tk"))
+                                 :on-click (fn [ev]
+                                             (.stopPropagation ev)
+                                             (core/send! bus [:select (:db/id e)]))}
+                          (:form/highlight e) (assoc :ref "selected"))
+                  it]))
               (when (:coll/type e)
                 (display-coll e
                               bus
@@ -573,7 +576,7 @@
      (when (< i breadcrumbs-max-numeric-label)
        [:span.inline-tag (str (inc i))])
      (if (= :list (:coll/type parent))
-       (or (str (some-> parent :seq/first :symbol/value)) "()")
+       (or (str (some-> parent :seq/first :token/value)) "()")
        (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
 
 (rum/defc parent-path
@@ -683,9 +686,9 @@
                                  (take 5))
            k (range 3)]
        (case k
-         0 (let [ent (d/entity db e)]
-             [:span.tk {:key e :class (token-class ent)}
-              (token-text ent)])
+         0 (let [{:token/keys [type value]} (d/entity db e)]
+             [:span.tk {:key e :class (token-class type value)}
+              (token-text type value)])
          1 [:span {:key (str "sr" e)} "x" (count ds)]
          2 [:span {:key (str "id" e)} (pr-str (take 5 (map first ds ))) ]))]))
 
@@ -708,7 +711,7 @@
           "")))]
    
    (if text
-     (stupid-symbol-search (d/entity-db sel) :symbol/value text)
+     (stupid-symbol-search (d/entity-db sel) :token/value text)
      [:span.modeline-content
       (if-not sel
         "(no selection)"
@@ -1363,7 +1366,7 @@
 ;; Scroll on settimeout so we don't query the dom and mutate it again immediately
 ;; Buffer all of the comments you write and use them as a commit msg
 
-;; keyword/value, symbol/value etc...
+;; keyword-value, symbol-value etc...
 ;; REALLY stupid compared to token/type because of multiple queries
 
 ;; Derefs, syntax quotes, etc - give them seq/first but make them not collections?

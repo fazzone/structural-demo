@@ -74,10 +74,7 @@
   [{::keys [text]} e bus]
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)
-                    (some-> (:symbol/value e) str)
-                    (some-> (:keyword/value e) str)
-                    (some-> (:string/value e) pr-str)
-                    (some-> (:number/value e) str))
+                    (e/->string e))
                 @text)
         form-eid (:db/id e)]
     [:input.edit-box.code-font

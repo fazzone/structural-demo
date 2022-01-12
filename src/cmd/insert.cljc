@@ -9,65 +9,33 @@
    [core :as core :refer [get-selected-form
                           move-selection-tx]]))
 
-#_(defn parse-token-tx
-  [s eid]
-  (println "PTT" eid (pr-str s))
-  (let [quote-start (string/starts-with? s "\"" )]
-    ;; cannot be a valid leaf, must be a string
-    (if (or quote-start (string/includes? s " "))
-      {:db/id eid
-       :string/value
-       (subs s
-             (if-not quote-start 0 1)
-             (- (count s)
-                (if-not (string/ends-with? s "\"" )
-                  0
-                  1)))}
-      (try
-        (println "Try to parse as code" (pr-str s))
-        #_(-> s
-              (edn/read-string)
-              (e/->tx)
-              (assoc :db/id eid))
-        (-> (e/string->tx s)
-            (assoc :db/id eid))
-        (catch #?(:cljs js/Error :clj Exception) e
-          (println "No edn" s)
-          (js/console.log e)
-          nil)))))
+(defn try-parse-edn
+  [s]
+  (try
+    (println "Try to parse as code" (pr-str s))
+    (e/string->tx s)
+    (catch #?(:cljs js/Error :clj Exception) e
+      (println "No edn" s)
+      (js/console.log e)
+      nil)))
 
 (defn parse-token-tx
   [s eid]
   (println "PTT" eid (pr-str s))
-  (let [quote-start (string/starts-with? s "\"" )]
-    ;; cannot be a valid leaf, must be a string
-    (or (try
-          (println "Try to parse as code" (pr-str s))
-          (-> (e/string->tx s)
-              (assoc :db/id eid))
-          (catch #?(:cljs js/Error :clj Exception) e
-            (println "No edn" s)
-            (js/console.log e)
-            nil))
-
-     (when (or quote-start (string/includes? s " "))
-       {:db/id eid
-        :string/value
-        (subs s
-              (if-not quote-start 0 1)
-              (- (count s)
-                 (if-not (string/ends-with? s "\"" )
-                   0
-                   1)))}))))
+  (when-not (empty? s)
+    (some-> (or (try-parse-edn s)
+                (and (string/starts-with? s "\"" )
+                     (try-parse-edn (str s "\""))))
+            (assoc :db/id eid))))
 
 (defn accept-edit-tx
   [form-eid value]
   [{:db/id :db/current-tx
     :edit/of form-eid}
-   [:db/retract form-eid :symbol/value]
-   [:db/retract form-eid :keyword/value]
-   [:db/retract form-eid :string/value]
-   [:db/retract form-eid :number/value]
+   
+   [:db/retract form-eid :token/value]
+   [:db/retract form-eid :token/type]
+   
    (parse-token-tx value form-eid)
    [:db/add form-eid :form/edited-tx :db/current-tx]
 

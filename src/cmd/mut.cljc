@@ -235,26 +235,22 @@
 
 (defn replace-with-pr-str
   [sel]
-  (let [new-node {:db/id        "eval-result"
-                  :string/value (pr-str (e/->form sel))}]
+  (let [new-node {:db/id       "eval-result"
+                  :token/type  :string
+                  :token/value (pr-str (e/->form sel))}]
     (prn "RPPRS" new-node )
-    (doto
-        (into [new-node]
-              (concat
-               (edit/form-overwrite-tx sel "eval-result")
-               (move-selection-tx (:db/id sel) "eval-result")))
-        prn
-        )))
+    (into [new-node]
+          (concat
+           (edit/form-overwrite-tx sel "eval-result")
+           (move-selection-tx (:db/id sel) "eval-result")))))
 
-(defn plus*
-  [e]
-  (when-let [n (:number/value e)]
-    [[:db/add (:db/id e) :number/value (inc n)]]))
+(defn unary-arith
+  [f e]
+  (when (= :number (:token/type e)) 
+    [[:db/add (:db/id e) :token/value (f (:token/value e))]]))
 
-(defn minus*
-  [e]
-  (when-let [n (:number/value e)]
-    [[:db/add (:db/id e) :number/value (dec n)]]))
+(def plus*  (partial unary-arith inc))
+(def minus* (partial unary-arith dec))
 
 (defn hoist-tx
   [sel]
@@ -295,11 +291,12 @@
 
 ;; This is junk because of retracting the highlight properly
 (defn stitch*
-  [sel vt e]
+  [sel e]
   (when-let [head (:seq/first e)]
-    (let [xs (keep vt (tree-seq :coll/type e/seq->vec e)
+    (let [xs (keep :token/value (tree-seq :coll/type e/seq->vec e)
                    #_(e/seq->vec e))]
-      (into [[:db/add (:db/id head) vt (string/join "-" xs)]]
+      (into [[:db/add (:db/id head) :token/value (string/join "-" xs)]
+             [:db/add (:db/id head) :token/type :symbol]]
             (concat (edit/form-raise-tx head)
                     (move-selection-tx (:db/id sel) (:db/id head)))))))
 
@@ -308,7 +305,7 @@
   (some->> (nav/parents-seq c)
            (filter (comp #{:tear} :coll/type))
            (first)
-           (stitch* sel :symbol/value)))
+           (stitch* sel)))
 
 (defn tear-str
   [s]
@@ -316,24 +313,21 @@
     (when more sp)))
 
 (defn tear*
-  ([sel]
-   (or (tear* sel :symbol/value)
-       (tear* sel :string/value)
-       (tear* sel :keyword/value)))
-  ([sel vt]
-   (when-let [vs (vt sel)]
-     (let [[head & more] (string/split vs #"[./\-]")]
-       (into [[:db/add (:db/id sel) vt head]
-              (when more
-                [:db/add "newnode" :seq/next "newtail"])
-              (when more
-                (-> (for [e more]
-                      {vt e :coll/_contains "newnode"})
-                    (e/seq-tx)
-                    (assoc :db/id "newtail")))]
+  [sel]
+  (when-let [vs (:token/value sel)]
+    (let [[head & more] (string/split vs #"[./\-]")]
+      (into [[:db/add (:db/id sel) :token/value head]
+             [:db/add (:db/id sel) :token/type (:token/type sel)]
+             (when more
+               [:db/add "newnode" :seq/next "newtail"])
+             (when more
+               (-> (for [e more]
+                     {:token/value e :coll/_contains "newnode"})
+                   (e/seq-tx)
+                   (assoc :db/id "newtail")))]
             (concat
              (edit/form-wrap-tx sel :tear)
-             (move-selection-tx (:db/id sel) "newnode")))))))
+             (move-selection-tx (:db/id sel) "newnode"))))))
 (defn tear-tx
   [sel]
   (or (restitch sel sel)
@@ -348,31 +342,23 @@
       :else (recur more))))
 
 (defn find-next
-  ([sel]
-   (or (find-next sel :symbol/value)
-       (find-next sel :keyword/value)
-       (find-next sel :string/value)))
-  ([sel vt]
-   (when-let [text (vt sel)]
-     (let [db  (d/entity-db sel)
-           ln  (str text "\udbff\udfff")
-           ir  (filter (fn [[e a v t]] (= v text)) (d/index-range db vt text ln))
-           fnf (find-next* (:db/id sel) ir)]
-       (d/entity
-        (d/entity-db sel)
-        (or fnf
-            (when (next ir)
-              (first (first ir)))))))))
+  [sel]
+  (when-let [text (:token/value sel)]
+    (let [db  (d/entity-db sel)
+          ln  (str text "\udbff\udfff")
+          ir  (filter (fn [[e a v t]] (= v text)) (d/index-range db :token/value text ln))
+          fnf (find-next* (:db/id sel) ir)]
+      (d/entity
+       (d/entity-db sel)
+       (or fnf
+           (when (next ir)
+             (first (first ir))))))))
 
 (defn find-first
   ([sel]
-   (or (find-first sel :symbol/value)
-       (find-first sel :keyword/value)
-       (find-first sel :string/value)))
-  ([sel vt]
-   (when-let [text (vt sel)]
+   (when-let [text (:token/value sel)]
      (let [ln  (str text "\udbff\udfff")
-           ir  (d/index-range (d/entity-db sel) vt text ln)
+           ir  (d/index-range (d/entity-db sel) :token/value text ln)
            dst (apply min (map first ir))]
        (when (and dst (not= dst (:db/id sel)))
          (d/entity (d/entity-db sel) dst))))))

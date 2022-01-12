@@ -1,11 +1,8 @@
 (ns schema)
 
 (def form-schema
-  {:symbol/value {:db/index true}
-   :number/value {}
-   :string/value {:db/index true}
-   :keyword/value {:db/index true}
-   :whitespace/value {}
+  {:token/type {}
+   :token/value {:db/index true}
    :coll/type {}
    :coll/contains {:db/valueType :db.type/ref
                    :db/cardinality :db.cardinality/many}
