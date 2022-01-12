@@ -132,17 +132,29 @@
                    last-tx))))
     (connect-sub! bus topic ch)))
 
-(defn register-movement!
+(defn movement->mutation
+  [mover]
+  (fn [db & args]
+    (let [sel (get-selected-form db)
+          nf  (apply mover sel args)]
+      (move-selection-tx (:db/id sel) (:db/id nf)))))
+
+
+
+#_(defn register-movement!
   [{:keys [bus conn history] :as app} topic mover]
   (let [ch (async/chan)]
     (go-loop []
       (let [[_ & args :as mut] (async/<! ch)
-            src                (get-selection bus)
+            src                (get-selected-form @conn)
             dst                (try (apply mover src args)
                                     (catch #?(:cljs js/Error :clj Exception) e
-                                      {:error e}))]
+                                      {:error e}))
+
+            ]
         (when-not (:error dst)
-         (set-selection! bus dst))
+
+          )
         (recur)))
     (connect-sub! bus topic ch)))
 

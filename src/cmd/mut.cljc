@@ -141,13 +141,12 @@
       (into [nil] children))))
 
 (defn numeric-movement
-  [sel n]
+  [n sel]
   (when-let [nmv (get-numeric-movement-vec sel)]
     #_(println "NMove" n sel )
     #_(run! prn (map vector (range) nmv))
     (when (< -1 n (count nmv))
-      (move-selection-tx (:db/id sel)
-                         (:db/id (nth nmv n))))))
+      (nth nmv n))))
 
 (defn ingest-result
   [db et c]
@@ -348,35 +347,35 @@
       (and more (= e me)) (first (first more))
       :else (recur more))))
 
-(defn find-next-tx
+(defn find-next
   ([sel]
-   (or (find-next-tx sel :symbol/value)
-       (find-next-tx sel :keyword/value)
-       (find-next-tx sel :string/value)))
+   (or (find-next sel :symbol/value)
+       (find-next sel :keyword/value)
+       (find-next sel :string/value)))
   ([sel vt]
    (when-let [text (vt sel)]
      (let [db  (d/entity-db sel)
            ln  (str text "\udbff\udfff")
            ir  (filter (fn [[e a v t]] (= v text)) (d/index-range db vt text ln))
            fnf (find-next* (:db/id sel) ir)]
+       (d/entity
+        (d/entity-db sel)
+        (or fnf
+            (when (next ir)
+              (first (first ir)))))))))
 
-       (select-form-tx db
-                       (or fnf
-                           (when (next ir)
-                             (first (first ir)))))))))
-
-(defn find-first-tx
+(defn find-first
   ([sel]
-   (or (find-first-tx sel :symbol/value)
-       (find-first-tx sel :keyword/value)
-       (find-first-tx sel :string/value)))
+   (or (find-first sel :symbol/value)
+       (find-first sel :keyword/value)
+       (find-first sel :string/value)))
   ([sel vt]
    (when-let [text (vt sel)]
      (let [ln  (str text "\udbff\udfff")
            ir  (d/index-range (d/entity-db sel) vt text ln)
            dst (apply min (map first ir))]
        (when (and dst (not= dst (:db/id sel)))
-         (move-selection-tx (:db/id sel) dst))))))
+         (d/entity (d/entity-db sel) dst))))))
 
 (defn make-alias-tx
   [sel]
@@ -408,114 +407,88 @@
 (def drag-left-tx  (partial drag* :move/prev-sibling))
 (def drag-right-tx (partial drag* :move/next-sibling))
 
+(def movement-commands
+  {:select          (fn [e eid] (d/entity (d/entity-db e) eid))
+   :find-next       find-next
+   :find-first      find-first
+   :flow-right      (partial move/move :move/flow)
+   :flow-left       (partial move/move :move/back-flow)
+   :flow-right-coll (fn [sel]
+                      (->> sel
+                           (iterate (partial move/move :move/flow))
+                           (next)
+                           (take-while some?)
+                           (filter :coll/type)
+                           (first)))
+   :parent          (partial move/move :move/up)
+   :toplevel        (partial move/move :move/most-upward)
+   :next            (partial move/move :move/next-sibling)
+   :prev            (partial move/move :move/prev-sibling)
+   :tail            (partial move/move :move/most-nested)
+   :m1              (partial numeric-movement 0)
+   :m2              (partial numeric-movement 1)
+   :m3              (partial numeric-movement 2)
+   :m4              (partial numeric-movement 3)
+   :m5              (partial numeric-movement 4)
+   :m6              (partial numeric-movement 5)
+   :m7              (partial numeric-movement 6)
+   :m8              (partial numeric-movement 7)})
+
+(def editing-commands
+  {:float (comp edit/exchange-with-previous-tx get-selected-form)
+   :sink  (comp edit/exchange-with-next-tx get-selected-form)
+   
+   :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
+   :hop-left     nav/hop-left
+   :hop-right    nav/hop-right
+
+   :uneval                         (comp uneval-and-next get-selected-form)
+   :insert-right                   (comp edit/insert-editing-after get-selected-form)
+   :insert-left                    (comp edit/insert-editing-before get-selected-form)
+   :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
+   :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
+   :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
+   :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
+   :edit/finish-and-edit-next-node (fn [db text] (->> text (insert/finish-edit-and-edit-next-tx (d/entity db [:form/editing true]))))
+   :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
+   :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
+   :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
+   :raise                          (comp edit/form-raise-tx get-selected-form)
+   :clone                          (comp edit/insert-duplicate-tx get-selected-form)
+   :linebreak                      linebreak-selected-form-tx
+   :compose                        (fn [db] (edit/wrap-and-edit-first-tx (get-selected-form db) :list))
+   :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
+   :indent                         (fn [db] (indent-selected-form-tx db 1))
+   :dedent                         (fn [db] (indent-selected-form-tx db -1))
+   :slurp-right                    (fn [db] (edit/slurp-right-tx (get-selected-form db)))
+   :barf-right                     (fn [db] (edit/barf-right-tx (get-selected-form db)))
+   :new-list                       (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {}))
+   :new-vec                        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :vec "" {}))
+   :new-deref                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :deref "" {}))
+   :new-quote                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
+   :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
+   :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
+   :new-bar                        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :bar "" {}))
+   :eval-result                    eval-result
+   :ingest-result                  ingest-result
+   :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
+   :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
+   :plus                           (comp plus* get-selected-form)
+   :minus                          (comp minus* get-selected-form)
+   :insert-data                    (fn [db c] (insert-data (get-selected-form db) c))
+   :insert-txdata                  (fn [db c] (insert-txdata (get-selected-form db) c))
+   :hoist                          (comp hoist-tx get-selected-form)
+   :gobble                         (comp gobble-tx get-selected-form)
+   :move-to-deleted-chain          (comp move-to-deleted-chain get-selected-form)
+   :tear                           (comp tear-tx get-selected-form)
+   :alias                          (comp make-alias-tx get-selected-form)
+   :drag-left                      (comp drag-left-tx get-selected-form)
+   :drag-right                     (comp drag-right-tx get-selected-form)
+   :split                          (comp edit/form-split-tx get-selected-form)
+   :splice                         (comp edit/form-splice-tx get-selected-form)})
+
 (def dispatch-table
-  {:select     nav/select-form-tx
-   :find-next  (comp find-next-tx get-selected-form)
-   :find-first (comp find-first-tx get-selected-form)
-   
-   :flow-right      (fn [db] (move/movement-tx db :move/flow))
-   :flow-left       (fn [db] (move/movement-tx db :move/back-flow))
-   :flow-right-coll (fn [db]
-                      (println "FRCnext" )
-                      (let [sel (get-selected-form db)]
-                        (when-let [dst (->> sel
-                                            (iterate (partial move/move :move/flow))
-                                            (next)
-                                            (take-while some?)
-                                            (filter :coll/type)
-                                            (first))]
-                          (move-selection-tx (:db/id sel) (:db/id dst)))))
-   :float           (comp edit/exchange-with-previous-tx get-selected-form)
-   :sink            (comp edit/exchange-with-next-tx get-selected-form)
-   :parent          (fn [db] (move/movement-tx db :move/up))
-   :toplevel        (fn [db] (move/movement-tx db :move/most-upward))
-   :next            (fn [db] (move/movement-tx db :move/next-sibling))
-   :prev            (fn [db] (move/movement-tx db :move/prev-sibling))
-   :tail            (fn [db] (move/movement-tx db :move/most-nested))
-   
-   :uneval (comp uneval-and-next get-selected-form)
-   
-   :insert-right (comp edit/insert-editing-after get-selected-form)
-   :insert-left  (comp edit/insert-editing-before get-selected-form)
-   
-   ;; :insert-right                   (fn [db] (edit/insert-editing-tx db :after))
-   ;; :insert-left                    (fn [db] (edit/insert-editing-tx db :before))
-   
-   :insert-right-newline
-   (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
-   
-   :edit/reject
-   (fn [db]
-     (insert/reject-edit-tx db (d/entid db [:form/editing true])))
-   
-   :edit/finish
-   (fn [db text]
-     (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
-   
-   :edit/finish-and-move-up
-   (fn [db text]
-     (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
-   
-   :edit/finish-and-edit-next-node
-   (fn [db text]
-     (->> text
-          (insert/finish-edit-and-edit-next-tx
-           (d/entity db [:form/editing true])
-           )))
-   
-   :edit/wrap        (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
-   :delete-left      (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
-   :delete-right     (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
-   :raise            (comp edit/form-raise-tx get-selected-form)
-   :clone            (comp edit/insert-duplicate-tx get-selected-form)
-   :linebreak        linebreak-selected-form-tx
-   :hop-left         nav/hop-left
-   :hop-right        nav/hop-right
-   :compose          (fn [db] (edit/wrap-and-edit-first-tx (get-selected-form db) :list))
-   :wrap             (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
-   :indent           (fn [db] (indent-selected-form-tx db 1))
-   :dedent           (fn [db] (indent-selected-form-tx db -1))
-   :slurp-right      (fn [db] (edit/slurp-right-tx (get-selected-form db)))
-   :barf-right       (fn [db] (edit/barf-right-tx (get-selected-form db)))
-   :new-list         (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {}))
-   :new-vec          (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :vec "" {}))
-   :new-deref        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :deref "" {}))
-   :new-quote        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
-   :new-syntax-quote (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
-   :new-unquote      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
-
-   :new-bar (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :bar "" {}))
-
-   :m1                    (fn [db] (numeric-movement (get-selected-form db) 0))
-   :m2                    (fn [db] (numeric-movement (get-selected-form db) 1))
-   :m3                    (fn [db] (numeric-movement (get-selected-form db) 2))
-   :m4                    (fn [db] (numeric-movement (get-selected-form db) 3))
-   :m5                    (fn [db] (numeric-movement (get-selected-form db) 4))
-   :m6                    (fn [db] (numeric-movement (get-selected-form db) 5))
-   :m7                    (fn [db] (numeric-movement (get-selected-form db) 6))
-   :m8                    (fn [db] (numeric-movement (get-selected-form db) 7)) 
-   :eval-result           eval-result
-   :ingest-result         ingest-result
-   :hide                  (fn [db]
-                            (toggle-hide-show
-                             (peek (nav/parents-vec (get-selected-form db)))))
-   :select-chain          (fn [db] (nav/select-chain-tx (get-selected-form db)))
-   :stringify             (fn [db] (replace-with-pr-str (get-selected-form db)))
-   :plus                  (comp plus* get-selected-form)
-   :minus                 (comp minus* get-selected-form)
-   :insert-data           (fn [db c] (insert-data (get-selected-form db) c))
-   :insert-txdata         (fn [db c] (insert-txdata (get-selected-form db) c))
-   :hoist                 (comp hoist-tx get-selected-form)
-   :gobble                (comp gobble-tx get-selected-form)
-   :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
-   :tear                  (comp tear-tx get-selected-form)
-
-   
-   :alias      (comp make-alias-tx get-selected-form)
-   :drag-left  (comp drag-left-tx get-selected-form)
-   :drag-right (comp drag-right-tx get-selected-form)
-
-
-   :split  (comp edit/form-split-tx get-selected-form)
-   :splice (comp edit/form-splice-tx get-selected-form)})
+  (merge movement-commands
+         editing-commands
+         ))
 

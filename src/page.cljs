@@ -140,9 +140,9 @@
                 
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/clojure.core.clj"))]
                 
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
                 
                 #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
                 )]
@@ -376,7 +376,7 @@
   [:ul.undo-preview
    (when s {:class s :ref "selected"})
    (when top?
-     [:span.prose-font "History"])
+     [:span.form-title "History"])
    (for [e (cond-> (e/seq->vec c) (not top?) reverse)]
      (rum/with-key
        (snapshot e b)
@@ -440,7 +440,7 @@
   (println "DCA" c)
   [:div.alias
    (when s {:class s :ref "selected"})
-   [:div.prose-font "Alias " (:db/id c) " of " (:db/id of)]
+   [:div.form-title "Alias " (:db/id c) " of " (:db/id of)]
    (fcc of b i s)])
 
 (defmethod display-coll :eval-result [c b i s]
@@ -453,7 +453,7 @@
   [db bus]
   (let [sel (get-selected-form db)]
     [:div.inspector
-     [:span.prose-font (str "Inspect #" (:db/id sel))]
+     [:span.form-title (str "Inspect #" (:db/id sel))]
      [:div
       (debug/datoms-table-eavt*
        (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
@@ -712,12 +712,11 @@
         "(no selection)"
         (str "#" (:db/id sel)
              " "
-             "\u2460"
-             "\u2779"
-
-             "\u2474"
-             "\u24fa"
-                                       
+             ;; "\u2460"
+             ;; "\u2779"
+             ;; "\u2474"
+             ;; "\u24fa"
+             
              #_(pr-str
                 (apply max
                        (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
@@ -931,7 +930,11 @@
                                     'sel scivar-sel
                                     '->seq e/seq->seq}})
          ]
-     (doseq [[m f] mut/dispatch-table]
+     #_(doseq [[m f] mut/dispatch-table]
+         (core/register-simple! a m f))
+     (doseq [[m f] mut/movement-commands]
+       (core/register-simple! a m (core/movement->mutation f)))
+     (doseq [[m f] mut/editing-commands]
        (core/register-simple! a m f))
      (doto a
        (core/register-mutation! :kbd
@@ -1033,7 +1036,7 @@
                        (catch :default e
                          (reduced
                           {:failure
-                           [:div [:p.prose-font [:span {:style {:color "tomato"}}
+                           [:div [:p.form-title [:span {:style {:color "tomato"}}
                                                  "Exception"]
                                   " "
                                   (ex-message e)]
