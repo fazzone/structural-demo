@@ -51,13 +51,20 @@
                       (core/connect-sub! bus (:db/id ent) ch)
                       (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [old-state {::keys [nupdate] :as new-state}]
-                    (let [[e _ & old-props] (:rum/args old-state)
-                          [_ _ & new-props] (:rum/args new-state)]
-                      #_(println " " (:db/id e) "Old props" old-props
-                                 "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
-                      (cond
-                        (not= old-props new-props) true
-                        (some? @nupdate)           (not (reset! nupdate false)))))
+                    
+                    (when @nupdate
+                      (reset! nupdate false)
+                      true)
+                    
+                    #_(let [[e _ & old-props] (:rum/args old-state)
+                            [_ _ & new-props] (:rum/args new-state)]
+                        #_(println " " (:db/id e) "Old props" old-props
+                                   "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
+                      
+                      
+                        #_(cond
+                            (not= old-props new-props) true
+                            (some? @nupdate)           (not (reset! nupdate false)))))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)

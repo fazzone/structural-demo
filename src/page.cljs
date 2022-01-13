@@ -206,13 +206,14 @@
 (declare el-bfs)
 (rum/defc top-level-form-component < dbrx/ereactive 
   [e bus p]
-  [:div.form-card {:ref "top-level"}
+  [:div.form-card
+   {}
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    
    #_[:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
    
    [:div.top-level-form.code-font
-    (fcc e bus 0 p)]
+    ^:inline (fcc e bus 0 p)]
    [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
 
 (defn computed-indent
@@ -230,7 +231,8 @@
       [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
      child)))
 
-(defn do-indent*
+
+#_(defn do-indent*
   [child ip fi linebreak?]
   #_(println "DI" fi linebreak?)
   (if (and (or (nil? fi) (zero? fi)) (not linebreak?))
@@ -248,57 +250,88 @@
         [:span.indenter {:style {:margin-left (str fi "ch")
                                  ;; :background-color "cadetblue"
                                  }}])]
+     
      child)))
 
-(defn coll-fragment
-  [e indent-prop]
-  (rum/fragment
-   (case (:coll/type e) :list "(" :vec "[" :map "{")
-   (for [x (e/seq->vec e)]
-     (rum/with-key (fcc x (computed-indent e indent-prop)) (:db/id x)))
-   (case (:coll/type e) :list ")" :vec "]" :map "}")))
-
-(defmulti display-coll (fn [c bus indent classes]
-                         (:coll/type c)))
-
-(defmethod display-coll :default [c _ _ _]
-  [:code (pr-str c)])
 
 (def render-counter (atom 0))
 
-(defn delimited-coll
-  [open close e bus indent classes proply]
-  #_(when proply (println "DC" e proply))
+(comment
   [:span.c.dl
-   (when classes {:class classes :ref "selected"})
+   {}
    [:span.d
-    
     #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
-    
     #_(when-let [p (get proply (:db/id e))]
         [:span.inline-tag-outer
          [:span.inline-tag-inner
           (str p)]])
-    
     #_[:span.inline-tag.debug
        (str (swap! render-counter inc))
        #_(str (:db/id e))]
-    
     open]
-   (for [x (e/seq->vec e)]
-       (-> (fcc x bus (computed-indent e indent) proply)
-           (rum/with-key (:db/id x))))
+   "..."
    [:span.d.cl close]])
 
+(rum/defc any-coll
+  [ct children classes bus indent proply]
+  (let [coll-class  (case ct
+                      (:list :vec :map :set :fn :tear) "dl"
+                      nil)
+        extra-class (case ct
+                      :uneval                                  "unev"
+                      (:deref :quote :syntax-quote :unquote
+                              :unquote-splicing :reader-macro) "pf"
+                      nil)
+        _           "«" 
+        open-delim  (case ct
+                      :list             "("
+                      :vec              "["
+                      :map              "{"
+                      :set              "#{"
+                      :fn               "#("
+                      :tear             "«"
+                      :uneval           "#_"
+                      :deref            "@"
+                      :quote            "'"
+                      :syntax-quote     "`"
+                      :unquote          "~"
+                      :unquote-splicing "~@"
+                      :reader-macro     "#"
+                      nil)
+        close-delim (case ct
+                      :list ")"
+                      :vec  "]"
+                      :map  "}"
+                      :set  "}"
+                      :fn   ")"
+                      :tear "»" 
+                      nil)]
+    [:span {:class ["c" coll-class extra-class classes]}
+     #_(str ct (pr-str (map :db/id children)))
+     (cond
+       extra-class [:span.d.pfc ^String open-delim]
+       open-delim  [:span.d ^String open-delim]
+       :else       nil)
+     (for [c children]
+       (let [{:form/keys [linebreak indent]} c
+             rc                              (fcc c bus indent proply)]
+         (rum/fragment
+          (cond
+            (and indent linebreak) [:span.indent-chars {} "\n"
+                                    [:span.indenter {:style {:margin-left (str indent "ch")}}]]
+            
+            linebreak              [:span.indent-chars {} "\n"]
+            indent [:span.indent-chars {}
+                    [:span.indenter {:style {:margin-left (str indent "ch")}}]])
+          
+          ^:inline rc))
+       #_(-> (fcc c bus indent proply)
+             (rum/with-key (:db/id c))))
+     (when close-delim
+       [:span.d ^String close-delim])]))
 
-(defmethod display-coll :list [c b i s p] (delimited-coll  "(" ")" c b i s p))
-(defmethod display-coll :vec  [c b i s p] (delimited-coll  "[" "]" c b i s p))
-(defmethod display-coll :map  [c b i s p] (delimited-coll  "{" "}" c b i s p))
-(defmethod display-coll :set  [c b i s p] (delimited-coll "#{" "}" c b i s p))
-(defmethod display-coll :fn   [c b i s p] (delimited-coll "#(" ")" c b i s p))
-(defmethod display-coll :tear [c b i s p] (delimited-coll  "«" "»" c b i s p))
 
-(defmethod display-coll :hidden  [c b i s p]
+#_(defmethod display-coll :hidden  [c b i s p]
   [:div {:style {:width "800px"}}
    (delimited-coll "SVG{ " " }SVG" c b i s p)
    (cc/svg-viewbox c b)
@@ -315,68 +348,13 @@
 
 
 
-(defmethod display-coll :uneval  [c b i s p]
-  [:span.c.unev
-   (when s {:class s :ref "selected"})
-   "#_"
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :deref  [c b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc "@"]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :quote  [c b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc "'"]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :syntax-quote  [c b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc "`"]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :unquote  [c b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc "~"]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :unquote-splicing  [c b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc "~@"]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
-(defmethod display-coll :reader-macro  [{:reader-macro/keys [dispatch] :as c} b i s p]
-  [:span.c.pf
-   (when s {:class s :ref "selected"})
-   [:span.pfc (str "#" dispatch)]
-   (for [x (e/seq->vec c)]
-     (-> (fcc x b (computed-indent c i) p)
-         (rum/with-key (:db/id x))))])
-
 (declare snapshot)
 
 (rum/defc display-undo-preview
   [c b s top?]
   [:ul.undo-preview
-   (when s {:class s :ref "selected"})
+   #_(when s {:class s :ref "selected"})
+   {}
    (when top?
      [:span.form-title "History"])
    (for [e (cond-> (e/seq->vec c) (not top?) reverse)]
@@ -391,7 +369,8 @@
     (if-not tx
       (display-undo-preview e bus (when (:form/highlight e) "selected") nil)
       [:li.undo-preview-entry
-       (when (:form/highlight e) {:class "selected" :ref "selected"})
+       {:class [(when (:form/highlight e)
+                  "selected")]}
        (str tx " " (some-> r :mut pr-str))
        #_(apply str (interpose " " (map pr-str (:mut r))))
        (if-not (some (fn [[e a v t]] (not= a :form/highlight))
@@ -399,33 +378,28 @@
          " movement only"
          (when r
            [:div.alternate-reality
-            (-> (peek (nav/parents-vec (get-selected-form (:db-after r))))
-                (fcc core/blackhole 0 nil))]))])))
+            {}
+            ^:inline (-> (peek (nav/parents-vec (get-selected-form (:db-after r))))
+                         (fcc core/blackhole 0 nil)),]))])))
 
-(defmethod display-coll :undo-preview  [c b i s p]
+#_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-(defmethod display-coll :chain [chain bus i classes proply]
+(rum/defc nchainc [chain bus]
   [:div.chain.hide-scrollbar
    {:key (:db/id chain)
-    :ref "chain"
-    :id (str "c" (:db/id chain))
-    :class classes}
-   #_(str "Chain" (:db/id chain))
+    :id (str "c" (:db/id chain))}
    (for [f (e/seq->vec chain)]
-     (-> (top-level-form-component f bus proply)
+     (-> (top-level-form-component f bus nil)
          (rum/with-key (:db/id f))))])
 
-(defmethod display-coll :bar [bar bus i c p]
+(rum/defc nbarc [bar bus]
   [:div.bar.hide-scrollbar
-   (when c {:ref "selected"})
-   #_(cond-> {:class c}
-       c (assoc :ref "selected"))
    (for [chain-head (e/seq->vec bar)]
-     (-> (fcc chain-head bus i p)
+     (-> (fcc chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
 
-(defmethod display-coll :keyboard [k bus i]
+#_(defmethod display-coll :keyboard [k bus i]
   "No keyboardn"
   [:div.display-keyboard
    (ck/keyboard-diagram
@@ -438,14 +412,14 @@
     (ck/kkc {} "F")]])
 
 
-(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
+#_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
   (println "DCA" c)
   [:div.alias
    (when s {:class s :ref "selected"})
    [:div.form-title "Alias " (:db/id c) " of " (:db/id of)]
    (fcc of b i s)])
 
-(defmethod display-coll :eval-result [c b i s]
+#_(defmethod display-coll :eval-result [c b i s]
   [:div.eval-result-outer
    [:span.eval-result
     (str "[" (:db/id c) "] " (:db/id (:eval/of c)) "=>")
@@ -465,7 +439,8 @@
              (filter (fn [[e a v t]]
                        (= v (:db/id sel)))))))]]))
 
-(defmethod display-coll :inspect [k bus i]
+
+#_(defmethod display-coll :inspect [k bus i]
   "No inspect"
   #_(inspector (d/entity-db k) bus))
 
@@ -501,42 +476,44 @@
     :string (pr-str v)
     :number (str v)))
 
-(rum/defc fcc < dbrx/ereactive
+
+
+(rum/defc fcc < dbrx/ereactive {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
-  #_(when proply (prn "FccProply" (:db/id e) proply))
-  (cond-> (or (when (:form/editing e)
-                (eb/edit-box e bus))
-              (when-let [tt (:token/type e)]
-                (let [tv (:token/value e)
-                      tc (token-class tt tv)
-                      it (token-text tt tv)]
-                 [:span (cond-> {:key (:db/id e)
-                                 :class (if (:form/highlight e)
-                                          (str tc " tk selected")
-                                          (str tc " tk"))
-                                 :on-click (fn [ev]
-                                             (.stopPropagation ev)
-                                             (core/send! bus [:select (:db/id e)]))}
-                          (:form/highlight e) (assoc :ref "selected"))
-                  it]))
-              (when (:coll/type e)
-                (display-coll e
-                              bus
-                              (+ 2 indent-prop)
-                              (when (:form/highlight e) "selected")
-                              proply
-                              #_(if-not (:form/highlight e)
-                                  proply
-                                  (zipmap
-                                   (map :db/id (next (mut/get-numeric-movement-vec e)))
-                                   (range 2 9)))))
-              (comment "Probably a retracted entity, do nothing"))
+  (cond
+    (:form/editing e)
+    (eb/edit-box e bus)
     
-    (not (= :noindent proply))
-    (do-indent*
-     indent-prop
-     (:form/indent e)
-     (:form/linebreak e))))
+    (:token/type e)
+    (let [tt (:token/type e)
+          tv (:token/value e)
+          tc (token-class tt tv)
+          it (token-text tt tv)]
+      [:span {:key      (:db/id e)
+              :class    (if (:form/highlight e)
+                          (str "tk selected " tc)
+                          (str "tk " tc))
+              :on-click (fn [ev]
+                          (.stopPropagation ev)
+                          (core/send! bus [:select (:db/id e)]))}
+       ^String it])
+    
+    (:coll/type e)
+    (case (:coll/type e)
+      nil    (comment "Probably a retracted entity, do nothing")
+      :chain (nchainc e bus)
+      :bar   (nbarc e bus)
+      (any-coll (:coll/type e)
+                (e/seq->vec e)
+                (when (:form/highlight e) "selected")
+                bus
+                (+ 2 indent-prop)
+                proply
+                #_(if-not (:form/highlight e)
+                    proply
+                    (zipmap
+                     (map :db/id (next (mut/get-numeric-movement-vec e)))
+                     (range 2 9)))))))
 
 #_(register-sub ::extract-to-new-top-level
               (->mutation
@@ -675,22 +652,42 @@
   ;; U+10FFFF
   (d/index-range db sa text (str text "\udbff\udfff")))
 
-(defn stupid-symbol-search
+
+
+(rum/defc stupid-symbol-search
   [db sa text]
   (println "Text" (count text) (pr-str text))
   (when (pos? (count text))
     [:div.search
-     (for [[v [[e] :as ds]] (->> (search* db sa text)
-                                 (group-by #(nth % 2))
-                                 (sort-by (comp - count second))
-                                 (take 5))
-           k (range 3)]
-       (case k
-         0 (let [{:token/keys [type value]} (d/entity db e)]
-             [:span.tk {:key e :class (token-class type value)}
-              (token-text type value)])
-         1 [:span {:key (str "sr" e)} "x" (count ds)]
-         2 [:span {:key (str "id" e)} (pr-str (take 5 (map first ds ))) ]))]))
+     {}
+     #_(for [[v [[e] :as ds]] (->> (search* db sa text)
+                                   (group-by #(nth % 2))
+                                   (sort-by (comp - count second))
+                                   (take 5))]
+         (rum/fragment
+          (let [{:token/keys [type value]} (d/entity db e)]
+            [:span.tk {:key e :class (token-class type value)}
+             (token-text type value)])
+          [:span {:key (str "sr" e)} "x" (count ds)]
+          [:span {:key (str "id" e)} (pr-str (take 5 (map first ds ))) ]))
+     (let [results (->> (search* db sa text)
+                        (group-by #(nth % 2))
+                        (sort-by (comp - count second))
+                        (take 5))]
+       (println "Results" results)
+       
+       (for [[v [[e] :as ds]] results]
+         (println "V e" v e)
+         (pr-str e)
+         (rum/fragment
+          (let [{:token/keys [type value]} (d/entity db e)
+                tt (token-text type value)]
+            [:span.tk {:key e :class (token-class type value)} ^String tt])
+          ;; 2n+1 and 2n-1
+          ;; -(2n+1) = -2n-1 = (- 0 1 (* 2 n))
+          ;; -(2n-1) = -2n+1 = (- 1 (* 2 n))
+          [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
+          [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds ))) ])))]))
 
 (declare command-compose-feedback)
 (declare save-status)
@@ -748,6 +745,7 @@
   (let [state (d/entity db ::state)]
     [:div.bar-container
      #_(breadcrumbs-always db bus)
+     (println "Rootc container?")
      (fcc (:state/bar state) bus 0 nil)
      (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -1282,26 +1280,32 @@
       (reset! keyboard-bus bus)
       #_(stupid-github-crap)
     
-      (go
+      #_(go
         (async/<!
          (async/onto-chan!
           (core/zchan bus)
-          [[:parent]
-           [:parent] [:parent]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:insert-right] [:edit/finish "a"]
-           [:prev] [:prev] [:prev] [:prev]
-           [:split]
-           [:parent]
-           [:splice]
-           [:flow-right] [:flow-right] [:flow-right] [:flow-right]
-           [:flow-left] [:flow-left] [:flow-left] [:flow-left] [:flow-left]
-           [:reify-undo]]
+          (into
+           [[:hop-left]
+            [:tail]]
+           (concat
+            (repeat 99 [:flow-left])
+            (repeat 99 [:flow-right])))
+          #_[[:parent]
+             [:parent] [:parent]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:insert-right] [:edit/finish "a"]
+             [:prev] [:prev] [:prev] [:prev]
+             [:split]
+             [:parent]
+             [:splice]
+             [:flow-right] [:flow-right] [:flow-right] [:flow-right]
+             [:flow-left] [:flow-left] [:flow-left] [:flow-left] [:flow-left]
+             [:reify-undo]]
           #_[[:clone]
              [:delete-right] [:delete-right] [:delete-right]
              [:undo] [:undo] [:undo]
@@ -1309,12 +1313,7 @@
              [:edit/finish "nice"]
              [:reify-undo]]
           false))
-        (println "We did it")
-        
-        (rum/mount
-         #_(debug-component)
-         (root-component @conn bus)
-         (.getElementById js/document "root")))
+        (println "We did it"))
     
       ;; document.write(process.versions['electron'])
       (rum/mount

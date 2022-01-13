@@ -153,7 +153,7 @@
 #?(:clj
    (defn seq->vec
      ([e]
-      a)
+      (seq->vec e []))
      ([e a]
       (if-let [f (:seq/first e)]
         (recur (:seq/next e) (conj a f))
@@ -214,7 +214,9 @@
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
-           (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'")
+           (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'"
+                 (str "<<<<" ct "????")
+                 )
            (cond
              (nil? x) nil
              
@@ -234,7 +236,9 @@
                                             " "))
                                     (sep y)
                                     (->string y (+ 2 i))))))))
-           (case ct :list ")" :vec "]" (:set :map) "}" :fn ")" (:chain :uneval :quote :deref) nil))))))))
+           (case ct :list ")" :vec "]" (:set :map) "}" :fn ")" (:chain :uneval :quote :deref) nil
+                 (str "????" ct ">>>>")
+                 ))))))))
 
 
 
