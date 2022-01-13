@@ -59,6 +59,7 @@ body {
 .top-level-form.code-font {
     /* color: #a6a6a0; */
     color: #777;
+    line-height: 1.15
 }
 .d { }
 
@@ -308,7 +309,7 @@ div.bp {
 .chain.selected .indent-chars { background-color: transparent; }
 
 span.indenter {
-    transition: margin-left 0.08s;
+    transition: margin-left 0.08s ease-in-out;
     /* transition-timing-function: linear; */
 }
 
@@ -467,7 +468,7 @@ span.key-compose-echo {
 .inline-tag {
     position: relative;
     color: #777;
-    top: -1ex;
+    top: -0.4ex;
 }
 
 .inspector {

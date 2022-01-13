@@ -11,4 +11,5 @@
   
   http-kit/http-kit {:mvn/version "2.5.3"}
   
+  zprint/zprint {:mvn/version "1.2.0"}
   }}

@@ -196,6 +196,35 @@
 
 
 
+(defn open-delim
+  [ct]
+  (case ct
+    :list             "("
+    :vec              "["
+    :map              "{"
+    :set              "#{"
+    :fn               "#("
+    :tear             "«"
+    :uneval           "#_"
+    :deref            "@"
+    :quote            "'"
+    :syntax-quote     "`"
+    :unquote          "~"
+    :unquote-splicing "~@"
+    :reader-macro     "#?"
+    nil))
+
+(defn close-delim
+  [ct]
+  (case ct
+    :list ")"
+    :vec  "]"
+    :map  "}"
+    :set  "}"
+    :fn   ")"
+    :tear "»" 
+    nil))
+
 (defn ->string
   ([e] (->string e 0))
   ([e i]
@@ -214,9 +243,7 @@
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
-           (case ct :list "(" :vec "[" :map "{" :set "#{" :chain nil :uneval "#_" :fn "#(" :deref "@" :quote "'"
-                 (str "<<<<" ct "????")
-                 )
+           (open-delim ct)
            (cond
              (nil? x) nil
              
@@ -236,9 +263,7 @@
                                             " "))
                                     (sep y)
                                     (->string y (+ 2 i))))))))
-           (case ct :list ")" :vec "]" (:set :map) "}" :fn ")" (:chain :uneval :quote :deref) nil
-                 (str "????" ct ">>>>")
-                 ))))))))
+           (close-delim ct))))))))
 
 
 

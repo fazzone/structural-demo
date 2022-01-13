@@ -179,6 +179,8 @@
     #_(println "Actual tx-data:")
     #_(run! prn tx-data)
     #_(println "Tempids" tempids)
+    #_(run! prn tx-data)
+    #_(println "Transacted" (count tx-data))
     (doseq [e es]
       (when-not (empty? (d/datoms db :eavt e))
         (send! the-bus [e (d/entity db e)])))

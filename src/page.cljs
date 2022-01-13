@@ -27,7 +27,7 @@
    [cmd.invar :as invar]
    [df.github :as dfg]
    [df.async :as a]
-   
+   [zprint.core :as zp-hacks]
    [core :as core
     :refer [get-selected-form
             move-selection-tx]])
@@ -59,7 +59,8 @@
    "S-F" :flow-right-coll
    "u"   :undo
    "S-A" :alias
-   "g" :gobble
+   "g"   :gobble
+   "S-I" :zp
    
    "S-S" :split
    "M-s" :splice
@@ -212,8 +213,7 @@
    
    #_[:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
    
-   [:div.top-level-form.code-font
-    ^:inline (fcc e bus 0 p)]
+   [:div.top-level-form.code-font ^:inline (fcc e bus 0 p)]
    [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
 
 (defn computed-indent
@@ -230,6 +230,23 @@
      [:span.indent-chars "\n"
       [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
      child)))
+
+
+(comment
+  [:span.c.dl
+   {}
+   [:span.d
+    #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
+    #_(when-let [p (get proply (:db/id e))]
+        [:span.inline-tag-outer
+         [:span.inline-tag-inner
+          (str p)]])
+    #_[:span.inline-tag.debug
+       (str (swap! render-counter inc))
+       #_(str (:db/id e))]
+    open]
+   "..."
+   [:span.d.cl close]])
 
 
 #_(defn do-indent*
@@ -253,24 +270,19 @@
      
      child)))
 
-
 (def render-counter (atom 0))
 
-(comment
-  [:span.c.dl
-   {}
-   [:span.d
-    #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
-    #_(when-let [p (get proply (:db/id e))]
-        [:span.inline-tag-outer
-         [:span.inline-tag-inner
-          (str p)]])
-    #_[:span.inline-tag.debug
-       (str (swap! render-counter inc))
-       #_(str (:db/id e))]
-    open]
-   "..."
-   [:span.d.cl close]])
+(rum/defc indenter
+  [nl? ip fi] 
+  (if (and (or (nil? fi) (zero? fi)) (not nl?))
+    nil
+    [:span.indent-chars (if-not nl? {} {:class "nl"})
+     (when nl? "\n")
+     (when fi
+       [:span.indenter {:style {:margin-left (str fi "ch")
+                                ;; :background-color "cadetblue"
+                                }}])]))
+
 
 (rum/defc any-coll
   [ct children classes bus indent proply]
@@ -283,48 +295,31 @@
                               :unquote-splicing :reader-macro) "pf"
                       nil)
         _           "«" 
-        open-delim  (case ct
-                      :list             "("
-                      :vec              "["
-                      :map              "{"
-                      :set              "#{"
-                      :fn               "#("
-                      :tear             "«"
-                      :uneval           "#_"
-                      :deref            "@"
-                      :quote            "'"
-                      :syntax-quote     "`"
-                      :unquote          "~"
-                      :unquote-splicing "~@"
-                      :reader-macro     "#"
-                      nil)
-        close-delim (case ct
-                      :list ")"
-                      :vec  "]"
-                      :map  "}"
-                      :set  "}"
-                      :fn   ")"
-                      :tear "»" 
-                      nil)]
+        open-delim  (e/open-delim ct)
+        close-delim (e/close-delim ct)]
     [:span {:class ["c" coll-class extra-class classes]}
      #_(str ct (pr-str (map :db/id children)))
+     #_[:span.inline-tag.debug
+       (str (swap! render-counter inc))
+       #_(str (:db/id e))]
      (cond
        extra-class [:span.d.pfc ^String open-delim]
        open-delim  [:span.d ^String open-delim]
        :else       nil)
      (for [c children]
-       (let [{:form/keys [linebreak indent]} c
-             rc                              (fcc c bus indent proply)]
-         (rum/fragment
-          (cond
-            (and indent linebreak) [:span.indent-chars {} "\n"
-                                    [:span.indenter {:style {:margin-left (str indent "ch")}}]]
-            
-            linebreak              [:span.indent-chars {} "\n"]
-            indent [:span.indent-chars {}
-                    [:span.indenter {:style {:margin-left (str indent "ch")}}]])
+       (fcc c bus indent proply)
+       #_(let [{:form/keys [linebreak indent]} c
+               rc                              (fcc c bus indent proply)]
+           (rum/fragment
+            (cond
+              (and indent linebreak) [:span.indent-chars {} "\n"
+                                      [:span.indenter {:style {:margin-left (str indent "ch")}}]]
+              
+              linebreak [:span.indent-chars {} "\n"]
+              indent    [:span.indent-chars {}
+                         [:span.indenter {:style {:margin-left (str indent "ch")}}]])
           
-          ^:inline rc))
+            ^:inline rc))
        #_(-> (fcc c bus indent proply)
              (rum/with-key (:db/id c))))
      (when close-delim
@@ -388,13 +383,16 @@
 (rum/defc nchainc [chain bus]
   [:div.chain.hide-scrollbar
    {:key (:db/id chain)
+    :class (when (:form/highlight chain) "selected")
     :id (str "c" (:db/id chain))}
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus nil)
          (rum/with-key (:db/id f))))])
 
+
 (rum/defc nbarc [bar bus]
   [:div.bar.hide-scrollbar
+   {:class (when (:form/highlight bar) "selected")}
    (for [chain-head (e/seq->vec bar)]
      (-> (fcc chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
@@ -461,7 +459,8 @@
                "v")
     :keyword "k"
     :string  "l"
-    :number  "n"))
+    :number  "n"
+    :regex   "re"))
 
 (defn token-text
   [t ^String v]
@@ -474,7 +473,8 @@
                        [:span.kn (subs k 0 is)]
                        (subs k is))))
     :string (pr-str v)
-    :number (str v)))
+    :number (str v)
+    :regex (str "REGEX:" v)))
 
 
 
@@ -489,31 +489,41 @@
           tv (:token/value e)
           tc (token-class tt tv)
           it (token-text tt tv)]
-      [:span {:key      (:db/id e)
-              :class    (if (:form/highlight e)
-                          (str "tk selected " tc)
-                          (str "tk " tc))
-              :on-click (fn [ev]
-                          (.stopPropagation ev)
-                          (core/send! bus [:select (:db/id e)]))}
-       ^String it])
+      (rum/fragment
+       ^:inline (indenter (:form/linebreak e)
+                          indent-prop
+                          (:form/indent e))
+       [:span {:key      (:db/id e)
+               :class    (if (:form/highlight e)
+                           (str "tk selected " tc)
+                           (str "tk " tc))
+               :on-click (fn [ev]
+                           (.stopPropagation ev)
+                           (core/send! bus [:select (:db/id e)]))}
+        
+        
+        ^String it]))
     
     (:coll/type e)
     (case (:coll/type e)
       nil    (comment "Probably a retracted entity, do nothing")
       :chain (nchainc e bus)
       :bar   (nbarc e bus)
-      (any-coll (:coll/type e)
-                (e/seq->vec e)
-                (when (:form/highlight e) "selected")
-                bus
-                (+ 2 indent-prop)
-                proply
-                #_(if-not (:form/highlight e)
-                    proply
-                    (zipmap
-                     (map :db/id (next (mut/get-numeric-movement-vec e)))
-                     (range 2 9)))))))
+      (rum/fragment
+       ^:inline (indenter (:form/linebreak e)
+                          indent-prop
+                          (:form/indent e))
+       (any-coll (:coll/type e)
+                 (e/seq->vec e)
+                 (when (:form/highlight e) "selected")
+                 bus
+                 (+ 2 indent-prop)
+                 proply
+                 #_(if-not (:form/highlight e)
+                     proply
+                     (zipmap
+                      (map :db/id (next (mut/get-numeric-movement-vec e)))
+                      (range 2 9))))))))
 
 #_(register-sub ::extract-to-new-top-level
               (->mutation
@@ -916,21 +926,31 @@
     (doto (d/create-conn s/schema)
       (d/transact! init-tx-data))))
   ([conn]
-   (let [a  (core/app conn)
-         scivar-sel (sci/new-var "zsel")
+   (let [a             (core/app conn)
+         scivar-sel    (sci/new-var "zsel")
          scivar-ingest (sci/new-var "ingest")
-         s  (sci/init {:namespaces {'d {'datoms d/datoms
-                                        'touch  d/touch}}
-                       :bindings   {'jcl    (fn [z] (js/console.log z))
-                                    'datafy datafy/datafy
-                                    'nav    datafy/nav
-                                    'fetch  (fn [z f]
-                                              (-> z (js/fetch) (.then f)))
-                                    'then (fn [p f] (.then (js/Promise.resolve p) f))
-                                    'stories dfg/stories
-                                    'ingest scivar-ingest
-                                    'sel scivar-sel
-                                    '->seq e/seq->seq}})
+         s             (sci/init {:namespaces {'d {'datoms d/datoms
+                                                   'touch  d/touch}}
+                                  :bindings   {'jcl     (fn [z] (js/console.log z))
+                                               'datafy  datafy/datafy
+                                               'nav     datafy/nav
+                                               'fetch   (fn [z f]
+                                                         (-> z (js/fetch) (.then f)))
+                                               'then    (fn [p f] (.then (js/Promise.resolve p) f))
+                                               'stories dfg/stories
+                                               'ingest  scivar-ingest
+                                               'sel     scivar-sel
+                                               '->seq   e/seq->seq
+                                               
+                                               'slurp (some-> js/window
+                                                              (aget "my_electron_bridge")
+                                                              (aget "slurp"))
+
+                                               'spit (some-> js/window
+                                                             (aget "my_electron_bridge")
+                                                             (aget "spit"))
+                                               
+                                               }})
          ]
      #_(doseq [[m f] mut/dispatch-table]
          (core/register-simple! a m f))
@@ -947,14 +967,14 @@
                                 (fn [_ db bus]
                                   (let [et (->> (get-selected-form db)
                                                 (move/move :move/most-upward))
-                                        c   (e/->string et)
-                                        #_(->> (e/->form et)
+                                        c  (e/->string et)
+                                        #_ (->> (e/->form et)
                                                (pr-str))]
                                     (println "Eval sci" c scivar-sel)
                                     
                                     (try
-                                      (let [_ (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
-                                            _ (sci/alter-var-root scivar-ingest
+                                      (let [_   (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
+                                            _   (sci/alter-var-root scivar-ingest
                                                                   (constantly (fn [z]
                                                                                 (.then (js/Promise.resolve z)
                                                                                        (fn [ar]
@@ -973,8 +993,45 @@
                                         (js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       (core/register-mutation! :scroll  (fn [_ _ _]
-                                           (scroll-to-selected!)))
+       (core/register-mutation! :scroll  (fn [_ db _]
+                                           #_(let [s (js/document.querySelector ".selected")
+                                                   p (.-parentNode s)]
+                                               (js/console.log s p)
+                                               (.setAttribute s "class" (string/replace (.getAttribute s "class") "selected" ""))
+                                               (.setAttribute p "class" (str (.getAttribute p "class" ) " selected"))
+
+                                               )
+
+                                           #_(let [q (peek (nav/parents-vec (get-selected-form db)))]
+                                             (js/console.log
+                                              (zp-hacks/zprint-file-str
+                                               (e/->string q)
+                                               (:db/id q))))
+                                           
+                                           #_(scroll-to-selected!)))
+       (core/register-simple! :zp (fn [db _]
+                                    (let [_   (js/console.time "formatting")
+                                          q   (-> (get-selected-form db) nav/parents-vec peek)
+                                          p   (zp-hacks/zprint-file-str (e/->string q) (:db/id q))
+                                          pt  (e/string->tx p)
+                                          ans (vec
+                                               (mapcat
+                                                (fn [a b]
+                                                  (when-not (and (= (:coll/type a) (:coll/type b))
+                                                                 (= (:token/type a) (:token/type b))
+                                                                 (= (:token/text a) (:token/text b)))
+                                                    (throw (ex-info "cannot reconcile " {})))
+                                                  (for [k     [:form/indent :form/linebreak]
+                                                        :when (not= (k a) (k b))]
+                                                    (if (k b)
+                                                      [:db/add (:db/id a) k (k b)]
+                                                      [:db/retract (:db/id a) k (k a)])))
+                                                (tree-seq :coll/type e/seq->vec q)
+                                                (tree-seq :coll/type e/seq->vec pt)))]
+                                      (js/console.timeEnd "formatting")
+                                      ans)
+                                           
+                                    #_(scroll-to-selected!)))
        (core/register-mutation! :save
                                 (fn [_ db bus]
                                   (let [xhr   (XhrIo.)
