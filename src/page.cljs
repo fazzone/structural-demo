@@ -61,6 +61,7 @@
    "S-A" :alias
    "g"   :gobble
    "S-I" :zp
+   "o"   :offer
    
    "S-S" :split
    "M-s" :splice
@@ -655,7 +656,7 @@
 
 (rum/defc stupid-symbol-search
   [db sa text]
-  (println "Text" (count text) (pr-str text))
+  (println "SSS Text" (count text) (pr-str text))
   (when (pos? (count text))
     [:div.search
      {}
@@ -676,8 +677,6 @@
        (println "Results" results)
        
        (for [[v [[e] :as ds]] results]
-         (println "V e" v e)
-         (pr-str e)
          (rum/fragment
           (let [{:token/keys [type value]} (d/entity db e)
                 tt (token-text type value)]
@@ -690,12 +689,13 @@
 
 (declare command-compose-feedback)
 (declare save-status)
-(rum/defc modeline-inner < dbrx/ereactive rum/reactive
+(rum/defc modeline-inner < rum/reactive
   [sel bus {:keys [^String text valid] :as edn-parse-state}]
+  (println "Modeline-inner" (:db/id sel))
   [:span {:class (str "modeline code-font"
                       (if text " editing modeline-search" " modeline-fixed")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
-   ""
+   "Thje modeline " (pr-str text)
    [:span.modeline-echo
     {}
     (let [{:keys [on at status file]} (rum/react save-status)]
@@ -730,8 +730,12 @@
   (let [sel (get-selected-form db)
         rpa (reverse (nav/parents-vec sel))
         nn (.getElementById js/document (modeline-portal-id (:db/id (first rpa))))]
+    (js/console.log
+     "Modeline-portal"
+     (:db/id sel)
+     nn
+     eb/editbox-ednparse-state)
     (when nn
-      
       (-> (modeline-inner
            sel
            bus
@@ -919,13 +923,23 @@
    (let [a             (core/app conn)
          scivar-sel    (sci/new-var "zsel")
          scivar-ingest (sci/new-var "ingest")
+         _             (js/console.log "Bridge"
+                           (some-> js/window
+                                   (aget "my_electron_bridge")))
          s             (sci/init {:namespaces {'d {'datoms d/datoms
-                                                   'touch  d/touch}}
+                                                   'touch  d/touch}
+                                               'p {'resolve (fn [p]
+                                                              (js/console.log "Promise/resolve" p)
+                                                              (js/Promise.resolve p))
+                                                   'all     (fn [a b c]
+                                                          (js/console.log "Proomise/all" a b c )
+                                                          (js/Promise.all a b c)
+                                                          )}}
                                   :bindings   {'jcl     (fn [z] (js/console.log z))
                                                'datafy  datafy/datafy
                                                'nav     datafy/nav
                                                'fetch   (fn [z f]
-                                                         (-> z (js/fetch) (.then f)))
+                                                          (-> z (js/fetch) (.then f)))
                                                'then    (fn [p f] (.then (js/Promise.resolve p) f))
                                                'stories dfg/stories
                                                'ingest  scivar-ingest
@@ -936,15 +950,15 @@
                                                               (aget "my_electron_bridge")
                                                               (aget "slurp"))
 
-                                               'spit (some-> js/window
+                                               'spit     (some-> js/window
                                                              (aget "my_electron_bridge")
                                                              (aget "spit"))
-                                               'exit (some-> js/window
+                                               'list-dir (some-> js/window
+                                                                 (aget "my_electron_bridge")
+                                                                 (aget "list_dir"))
+                                               'exit     (some-> js/window
                                                              (aget "my_electron_bridge")
-                                                             (aget "exit"))
-                                               
-                                               }})
-         ]
+                                                             (aget "exit"))}})]
      #_(doseq [[m f] mut/dispatch-table]
          (core/register-simple! a m f))
      (doseq [[m f] mut/movement-commands]
@@ -962,18 +976,19 @@
                                                 (move/move :move/most-upward))
                                         c  (e/->string et)
                                         #_ (->> (e/->form et)
-                                               (pr-str))]
+                                                (pr-str))]
                                     (println "Eval sci" c scivar-sel)
                                     
                                     (try
                                       (let [_   (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
                                             _   (sci/alter-var-root scivar-ingest
-                                                                  (constantly (fn [z]
-                                                                                (.then (js/Promise.resolve z)
-                                                                                       (fn [ar]
-                                                                                         (js/console.log "PARse" ar)
-                                                                                         (core/send! bus [:ingest-result (:db/id et) ar])
-                                                                                         ::ok)))))
+                                                                    (constantly (fn [z]
+                                                                                  (.then (js/Promise.resolve z)
+                                                                                         (fn [ar]
+                                                                                           (js/console.log "Ingest?" ar)
+                                                                                           (cljs.pprint/pprint ar)
+                                                                                           (core/send! bus [:ingest-result (:db/id et) ar])
+                                                                                           ::ok)))))
                                             ans (sci/eval-string* s c)]
                                         (.then (js/Promise.resolve ans)
                                                (fn [ar]
@@ -1000,16 +1015,19 @@
                                                )
 
                                            #_(let [q (peek (nav/parents-vec (get-selected-form db)))]
-                                             (js/console.log
-                                              (zp-hacks/zprint-file-str
-                                               (e/->string q)
-                                               (:db/id q))))
+                                               (js/console.log
+                                                (zp-hacks/zprint-file-str
+                                                 (e/->string q)
+                                                 (:db/id q))))
                                            
                                            #_(scroll-to-selected!)))
        (core/register-simple! :zp (fn [db _]
-                                    (let [_   (js/console.time "formatting")
-                                          q   (-> (get-selected-form db) nav/parents-vec peek)
-                                          p   (zp-hacks/zprint-file-str (e/->string q) (:db/id q))
+                                    (let [_         (js/console.time "formatting")
+                                          _         (zp-hacks/set-options! {:map {:sort? nil}})
+                                          q         (-> (get-selected-form db) nav/parents-vec peek)
+                                          my-string (e/->string q)
+                                          
+                                          p   (zp-hacks/zprint-file-str my-string (:db/id q))
                                           pt  (e/string->tx p)
                                           ans (vec
                                                (mapcat
@@ -1017,6 +1035,11 @@
                                                   (when-not (and (= (:coll/type a) (:coll/type b))
                                                                  (= (:token/type a) (:token/type b))
                                                                  (= (:token/value a) (:token/value b)))
+                                                    (println "!!!! cannot reconcile !!! ")
+                                                    (println "A:")
+                                                    (println my-string)
+                                                    (println "B:")
+                                                    (println p)
                                                     (throw (ex-info "cannot reconcile " {})))
                                                   (for [k     [:form/indent :form/linebreak]
                                                         :when (not= (k a) (k b))]
@@ -1338,12 +1361,15 @@
         (async/<!
          (async/onto-chan!
           (core/zchan bus)
-          (into
-           [[:hop-left]
-            [:tail]]
-           (concat
-            (repeat 99 [:flow-left])
-            (repeat 99 [:flow-right])))
+          [[:m1]
+           [:clone]
+           [:offer]]
+          #_(into
+             [[:hop-left]
+              [:tail]]
+             (concat
+              (repeat 99 [:flow-left])
+              (repeat 99 [:flow-right])))
           #_[[:parent]
              [:parent] [:parent]
              [:insert-right] [:edit/finish "a"]

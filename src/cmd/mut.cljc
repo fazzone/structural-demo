@@ -181,12 +181,13 @@
                      :token/value (pr-str c)
                      :eval/of (:db/id et)}]
     (into [result-node]
-          (apply
-           concat
-           (edit/insert-before-tx top-level result-node)
-           (for [[e a v t a?] (d/datoms db :avet :eval/of)
-                 :when a?]
-             (edit/form-delete-tx (d/entity db e)))))
+          (edit/insert-before-tx top-level result-node)
+          #_(apply
+             concat
+             (edit/insert-before-tx top-level result-node)
+             (for [[e a v t a?] (d/datoms db :avet :eval/of)
+                   :when a?]
+               (edit/form-delete-tx (d/entity db e)))))
     
     #_(into [new-node]
             (if (= (:db/id et) (:db/id (:eval/of prev)))
@@ -463,7 +464,8 @@
    :drag-left                      (comp drag-left-tx get-selected-form)
    :drag-right                     (comp drag-right-tx get-selected-form)
    :split                          (comp edit/form-split-tx get-selected-form)
-   :splice                         (comp edit/form-splice-tx get-selected-form)})
+   :splice                         (comp edit/form-splice-tx get-selected-form)
+   :offer                          (comp edit/offer-tx get-selected-form)})
 
 (def dispatch-table
   (merge movement-commands

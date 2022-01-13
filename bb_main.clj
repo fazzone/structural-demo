@@ -34,27 +34,29 @@
   []
   (deps/clojure []))
 
-(defn compile-and-host-cljs
-  []
-  (let [the-prepl     (deps/clojure ["-M"
-                                     "-e" "(require '[clojure.core.server :as s])"
-                                     "-e" "@user/shadow-server"
-                                     "-e" "(s/io-prepl)"]
-                                    {:in  nil
-                                     :out nil
-                                     :err :inherit})
-        input-writer  (io/writer (:in the-prepl))
-        output-reader (-> the-prepl :out io/reader)]
-    (binding [*out* input-writer]
-      #_(println
-         '(+ 91 94))
-      (prn '(user/release-cljs!)))
+(def the-prepl
+  (delay
+    (let [_ (println "Staring big clojure...")
+          proc (deps/clojure ["-M"
+                              "-e" "(require '[clojure.core.server :as s])"
+                              "-e" "@user/shadow-server"
+                              "-e" "(s/io-prepl)"]
+                             {:in nil
+                              :out nil
+                              :err :inherit})]
+      {:proc proc
+       :writer (-> proc :in io/writer) 
+       :reader (-> proc :out io/reader)})))
 
+(defn compile-and-host-cljs
+  [body-expr]
+  (let [{:keys [reader writer]} @the-prepl]
+    (binding [*out* writer]
+      (prn body-expr))
     ;; wait for shadow to finish
-    (binding [*in* output-reader]
+    (binding [*in* reader]
       (loop []
         (when-let [line (read-line)]
-          (prn 'L line)
           (if (not= "{" (subs line 0 1))
             (do
               (println "[clj]  " line)
@@ -84,17 +86,37 @@
     (let [exit (:exit @puppeteer)]
       (println "OK"))))
 
-(defn install-electron
+(defn maybe-install-electron
   []
   (when-not (fs/exists? "node_modules/electron")
     @(p/process ["npm" "i" "electron"] {:out :inherit})))
 
+(def electron-exe
+  (delay
+    (maybe-install-electron)
+    (-> ["node" "-e" "console.log(require('electron'))"]
+        (p/process)
+        :out
+        (slurp)
+        (string/trim))))
+
+(def electron-process (atom nil))
+
+
 (defn run-electron
   []
-  (install-electron)
-  (compile-and-host-cljs)
-  (p/process
-   [(string/trim (slurp (:out (p/process ["node" "-e" "console.log(require('electron'))"]))))
-    electron-main]))
+  #_(compile-and-host-cljs
+     (quote (+ 1 1))
+     #_(quote (user/release-cljs!)))
+  (prn "The electron process was" @electron-process)
+  (reset! electron-process
+          (p/process [@electron-exe electron-main])))
+
+(comment
+  (compile-and-host-cljs
+   (quote (+ 1 1)))
+
+  (run-electron))
 
 #_(run-electron)
+

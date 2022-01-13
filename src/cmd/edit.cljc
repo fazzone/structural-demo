@@ -2,7 +2,8 @@
   (:require
    [datascript.core :as d]
    [embed :as e]
-   [core :refer [get-selected-form move-selection-tx]]))
+   [core :refer [get-selected-form move-selection-tx]]
+   [cmd.move :as move]))
 
 (defn exactly-one
   [[x & more :as xs]]
@@ -108,6 +109,13 @@
        (when-let [next (:seq/next spine)]
          [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
 
+(defn insert-into-empty-tx
+  [target new-node]
+  (when (:seq/first target)
+    (throw (ex-info "Not empty" {})))
+  [[:db/add (:db/id target) :coll/contains (:db/id new-node)]
+   [:db/add (:db/id target) :seq/first (:db/id new-node)]])
+
 (defn form-cons-tx
   [elem coll]
   (if-let [f (:seq/first coll)]
@@ -116,15 +124,13 @@
      [:db/add (:db/id coll) :seq/first (:db/id elem)]]))
 
 (defn insert-editing*
-  [sel inserter]
+  [inserter target from]
   (let [new-node {:db/id "newnode"
                   :form/editing true
                   :form/edit-initial ""}] 
     (into [new-node]
-          (concat (inserter sel new-node)
-                  (move-selection-tx (:db/id sel) "newnode")))))
-
-
+          (concat (inserter target new-node)
+                  (move-selection-tx (:db/id from) "newnode")))))
 
 (defn exchange-with-previous-tx
   [sel]
@@ -208,7 +214,7 @@
 
 
 (defn edit-new-wrapped*
-  [inserter sel ct init opts]
+  [inserter target from ct init opts]
   (let [new-node (merge opts
                         {:db/id "newnode"
                          :coll/type ct
@@ -218,12 +224,14 @@
                                      :form/edit-initial (or init  "")
                                      :form/editing true}})]
     (into [new-node]
-          (concat (inserter sel new-node)
-                  (move-selection-tx (:db/id sel) "inner")))))
+          (concat (inserter target new-node)
+                  (move-selection-tx (:db/id from) "inner")))))
 
 (defn edit-new-wrapped-tx
-  [sel ct init opts]
-  (edit-new-wrapped* insert-after-tx sel ct init opts))
+  ([sel ct init opts]
+   (edit-new-wrapped* insert-after-tx sel sel ct init opts))
+  ([target from ct init opts]
+   (edit-new-wrapped* insert-after-tx target from ct init opts)))
 
 (defn move-last*
   [e]
@@ -296,17 +304,21 @@
        (if next
          [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))
 
-(defn insert-editing-before [sel]
-  (let [parent (exactly-one (:coll/_contains sel))]
-    (if (= :chain (:coll/type parent))
-      (edit-new-wrapped* insert-before-tx sel :list "" nil)
-      (insert-editing* sel insert-before-tx))))
+(defn insert-editing-before
+  ([sel] (insert-editing-before sel sel))
+  ([target from]
+   (let [parent (exactly-one (:coll/_contains target))]
+     (if (= :chain (:coll/type parent))
+       (edit-new-wrapped* insert-before-tx target from :list "" nil)
+       (insert-editing* insert-before-tx target from)))))
 
-(defn insert-editing-after [sel]
-  (let [parent (exactly-one (:coll/_contains sel))]
-       (if (= :chain (:coll/type parent))
-         (edit-new-wrapped* insert-after-tx sel :list "" nil)
-         (insert-editing* sel insert-after-tx))))
+(defn insert-editing-after 
+  ([sel] (insert-editing-after sel sel))
+  ([target from]
+   (let [parent (exactly-one (:coll/_contains target))]
+     (if (= :chain (:coll/type parent))
+       (edit-new-wrapped* insert-after-tx target from :list "" nil)
+       (insert-editing* insert-after-tx target from)))))
 
 (defn form-split-tx
   [e]
@@ -330,8 +342,7 @@
                 [:db/add     "newc"         :seq/next (:db/id sn)]]))))))
 
 (defn form-splice-tx
-  ([e]
-   (form-splice-tx e e))
+  ([e] (form-splice-tx (move/move :move/up e) e))
   ([e from]
    (let [spine     (some-> e :seq/_first exactly-one)
          coll      (some-> e :coll/_contains exactly-one)
@@ -373,3 +384,31 @@
          (println "Splice tx")
          (run! prn tx)
          tx)))))
+
+(defn offer-tx
+  [sel]
+  (println "Offer" (e/->string sel))
+  (println "Offer first" (e/->string (:seq/first sel)) )
+  (println "Offer nexct" (e/->string (:seq/next sel)) )
+  (println "Offer last"
+           (e/->string
+            (loop [s sel]
+              (if-let [n (:seq/next s)]
+                (recur n)
+                s))))
+  (cond
+    (:token/type sel)
+    [[:db/retract (:db/id sel) :token/value (:token/value sel)]
+     [:db/add (:db/id sel) :form/editing true]]
+    
+    (nil? (:seq/first sel))
+    (insert-editing* insert-into-empty-tx sel sel)
+    
+    :else
+    (let [last-cons (loop [s sel]
+                      (if-let [n (:seq/next s)]
+                        (recur n) 
+                        s))]
+      (insert-editing-after (:seq/first last-cons) sel))))
+
+

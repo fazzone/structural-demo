@@ -25,7 +25,8 @@
   (when-not (empty? s)
     (some-> (or (try-parse-edn s)
                 (and (string/starts-with? s "\"" )
-                     (try-parse-edn (str s "\""))))
+                     (try-parse-edn (str s "\"")))
+                nil)
             (assoc :db/id eid))))
 
 (defn accept-edit-tx

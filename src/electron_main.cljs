@@ -15,7 +15,8 @@
   
   ;; Path is relative to the compiled js file (main.js in our case)
   (.loadURL ^js/electron.BrowserWindow @main-window
-            (str "file://" js/__dirname "/index.html"))
+            #_(str "file://" js/__dirname "/index.html")
+            "localhost:8087/srv/index.html")
   (.openDevTools (.-webContents  ^js/electron.BrowserWindow @main-window))
   (.on ^js/electron.BrowserWindow @main-window "closed" #(reset! main-window nil)))
 
@@ -28,7 +29,8 @@
               :autoSubmit false}))
 
   #_(.on app "window-all-closed" #(when-not (= js/process.platform "darwin")
-                                  (.quit app)))
+                                    (.quit app)))
   (.on app "window-all-closed" #(.quit app))
   
+  (println "Electron main" (js/process.argv))
   (.on app "ready" init-browser))
