@@ -508,3 +508,11 @@ span.key-compose-echo {
 
 
 .chain:first-child { padding-top: 200px; }
+
+.tk.verbatim {
+    display: block;
+    white-space: pre;
+    padding: 1ex;
+    background-color: #333;
+    border-radius: 0px;
+}

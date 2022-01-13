@@ -1,6 +1,8 @@
 const { contextBridge } = require('electron');
 const fs = require('fs/promises')
 const path = require('path')
+const process = require('process')
+
 
 contextBridge.exposeInMainWorld('my_electron_bridge', {
     spit: (function (p, c) {
@@ -16,5 +18,8 @@ contextBridge.exposeInMainWorld('my_electron_bridge', {
         if (!nested)
             return false;
         return fs.readFile(p, {encoding: 'utf-8'});
-    })
+    }),
+    // exit: (function (c) {
+    //     app.quit();
+    // })
 });

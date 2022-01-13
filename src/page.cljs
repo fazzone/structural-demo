@@ -131,23 +131,9 @@
 (def init-tx-data
   (let [chains (concat
 
-                [(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
                 
-                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                
-                #_[(e/string->tx-all (m/macro-resource "clojure/core.clj"))]
-                
-                #_[(assoc (e/string->tx-all (m/macro-slurp  "src/embed.cljc"))
-                          :chain/filename "zz-embed.cljc")]
-                
-                #_[(e/string->tx-all (m/macro-slurp  "subtree/clojure.core.clj"))]
-                
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
-                
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/mut.cljc"))]
                 )]
     [{:db/ident ::state
       :state/bar "bar"}
@@ -397,17 +383,18 @@
      (-> (fcc chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
 
+
 #_(defmethod display-coll :keyboard [k bus i]
-  "No keyboardn"
-  [:div.display-keyboard
-   (ck/keyboard-diagram
-    k
-    #_(d/entity (d/entity-db k) )
-    )
+    "No keyboardn"
+    [:div.display-keyboard
+     (ck/keyboard-diagram
+      k
+      #_(d/entity (d/entity-db k) )
+      )
    
-   [:div {:style {:width "6ex"
-                  :font-size "9pt"}}
-    (ck/kkc {} "F")]])
+     [:div {:style {:width "6ex"
+                    :font-size "9pt"}}
+      (ck/kkc {} "F")]])
 
 
 #_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
@@ -445,22 +432,23 @@
 (defn token-class
   [t v]
   (case t
-    :symbol  (case v
-               ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
-                "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
-                "if-let" "when-let" "recur" "try" "catch" "nil")
-               "m"
-               ("first" "map" "filter" "apply" "reset!" "swap!"
-                "get" "assoc" "update" "cons" "conj" "seq" "next"
-                "prn" "println" "into" "set" "vector"
-                "take" "drop" "take-while" "dorp-while" "reduce"
-                "concat")
-               "s"
-               "v")
-    :keyword "k"
-    :string  "l"
-    :number  "n"
-    :regex   "re"))
+    :symbol   (case v
+                ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
+                 "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
+                 "if-let" "when-let" "recur" "try" "catch" "nil")
+                "m"
+                ("first" "map" "filter" "apply" "reset!" "swap!"
+                 "get" "assoc" "update" "cons" "conj" "seq" "next"
+                 "prn" "println" "into" "set" "vector"
+                 "take" "drop" "take-while" "dorp-while" "reduce"
+                 "concat")
+                "s"
+                "v")
+    :keyword  "k"
+    :string   "l"
+    :number   "n"
+    :regex    "re"
+    :verbatim "verbatim"))
 
 (defn token-text
   [t ^String v]
@@ -473,6 +461,7 @@
                        [:span.kn (subs k 0 is)]
                        (subs k is))))
     :string (pr-str v)
+    :verbatim v
     :number (str v)
     :regex (str "REGEX:" v)))
 
@@ -506,9 +495,9 @@
     
     (:coll/type e)
     (case (:coll/type e)
-      nil    (comment "Probably a retracted entity, do nothing")
-      :chain (nchainc e bus)
-      :bar   (nbarc e bus)
+      nil          (comment "Probably a retracted entity, do nothing")
+      :chain       (nchainc e bus)
+      :bar         (nbarc e bus)
       (rum/fragment
        ^:inline (indenter (:form/linebreak e)
                           indent-prop
@@ -742,6 +731,7 @@
         rpa (reverse (nav/parents-vec sel))
         nn (.getElementById js/document (modeline-portal-id (:db/id (first rpa))))]
     (when nn
+      
       (-> (modeline-inner
            sel
            bus
@@ -949,6 +939,9 @@
                                                'spit (some-> js/window
                                                              (aget "my_electron_bridge")
                                                              (aget "spit"))
+                                               'exit (some-> js/window
+                                                             (aget "my_electron_bridge")
+                                                             (aget "exit"))
                                                
                                                }})
          ]
@@ -981,16 +974,20 @@
                                                                                          (js/console.log "PARse" ar)
                                                                                          (core/send! bus [:ingest-result (:db/id et) ar])
                                                                                          ::ok)))))
-                                            ans (sci/eval-string* s c)
-                                            
-                                            #_ (sci/eval-string c
-                                                                )]
+                                            ans (sci/eval-string* s c)]
                                         (.then (js/Promise.resolve ans)
                                                (fn [ar]
                                                  (when (not= ::ok ar)
-                                                   (core/send! bus [:eval-result (:db/id et) ar])))))
+                                                   (prn 'AR ar)
+                                                   (core/send! bus [:eval-result et ar])))))
                                       (catch :default e
-                                        (js/console.log "SCI exception" e))))))
+                                        (core/send! bus [:eval-result
+                                                         et
+                                                         (or
+                                                          (ex-message e)
+                                                          (str e))])
+                                        
+                                        #_(js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :scroll  (fn [_ db _]
@@ -1019,7 +1016,7 @@
                                                 (fn [a b]
                                                   (when-not (and (= (:coll/type a) (:coll/type b))
                                                                  (= (:token/type a) (:token/type b))
-                                                                 (= (:token/text a) (:token/text b)))
+                                                                 (= (:token/value a) (:token/value b)))
                                                     (throw (ex-info "cannot reconcile " {})))
                                                   (for [k     [:form/indent :form/linebreak]
                                                         :when (not= (k a) (k b))]

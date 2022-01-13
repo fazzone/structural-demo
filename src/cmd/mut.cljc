@@ -160,41 +160,33 @@
            (:seq/first ee)
            {:db/id (:db/id new-node)}))))
 
-(defn eval-result
+(defn eval-result-on-evalchain
   [db et-eid c]
   (let [ee (d/entity db :page/evalchain)
-        new-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
-                              (pr-str c))
-                     (assoc :form/linebreak true)
-                     (update :db/id #(or % "import-formdata-tx")))]
-    (prn et-eid c)
-    (into [new-node]
-          (edit/insert-before-tx (:seq/first ee) new-node))))
+        nn {:db/id "nn"
+            :token/type :verbatim
+            :token/value (pr-str c)}
+        tx 
+        (into [nn]
+              (edit/insert-before-tx (:seq/first ee) nn))]
+    (println "TXXX" tx)
+    tx))
 
-#_(defn eval-result
+(defn eval-result-above-toplevel
   [db et c]
   (let [top-level   (peek (nav/parents-vec et))
         prev        (move/move :move/prev-sibling top-level)
-        result-node (-> (e/->tx* #_(with-out-str (cljs.pprint/pprint c))
-                                 (pr-str c))
-                        (update :db/id #(or % "import-formdata-tx")))
-        prev-eval (d/datoms db :avet :eval/of )
-        new-node    {:db/id       "eval-result"
-                     :eval/of     (:db/id et)
-                     :coll/type   :eval-result
-                     :eval/result result-node}]
-    (println "PRevevel")
-    (run! prn prev-eval)
-    (doto
-        (into [new-node]
-              (apply
-               concat
-               (edit/insert-before-tx top-level new-node)
-               (for [[e a v t a?] (d/datoms db :avet :eval/of)
-                     :when a?]
-                 (edit/form-delete-tx (d/entity db e)))))
-        prn
-        )
+        result-node {:db/id "nn"
+                     :token/type :verbatim
+                     :token/value (pr-str c)
+                     :eval/of (:db/id et)}]
+    (into [result-node]
+          (apply
+           concat
+           (edit/insert-before-tx top-level result-node)
+           (for [[e a v t a?] (d/datoms db :avet :eval/of)
+                 :when a?]
+             (edit/form-delete-tx (d/entity db e)))))
     
     #_(into [new-node]
             (if (= (:db/id et) (:db/id (:eval/of prev)))
@@ -455,7 +447,7 @@
    :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
    :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
    :new-bar                        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :bar "" {}))
-   :eval-result                    eval-result
+   :eval-result                    eval-result-above-toplevel
    :ingest-result                  ingest-result
    :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
    :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
