@@ -180,3 +180,11 @@
 #_(run-electron)
 
 
+
+(defn compile-cljs!
+  [b]
+  (when (not= ":done" (sync-prepl-exec `(shadow.cljs.devtools.api/release ~b)))
+    (throw (ex-info "Shadow failed" {:b b}))
+    :ok))
+
+
