@@ -85,7 +85,7 @@
                                                                                                 (println "Closed browser ")
                                                                                                 (js/process.exit 0))))))))))))))))))))))))
 (def ^:const ptr-opts
-  #js {:headless false
+  #js {:headless true
        :defaultViewport #js {:width 1000 :height 800}})
 
 (defn tseq
