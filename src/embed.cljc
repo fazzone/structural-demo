@@ -50,10 +50,7 @@
                acc
                (case (n/tag x)
                  (:comma :whitespace)
-                 (do
-                   
-                   (println "Wsste" (pr-str (n/string x)))
-                   (recur xs id (+ isf (count (n/string x))) nl acc))
+                 (recur xs id (+ isf (count (n/string x))) nl acc)
 
                  :newline
                  (recur xs id 0 true acc)

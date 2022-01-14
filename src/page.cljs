@@ -137,8 +137,8 @@
   (let [chains (concat
 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                (map e/->tx test-form-data-bar)
                 [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                (map e/->tx test-form-data-bar)
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     
     [{:db/ident ::state
@@ -1320,7 +1320,6 @@
         (println "We did it"))
     
     ;; document.write(process.versions['electron'])
-    (js/console.log "What are you doing")
     (rum/mount
      #_(debug-component)
      (root-component @conn bus)

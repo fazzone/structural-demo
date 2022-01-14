@@ -3,7 +3,8 @@
    [df.async :as a]
    ["puppeteer" :as pt]
    ["process" :as process]
-   ["http" :as http]))
+   ["http" :as http]
+   ["path" :as path]))
 
 
 ;; const puppeteer = require('puppeteer');
@@ -91,10 +92,10 @@
   [^js page i ts]
   (println "TSeq")
   
-  (a/let [outf (str "artifact/screenshot/ZZstate" i ".png")
-          _ (.type (.-keyboard page) ts #js {:delay 1})
-          ;; _ (.waitForTimeout page 50)
-          ;; _ (.screenshot page #js {#_ #_:fullPage true :path outf})
+  (a/let [outf (str "artifact/screenshot/state" i ".png")
+          _ (.type (.-keyboard page) ts #js {:delay 20})
+          _ (.waitForTimeout page 50)
+          _ (.screenshot page #js {#_ #_:fullPage true :path outf})
           ;; _ (println "Wrote" outf)
           ]
     outf))
@@ -109,22 +110,27 @@
           ;; _ (.start (.-tracing page))
           cdp-client (.createCDPSession (.target page))
           _ (.send cdp-client "Overlay.setShowFPSCounter" #js{:show true})
-          _ (.goto page "http://localhost:8087")
+          ;; _ (.goto page "http://localhost:8087")
+          _ (println "Js dirname" js/__dirname)
+          uu (str "file:///" (-> js/__dirname
+                                 (path/dirname)
+                                 (path/join "index.html")))
+          _ (println "File url?" uu)
+
+          _ (.goto page uu)
           
           ;; _ (.stop (.-tracing page))
           _ (tseq page 0 "z")
           _ (reduce
-             (fn [p t]
-               (.then p (fn [] (tseq page t
-                                     (apply str
-                                            "x"
-                                            (repeat 999 "f")
-                                            #_(concat (repeat 599 "f")
-                                                      (repeat 599 "a")))
-                                     #_"ffaffaofuck\nfafcaaawaasfffdfffofuck\nfffaaffaffffofuck\naa"))))
+             (fn [p [i t]]
+               (.then p (fn [] (tseq page i t))))
              (js/Promise.resolve nil)
-             (map inc (range 4)))
-          _ (when ( aget ptr-opts "headless")
+             (map vector (range) (map str (str "zfjjjj" "jl first-to" "ken\n1j" "jonext-token\n1jj" "dfothird-token\n1jff last-"
+                                               "token\nfafaafffffffaafff"
+                                               "1jjjjlhc_cH1kf"
+                                               "f;done\n")))
+             #_[])
+          _ (when (aget ptr-opts "headless")
               (println "closing headless")
               (.close browser))]
     (println "Nice.")
@@ -134,7 +140,4 @@
   (println "Start main")
   (go))
 
-(defn  ^:dev/after-load loady
-  []
-  
-  (println "You cannot be serious"))
+(defn ^:dev/after-load loady [])

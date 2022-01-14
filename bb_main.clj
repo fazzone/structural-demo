@@ -91,30 +91,7 @@
 
 (def puppeteers (atom []))
 
-(defn screenshots []
-  (doseq [od ["artifact/screenshot/whatever"]]
-    (io/make-parents (io/file od)))
-  (let [puppeteer (p/process ["node" ptr-script]
-                             {:extra-env puppeteer-env})]
 
-    (swap! puppeteers conj puppeteer)
-    (future
-      (binding [*in* (-> puppeteer :err io/reader)]
-        (loop []
-          (when-let [line (read-line)]
-            (println "[pptr err] " line)
-            (recur)))
-        (println "Error slurper done?")))
-    
-    (binding [*in* (-> puppeteer :out io/reader)]
-      (loop []
-        (when-let [line (read-line)]
-          (println "[pptr] " line)
-          (recur)))
-      (println "In slurpy done?"))
-
-    (let [exit (:exit @puppeteer)]
-      (println "OK"))))
 
 (defn maybe-install-electron
   []
@@ -153,6 +130,30 @@
    (quote
     (shadow/watch :br))))
 
+(defn screenshots []
+  (doseq [od ["artifact/screenshot/whatever"]]
+    (io/make-parents (io/file od)))
+  (let [puppeteer (p/process ["node" ptr-script]
+                             {:extra-env puppeteer-env})]
+    (swap! puppeteers conj puppeteer)
+    (future
+      (binding [*in* (-> puppeteer :err io/reader)]
+        (loop []
+          (when-let [line (read-line)]
+            (println "[pptr err] " line)
+            (recur)))
+        (println "Error slurper done?")))
+    
+    (binding [*in* (-> puppeteer :out io/reader)]
+      (loop []
+        (when-let [line (read-line)]
+          (println "[pptr] " line)
+          (recur)))
+      (println "In slurpy done?"))
+
+    (let [exit (:exit @puppeteer)]
+      (println "OK"))))
+
 (comment
   (sync-prepl-exec
    (quote
@@ -181,6 +182,12 @@
 #_(run-electron)
 
 (defn compile-cljs!
+  [b]
+  (when (not= ":done" (sync-prepl-exec `(shadow.cljs.devtools.api/compile ~b)))
+    (throw (ex-info "Shadow failed" {:b b}))
+    :ok))
+
+(defn release-cljs!
   [b]
   (when (not= ":done" (sync-prepl-exec `(shadow.cljs.devtools.api/release ~b)))
     (throw (ex-info "Shadow failed" {:b b}))
