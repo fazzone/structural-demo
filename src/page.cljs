@@ -132,13 +132,14 @@
    "S-Q"       :stringify
    "S-+"       :plus})
 
+
 (def init-tx-data
   (let [chains (concat
 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
-                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
-                [(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     
     [{:db/ident ::state
       :state/bar "bar"}
