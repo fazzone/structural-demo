@@ -81,9 +81,6 @@
                  [:db/retract (:db/id parent) :form/indent indent])]
               (form-replace-tx parent e))))))
 
-
-
-
 (defn insert-after-tx
   [target new-node]
   (when-let [spine (first (:seq/_first target))]
@@ -100,6 +97,7 @@
   [target new-node]
   (let [spine (first (:seq/_first target))
         coll (first (:coll/_contains target))]
+    (println "IBTX" spine coll)
     (when (and spine coll)
       [{:db/id (:db/id spine)
         :seq/first (:db/id new-node)
@@ -124,13 +122,14 @@
      [:db/add (:db/id coll) :seq/first (:db/id elem)]]))
 
 (defn insert-editing*
-  [inserter target from]
-  (let [new-node {:db/id "newnode"
-                  :form/editing true
-                  :form/edit-initial ""}] 
+  [inserter target from props]
+  (let [new-node (merge {:db/id "newnode"
+                         :form/editing true
+                         :form/edit-initial ""}
+                        props)] 
     (into [new-node]
           (concat (inserter target new-node)
-                  (move-selection-tx (:db/id from) "newnode")))))
+                  (move-selection-tx (:db/id from) (:db/id new-node))))))
 
 (defn exchange-with-previous-tx
   [sel]
@@ -306,19 +305,21 @@
 
 (defn insert-editing-before
   ([sel] (insert-editing-before sel sel))
-  ([target from]
+  ([target from] (insert-editing-before target from nil))
+  ([target from props]
    (let [parent (exactly-one (:coll/_contains target))]
      (if (= :chain (:coll/type parent))
-       (edit-new-wrapped* insert-before-tx target from :list "" nil)
-       (insert-editing* insert-before-tx target from)))))
+       (edit-new-wrapped* insert-before-tx target from :list "" props)
+       (insert-editing* insert-before-tx target from props)))))
 
 (defn insert-editing-after 
   ([sel] (insert-editing-after sel sel))
-  ([target from]
+  ([target from] (insert-editing-after target from nil))
+  ([target from props]
    (let [parent (exactly-one (:coll/_contains target))]
      (if (= :chain (:coll/type parent))
-       (edit-new-wrapped* insert-after-tx target from :list "" nil)
-       (insert-editing* insert-after-tx target from)))))
+       (edit-new-wrapped* insert-after-tx target from :list "" props)
+       (insert-editing* insert-after-tx target from props)))))
 
 (defn form-split-tx
   [e]
@@ -402,7 +403,7 @@
      [:db/add (:db/id sel) :form/editing true]]
     
     (nil? (:seq/first sel))
-    (insert-editing* insert-into-empty-tx sel sel)
+    (insert-editing* insert-into-empty-tx sel sel nil)
     
     :else
     (let [last-cons (loop [s sel]

@@ -86,10 +86,16 @@ span.tk.v  { color: #eee; }
 /* span.tk.p  { color: #70c0b1; } */
 span.tk.n  { color: #f0c674; }
 span.tk.l  { color: #b5bd68; white-space: pre;}
-
 span.unev span.tk { color: #777; }
 span.unev span.d { color: #777; }
 span.unev span.kn { color: #777; }
+
+.tk.comment {
+    white-space: pre;
+    border-left: 0;
+    color: #777;
+}
+.tk.comment.selected { color: #999; }
 
 .selected {
     /* background-color: #062606; */
@@ -507,7 +513,7 @@ span.key-compose-echo {
 }
 
 
-.chain:first-child { padding-top: 200px; }
+/* .chain:first-child { padding-top: 200px; } */
 
 .tk.verbatim {
     display: block;
@@ -517,4 +523,10 @@ span.key-compose-echo {
     padding: 1ex;
     background-color: #333;
     border-radius: 0px;
+}
+
+
+.bar .bar {
+    width: unset;
+    border: 1px solid cadetblue;
 }

@@ -137,7 +137,8 @@
   (fn [db & args]
     (let [sel (get-selected-form db)
           nf  (apply mover sel args)]
-      (move-selection-tx (:db/id sel) (:db/id nf)))))
+      (when nf
+        (move-selection-tx (:db/id sel) (:db/id nf))))))
 
 
 

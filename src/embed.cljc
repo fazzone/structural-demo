@@ -8,11 +8,7 @@
    [clojure.string :as string]
    [datascript.core :as d]))
 
-(defn seq-tx
-  [xs]
-  (if-let [x (first xs)]
-    (cond-> {:seq/first x}
-      (next xs) (assoc :seq/next (seq-tx (next xs))))))
+
 
 (def some-map
   {:this :is
@@ -31,32 +27,74 @@
    []
    m))
 
+(defn seq-tx
+  [xs]
+  (if-let [x (first xs)]
+    (cond-> {:seq/first x}
+      (next xs) (assoc :seq/next (seq-tx (next xs))))))
+
+#_(-> (p/parse-string-all (slurp "subtree/small.clj"))
+    (n/children)
+    first
+    (n/children)
+    (nth 5)
+    (n/children)
+    )
+;; => (<token: fn> <whitespace: " "> <vector: [It]> <newline: "\n"> <whitespace: "    "> <comment: ";; This is wrong\n"> <whitespace: "    "> <token: What>)
+
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]
-   (letfn [(coll-tx [coll-type xs]
+   (letfn [(seq-ws-tx [[x & xs] id isf nl acc]
+             (if-not x
+               acc
+               (case (n/tag x)
+                 (:comma :whitespace)
+                 (do
+                   
+                   (println "Wsste" (pr-str (n/string x)))
+                   (recur xs id (+ isf (count (n/string x))) nl acc))
+
+                 :newline
+                 (recur xs id 0 true acc)
+
+                 :comment
+                 (recur xs id 0 true
+                        (conj acc
+                              (cond-> (n->tx x isf)
+                                true      (assoc :coll/_contains id)
+                                nl        (assoc :form/linebreak nl)
+                                (< 0 isf) (assoc :form/indent isf))))
+
+                 (recur xs id 0 nil
+                        (conj acc (cond-> (n->tx x isf)
+                                    true      (assoc :coll/_contains id)
+                                    (< 1 isf) (assoc :form/indent isf)
+                                    nl        (assoc :form/linebreak true)))))))
+           (coll-tx [coll-type xs]
              (let [id         (new-tempid)
                    linebreak? (atom nil)
                    isf        (atom 0)]
                (cond-> {:db/id id :coll/type coll-type}
-                 (seq xs) (merge (seq-tx (for [x     xs
-                                               :when (case (n/tag x)
-                                                       (:comma :whitespace)
-                                                       (do (swap! isf + (count (n/string x)))
-                                                           false)
-                                                       :newline
-                                                       (do (when (n/linebreak? x)
-                                                             (reset! linebreak? true)
-                                                             (reset! isf 0))
-                                                           false)
-                                                       true)]
-                                           (let [i @isf]
-                                             (reset! isf 0)
-                                             (cond-> (n->tx x)
-                                               true        (assoc :coll/_contains id)
-                                               (< 1 i)     (assoc :form/indent i)
-                                               @linebreak? (assoc :form/linebreak (do (reset! linebreak? false)
-                                                                                      true))))))))))]
+                 (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil [])))
+                 
+                 #_ (merge (seq-tx (for [x     xs
+                                         :when (case (n/tag x)
+                                                 (:comma :whitespace)
+                                                 (do (swap! isf + (count (n/string x)))
+                                                     false)
+                                                 :newline
+                                                 (do (when (n/linebreak? x)
+                                                       (reset! linebreak? true)
+                                                       (reset! isf 0))
+                                                     false)
+                                                 true)]
+                                     (let [i @isf]
+                                       (cond-> (n->tx x)
+                                         true        (assoc :coll/_contains id)
+                                         (< 1 i)     (assoc :form/indent i)
+                                         @linebreak? (assoc :form/linebreak (do (reset! linebreak? false)
+                                                                                true))))))))))]
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
@@ -78,7 +116,7 @@
        :forms   (coll-tx :vec (n/children n))
        :deref   (coll-tx :deref (n/children n))
        :comma   nil
-       :comment {:token/type :string :token/value (n/string n)}
+       :comment {:token/type :comment :token/value (string/trimr (n/string n))}
        :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                       mta                (n/sexpr mta-n)]
                   #_(println "Mta-n" (n/string mta-n)
@@ -104,7 +142,7 @@
        
        :fn               (coll-tx :fn (n/children n))
        :quote            (coll-tx :quote (n/children n))
-       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))
@@ -112,8 +150,6 @@
        :regex            {:token/type :regex :token/value (n/string n)}
        
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
-
-
 
 (defn string->tx
   [s]
@@ -239,7 +275,8 @@
           :symbol  (str (:token/value e))
           :keyword (str (:token/value e))
           :string  (pr-str (:token/value e))
-          :number  (str (:token/value e))))
+          :number  (str (:token/value e))
+          :comment (:token/value e)))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str

@@ -368,23 +368,63 @@
            (edit/insert-before-tx top-level new-node)
            (move-selection-tx (:db/id sel) tempid)))))
 
+(defn new-bar-tx
+  [sel]
+  (let [new-node {:db/id "newbar"
+                  :coll/type :bar
+                  :coll/contains #{"newchain"} 
+                  :seq/first {:db/id "newchain"
+                              :coll/contains #{"newnode"}
+                              :coll/type :chain
+                              :seq/first {:db/id "newnode"
+                                          :form/edit-initial ""
+                                          :form/editing true}}
+                  #_{:db/id "inner"
+                     :coll/_contains "newnode"
+                     :form/edit-initial (or init  "")
+                     :form/editing true}}]
+    (into [new-node]
+          (concat (edit/insert-after-tx sel new-node)
+                  (move-selection-tx (:db/id sel) "newnode")))))
+
 (defn drag*
-  [chain-mover sel]
+  [chain-mover chain-inserter sel]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
         other-chain (move/move chain-mover chain)
         target      (or (:chain/selection other-chain)
                         (:seq/first other-chain))
-        target-tl   (peek (nav/parents-vec target))]
-    (when target-tl
-      (into (edit/form-unlink-tx sel)
+        target-tl   (peek (nav/parents-vec target))
+        
+        new-sel (move/move :move/backward-up sel)]
+    (into (edit/form-unlink-tx sel)
+          (cond
+            target-tl
             (concat (edit/insert-before-tx target-tl sel)
-                    (some->> (move/move :move/backward-up sel)
-                             (:db/id)
-                             (move-selection-tx (:db/id sel))))))))
+                    (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
+      
+            (and chain (nil? other-chain))
+            (let [new-chain {:db/id "newchain"
+                             :coll/type :chain
+                             :coll/contains (:db/id sel)
+                             :seq/first (:db/id sel)}]
+              (concat [new-chain]
+                      (chain-inserter chain new-chain)
+                      (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
 
-(def drag-left-tx  (partial drag* :move/prev-sibling))
-(def drag-right-tx (partial drag* :move/next-sibling))
+
+(def drag-left-tx  (partial drag* :move/prev-sibling edit/insert-before-tx))
+(def drag-right-tx (partial drag* :move/next-sibling edit/insert-after-tx))
+
+(defn chain-from-text
+  [sel text props]
+  (let [top-level   (peek (nav/parents-vec sel))
+        chain       (some-> top-level :coll/_contains edit/exactly-one)
+        nf (-> (e/string->tx text)
+               (update :db/id #(or % "cft"))
+               (assoc :coll/type :chain))]
+    (edit/insert-after-tx chain
+                          (merge {:db/id "newchain"} nf {:coll/type :chain} props))))
 
 (def movement-commands
   {:select          (fn [e eid] (d/entity (d/entity-db e) eid))
@@ -420,11 +460,11 @@
    :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
    :hop-left     nav/hop-left
    :hop-right    nav/hop-right
-
+   
    :uneval                         (comp uneval-and-next get-selected-form)
    :insert-right                   (comp edit/insert-editing-after get-selected-form)
    :insert-left                    (comp edit/insert-editing-before get-selected-form)
-   :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
+   ;; :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
    :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
    :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
@@ -447,7 +487,16 @@
    :new-quote                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
    :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
    :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
-   :new-bar                        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :bar "" {}))
+   :new-comment                    (fn [db]
+                                     (let [sel (get-selected-form db)]
+                                       (into [[:db/add (:db/id sel) :form/linebreak true]]
+                                             (edit/insert-editing-before sel sel
+                                                                         (cond-> {:token/type :comment 
+                                                                                  :form/linebreak true
+                                                                                  :form/edit-initial ";; "}
+                                                                           (:form/indent sel)
+                                                                           (assoc  :form/indent  (:form/indent sel ))) ))))
+   :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    eval-result-above-toplevel
    :ingest-result                  ingest-result
    :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))

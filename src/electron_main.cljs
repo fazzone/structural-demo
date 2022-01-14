@@ -14,9 +14,10 @@
                                                   #_ #_:nodeIntegration true}})))
   
   ;; Path is relative to the compiled js file (main.js in our case)
+  #_(js/console.log  "HJave to device here" (.-argv  js/process))
   (.loadURL ^js/electron.BrowserWindow @main-window
-            #_(str "file://" js/__dirname "/index.html")
-            "localhost:8087/srv/index.html")
+            (str "file://" js/__dirname "/index.html")
+            #_"http://localhost:8087/index.html")
   (.openDevTools (.-webContents  ^js/electron.BrowserWindow @main-window))
   (.on ^js/electron.BrowserWindow @main-window "closed" #(reset! main-window nil)))
 
@@ -32,5 +33,6 @@
                                     (.quit app)))
   (.on app "window-all-closed" #(.quit app))
   
-  (println "Electron main" (js/process.argv))
+  #_(js/console.log  "Electron main" (.-argv  js/process))
+  #_(println "Electron main" (.-argv  js/process))
   (.on app "ready" init-browser))

@@ -34,54 +34,84 @@
   []
   (deps/clojure []))
 
-(def the-prepl
+(def value-expected (atom nil))
+
+(defonce the-prepl
   (delay
-    (let [_ (println "Staring big clojure...")
-          proc (deps/clojure ["-M"
-                              "-e" "(require '[clojure.core.server :as s])"
-                              "-e" "@user/shadow-server"
-                              "-e" "(s/io-prepl)"]
-                             {:in nil
-                              :out nil
-                              :err :inherit})]
-      {:proc proc
+    (println "Staring big clojure...")
+    (let [{:keys [in out err]} (deps/clojure ["-M"
+                                              "-e" "(require '[clojure.core.server :as s])"
+                                              "-e" "@user/shadow-server"
+                                              "-e" "(s/io-prepl)"]
+                                             {:in nil
+                                              :out nil
+                                              :err nil
+                                              :shutdown p/destroy-tree})]
+      (future
+        (binding [*in* (io/reader err)]
+          (loop []
+            (when-let [line (read-line)]
+              (println "[clj err] " line)
+              (recur)))
+          (println "Error slurper done?")))
+      
+      (future
+        (binding [*in* (io/reader out)]
+          (loop []
+            (when-let [line (read-line)]
+              (if (not= "{" (subs line 0 1))
+                (do
+                  (println "[clj]  " line)
+                  (recur))
+                (let [v (edn/read-string line)]
+                  (case (:tag v)
+                    :ret (do
+                           (when-let [ve @value-expected]
+                             (deliver ve (:val v)))
+                           (recur))
+                    :out (do (print "[clj]  " (:val v))
+                             (recur))
+                    (do (prn 'clj-error v)
+                        (recur)))))))))      
+      
+      {:out (io/writer in)})
+    #_{:proc proc
        :writer (-> proc :in io/writer) 
-       :reader (-> proc :out io/reader)})))
+       :reader (-> proc :out io/reader)}))
 
-(defn compile-and-host-cljs
+(defn sync-prepl-exec
   [body-expr]
-  (let [{:keys [reader writer]} @the-prepl]
-    (binding [*out* writer]
-      (prn body-expr))
-    ;; wait for shadow to finish
-    (binding [*in* reader]
-      (loop []
-        (when-let [line (read-line)]
-          (if (not= "{" (subs line 0 1))
-            (do
-              (println "[clj]  " line)
-              (recur))
-            (let [v (edn/read-string line)]
-              (case (:tag v)
-                :ret (:val v)
-                :out (do (print "[clj]  " (:val v))
-                         (recur))
-                (do (prn 'clj-error v)
-                    (recur))))))))))
+  (let [{:keys [out]} @the-prepl
+        ans (promise)]
+    (reset! value-expected ans)
+    (binding [*out* out] (prn body-expr))
+    (println "Answer" @ans)
+    @ans))
 
+
+(def puppeteers (atom []))
 
 (defn screenshots []
   (doseq [od ["artifact/screenshot/whatever"]]
     (io/make-parents (io/file od)))
   (let [puppeteer (p/process ["node" ptr-script]
-                             {:err :inherit
-                              :extra-env puppeteer-env})]
+                             {:extra-env puppeteer-env})]
 
+    (swap! puppeteers conj puppeteer)
+    (future
+      (binding [*in* (-> puppeteer :err io/reader)]
+        (loop []
+          (when-let [line (read-line)]
+            (println "[pptr err] " line)
+            (recur)))
+        (println "Error slurper done?")))
+    
     (binding [*in* (-> puppeteer :out io/reader)]
       (loop []
         (when-let [line (read-line)]
           (println "[pptr] " line)
-          (recur))))
+          (recur)))
+      (println "In slurpy done?"))
 
     (let [exit (:exit @puppeteer)]
       (println "OK"))))
@@ -108,15 +138,45 @@
   #_(compile-and-host-cljs
      (quote (+ 1 1))
      #_(quote (user/release-cljs!)))
-  (prn "The electron process was" @electron-process)
-  (reset! electron-process
-          (p/process [@electron-exe electron-main])))
+  
+  (let [result (sync-prepl-exec (quote (do
+                                         (shadow.cljs.devtools.api/release :elec)
+                                         (shadow.cljs.devtools.api/release :br))))]
+    (if-not (= ":done" result)
+      (println "Failed to build")
+      (reset! electron-process
+              (p/process [@electron-exe electron-main "These" "Are" "Yourargs"])))))
+
+(defn start-repl
+  []
+  (sync-prepl-exec
+   (quote
+    (shadow/watch :br))))
 
 (comment
-  (compile-and-host-cljs
-   (quote (+ 1 1)))
-
-  (run-electron))
-
+  (sync-prepl-exec
+   (quote
+    (shadow/release :br)
+    #_(shadow/compile :ptr)
+    #_(release-cljs!)
+    #_(do
+        (System/currentTimeMillis))))
+  
+  (future-cancel screenshot-future)
+  (count @puppeteers)
+  (for [c @puppeteers] (.isAlive (:proc c)))
+  (future-done? screenshot-future)
+  (def screenshot-future
+    (future
+      (let [result (sync-prepl-exec (quote (do
+                                             (use 'df.async :reload)
+                                             (shadow.cljs.devtools.api/compile
+                                              :ptr))))]
+        (if-not (= ":done" result)
+          (println "Failed: " (pr-str result))
+          (do (screenshots)
+              (println "Finished in bb"))))))
+  )
 #_(run-electron)
+
 

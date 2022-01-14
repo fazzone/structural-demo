@@ -10,18 +10,21 @@
   )
 
 (defonce shadow-server (future (server/start!)))
-(defonce shadow-watch (future
-                    @shadow-server
-                    (Thread/sleep 200)
-                    (println "Starting watch")
-                    (shadow/watch :br)))
+
+(defonce shadow-watch
+  (future
+    @shadow-server
+    (Thread/sleep 200)
+    #_(println "Starting watch")
+    #_(shadow/watch :br)))
+
 (defonce nrepl-server
   (let [port-file (io/file ".nrepl-port")
         {:keys [port]} (nrepl-server/start-server #_ #_:handler cnr/cider-nrepl-handler)]
     (spit ".nrepl-port" port)))
 
 (comment
-  (shadow/watch :elec))
+  (shadow/compile :br))
 (comment
   (shadow/release :elec))
 (comment

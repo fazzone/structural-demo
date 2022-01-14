@@ -6,7 +6,7 @@
    [debug :as debug]
    [tx-history :as h]
    [goog.string :as gstring]
-   [goog.functions :as gf]
+   [goog.functions :as gfunc]
    [datascript.core :as d]
    [clojure.datafy :as datafy]
    [clojure.string :as string]
@@ -25,12 +25,14 @@
    [cmd.edit :as edit]
    [cmd.mut :as mut]
    [cmd.invar :as invar]
-   [df.github :as dfg]
+   #_[df.github :as dfg]
    [df.async :as a]
    [zprint.core :as zp-hacks]
    [core :as core
     :refer [get-selected-form
-            move-selection-tx]])
+            move-selection-tx]]
+   
+   )
   (:import
    [goog.net XhrIo]
    [goog.net EventType])
@@ -62,6 +64,7 @@
    "g"   :gobble
    "S-I" :zp
    "o"   :offer
+   ";"   :new-comment
    
    "S-S" :split
    "M-s" :splice
@@ -134,8 +137,9 @@
 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 (map e/->tx test-form-data-bar)
-                
-                )]
+                #_[(e/string->tx-all (m/macro-slurp  "src/page.cljs"))]
+                [(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
+    
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::evalchain
@@ -188,7 +192,6 @@
 
 (declare fcc)
 
-(defn breadcrumbs-portal-id [eid] (str eid "bp"))
 (defn modeline-portal-id [eid] (str eid "mp"))
 
 (declare el-bfs)
@@ -198,8 +201,6 @@
    {}
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    
-   #_[:div.bp {:id (breadcrumbs-portal-id (:db/id e))}]
-   
    [:div.top-level-form.code-font ^:inline (fcc e bus 0 p)]
    [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
 
@@ -208,16 +209,6 @@
   (+ indent-prop
      (or (:form/indent e)
          0)))
-
-#_(defn do-indent
-  [child linebreak? indent-level]
-  (if-not linebreak?
-    child
-    (rum/fragment
-     [:span.indent-chars "\n"
-      [:span.indenter {:style {:margin-left (str indent-level "ch")}}]]
-     child)))
-
 
 (comment
   [:span.c.dl
@@ -235,28 +226,6 @@
    "..."
    [:span.d.cl close]])
 
-
-#_(defn do-indent*
-  [child ip fi linebreak?]
-  #_(println "DI" fi linebreak?)
-  (if (and (or (nil? fi) (zero? fi)) (not linebreak?))
-    ^:inline child
-    (rum/fragment
-     
-     [:span.indent-chars (if-not linebreak? {} {:class "nl"})
-      (when linebreak? "\n")
-      #_[:span.indenter {:style {:padding-left (str ip "ch")
-                                 :background-color "tomato"}}]
-      (when fi
-        #_[:span.indenter
-           {:style {:color "cadetblue"} }
-           (apply str (repeat fi "-"))]
-        [:span.indenter {:style {:margin-left (str fi "ch")
-                                 ;; :background-color "cadetblue"
-                                 }}])]
-     
-     child)))
-
 (def render-counter (atom 0))
 
 (rum/defc indenter
@@ -266,9 +235,10 @@
     [:span.indent-chars (if-not nl? {} {:class "nl"})
      (when nl? "\n")
      (when fi
-       [:span.indenter {:style {:margin-left (str fi "ch")
-                                ;; :background-color "cadetblue"
-                                }}])]))
+       #_[:span.indenter
+        {:style {:color "cadetblue"} }
+        (apply str (repeat fi "-"))]
+       [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
 
 
 (rum/defc any-coll
@@ -294,7 +264,7 @@
        open-delim  [:span.d ^String open-delim]
        :else       nil)
      (for [c children]
-       (fcc c bus indent proply)
+       ^:inline (fcc c bus indent proply)
        #_(let [{:form/keys [linebreak indent]} c
                rc                              (fcc c bus indent proply)]
            (rum/fragment
@@ -441,7 +411,7 @@
                 ("first" "map" "filter" "apply" "reset!" "swap!"
                  "get" "assoc" "update" "cons" "conj" "seq" "next"
                  "prn" "println" "into" "set" "vector"
-                 "take" "drop" "take-while" "dorp-while" "reduce"
+                 "take" "drop" "take-while" "drop-while" "reduce"
                  "concat")
                 "s"
                 "v")
@@ -449,7 +419,8 @@
     :string   "l"
     :number   "n"
     :regex    "re"
-    :verbatim "verbatim"))
+    :verbatim "verbatim"
+    :comment  "comment"))
 
 (defn token-text
   [t ^String v]
@@ -464,6 +435,7 @@
     :string (pr-str v)
     :verbatim v
     :number (str v)
+    :comment v
     :regex (str "REGEX:" v)))
 
 
@@ -515,18 +487,6 @@
                       (map :db/id (next (mut/get-numeric-movement-vec e)))
                       (range 2 9))))))))
 
-#_(register-sub ::extract-to-new-top-level
-              (->mutation
-               (fn [db]
-                 (let [sel (get-selected-form db)
-                       top-level (first (reverse-parents-array sel))
-                       chain (some-> top-level :coll/_contains first)
-                       new-node (-> (form-duplicate-tx sel)
-                                    (update :db/id #(or % "dup-leaf")))]
-                   (into [new-node]
-                         (concat (edit/insert-before-tx top-level new-node)
-                                 (move-selection-tx (:db/id sel) (:db/id new-node))))))))
-
 (defn el-bfs
   [top limit]
   (loop [out   []
@@ -540,42 +500,6 @@
                      (cond-> (subvec front 1)
                        (:seq/next e) (conj (:seq/next e))
                        (:seq/first e) (conj (:seq/first e))))))))
-
-(def breadcrumbs-max-numeric-label 8)
-(rum/defc parent-path-item
-  [bus i parent]
-  [:li
-   [:a {:href "#"
-        :on-click #(do (.preventDefault %)
-                       (core/send! bus [:select (:db/id parent)]))}
-    [:span.code-font
-     {}
-     (when (< i breadcrumbs-max-numeric-label)
-       [:span.inline-tag (str (inc i))])
-     (if (= :list (:coll/type parent))
-       (or (str (some-> parent :seq/first :token/value)) "()")
-       (case (:coll/type parent) :vec "[]" :map "{}" "??"))]]])
-
-(rum/defc parent-path
-  [rpa bus]
-  [:ul.parent-path
-   (for [i (range (count rpa))]
-     (-> (parent-path-item bus i (nth rpa i))
-         (rum/with-key i)))])
-
-(rum/defc breadcrumbs-always < (dbrx/areactive :form/highlight :form/edited-tx)
-  [db bus]
-  (when-let [sel (get-selected-form db)]
-    (let [rpa (some-> sel nav/parents-vec reverse vec)
-          top-level (first rpa)]
-      (when-let [n (->> (:db/id top-level)
-                        (breadcrumbs-portal-id)
-                        (.getElementById js/document))]
-        (-> (if-not (= (:db/id sel) (:db/id top-level))
-              (butlast rpa)
-              (el-bfs sel 9))
-            (parent-path bus)
-            (rum/portal n))))))
 
 (def special-key-map
   (merge
@@ -635,7 +559,7 @@
                  "p" [::reify-parse-selected]}
     "C-z"       [::revert-last]}
    (into {}
-         (for [i (range  breadcrumbs-max-numeric-label)]
+         (for [i (range  8)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
 (comment
@@ -674,8 +598,6 @@
                         (group-by #(nth % 2))
                         (sort-by (comp - count second))
                         (take 5))]
-       (println "Results" results)
-       
        (for [[v [[e] :as ds]] results]
          (rum/fragment
           (let [{:token/keys [type value]} (d/entity db e)
@@ -691,11 +613,9 @@
 (declare save-status)
 (rum/defc modeline-inner < rum/reactive
   [sel bus {:keys [^String text valid] :as edn-parse-state}]
-  (println "Modeline-inner" (:db/id sel))
   [:span {:class (str "modeline code-font"
                       (if text " editing modeline-search" " modeline-fixed")
                       (when (and (not (empty? text)) (not valid)) " invalid"))}
-   "Thje modeline " (pr-str text)
    [:span.modeline-echo
     {}
     (let [{:keys [on at status file]} (rum/react save-status)]
@@ -730,11 +650,6 @@
   (let [sel (get-selected-form db)
         rpa (reverse (nav/parents-vec sel))
         nn (.getElementById js/document (modeline-portal-id (:db/id (first rpa))))]
-    (js/console.log
-     "Modeline-portal"
-     (:db/id sel)
-     nn
-     eb/editbox-ednparse-state)
     (when nn
       (-> (modeline-inner
            sel
@@ -749,7 +664,6 @@
   (let [state (d/entity db ::state)]
     [:div.bar-container
      #_(breadcrumbs-always db bus)
-     (println "Rootc container?")
      (fcc (:state/bar state) bus 0 nil)
      (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -898,8 +812,12 @@
      (when new-chain-top (.scrollTo chain #js{:top new-chain-top}))
      (when new-bar-left  (.scrollTo bar   #js{:left new-bar-left})))))
 
+(def ensure-selected-in-view!
+  (-> (fn [] (scroll-to-selected! false))
+      (gfunc/debounce 10)))
+
+#_
 (defn ensure-selected-in-view! []
-  (println "ESIV")
   (scroll-to-selected! false))
 
 (def save-status (atom nil))
@@ -941,24 +859,19 @@
                                                'fetch   (fn [z f]
                                                           (-> z (js/fetch) (.then f)))
                                                'then    (fn [p f] (.then (js/Promise.resolve p) f))
-                                               'stories dfg/stories
+                                               ;; 'stories dfg/stories
                                                'ingest  scivar-ingest
                                                'sel     scivar-sel
                                                '->seq   e/seq->seq
                                                
-                                               'slurp (some-> js/window
-                                                              (aget "my_electron_bridge")
+                                               'slurp (some-> (aget js/window "my_electron_bridge")
                                                               (aget "slurp"))
-
-                                               'spit     (some-> js/window
-                                                             (aget "my_electron_bridge")
-                                                             (aget "spit"))
-                                               'list-dir (some-> js/window
-                                                                 (aget "my_electron_bridge")
+                                               'spit     (some-> (aget js/window "my_electron_bridge")
+                                                                 (aget "spit"))
+                                               'list-dir (some-> (aget js/window "my_electron_bridge")
                                                                  (aget "list_dir"))
-                                               'exit     (some-> js/window
-                                                             (aget "my_electron_bridge")
-                                                             (aget "exit"))}})]
+                                               'exit     (some-> (aget js/window "my_electron_bridge")
+                                                                 (aget "exit"))}})]
      #_(doseq [[m f] mut/dispatch-table]
          (core/register-simple! a m f))
      (doseq [[m f] mut/movement-commands]
@@ -1023,12 +936,20 @@
                                            #_(scroll-to-selected!)))
        (core/register-simple! :zp (fn [db _]
                                     (let [_         (js/console.time "formatting")
+                                          _  (js/console.time "preparing")
                                           _         (zp-hacks/set-options! {:map {:sort? nil}})
                                           q         (-> (get-selected-form db) nav/parents-vec peek)
+                                          _  (js/console.timeEnd "preparing")
+                                          _ (js/console.time "stringifying")
                                           my-string (e/->string q)
-                                          
+                                          _ (js/console.timeEnd "stringifying")
+                                          _ (js/console.time "zprint")
                                           p   (zp-hacks/zprint-file-str my-string (:db/id q))
+                                          _ (js/console.timeEnd "zprint")
+                                          _ (js/console.time "parsing")
                                           pt  (e/string->tx p)
+                                          _ (js/console.timeEnd "parsing")
+                                          _ (js/console.time "reconciling")
                                           ans (vec
                                                (mapcat
                                                 (fn [a b]
@@ -1048,6 +969,7 @@
                                                       [:db/retract (:db/id a) k (k a)])))
                                                 (tree-seq :coll/type e/seq->vec q)
                                                 (tree-seq :coll/type e/seq->vec pt)))]
+                                      (js/console.timeEnd "reconciling")
                                       (js/console.timeEnd "formatting")
                                       ans)
                                            
@@ -1120,11 +1042,11 @@
                                                  "Exception"]
                                   " "
                                   (ex-message e)]
-                            [:p (with-out-str (cljs.pprint/pprint (ex-data e)))]
+                            [:p {} (with-out-str (cljs.pprint/pprint (ex-data e)))]
                             "Mutation"
-                            [:p (pr-str (into [m] args) )]
+                            [:p {} (pr-str (into [m] args) )]
                             "At selected form"
-                            [:p (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]]})))
+                            [:p {} (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]]})))
                      (throw (ex-info "No mutation" {:m m}))))
                  init-report
                  muts)]
@@ -1132,7 +1054,7 @@
      [:div {:style {:display "flex" :flex-direction "column" :width "100%"}}
       (for [[i m {:keys [failure input-tx db-after tx-data]} other] (map vector (range) (cons "initial" muts) reports (cons nil reports))]
         (if failure
-          [:div failure]
+          [:div {} failure]
           [:div {:key i :style {:display :flex
                                 :flex-direction :column
                                 :margin-top "2ex"
@@ -1153,7 +1075,8 @@
                   (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
               #_(pr-str input-tx)
               [:div ;; :details[:summary "txdata"]
-               (debug/datoms-table-eavt* tx-data)]
+               
+               ^:inline (debug/datoms-table-eavt* tx-data)]
               #_[:div
                  (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
 
@@ -1353,11 +1276,11 @@
   
   (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
     
-      (println "Reset keyhboard bus" bus)
-      (reset! keyboard-bus bus)
-      #_(stupid-github-crap)
+    (println "Reset keyhboard bus" bus)
+    (reset! keyboard-bus bus)
+    #_(stupid-github-crap)
     
-      #_(go
+    #_(go
         (async/<!
          (async/onto-chan!
           (core/zchan bus)
@@ -1395,11 +1318,12 @@
           false))
         (println "We did it"))
     
-      ;; document.write(process.versions['electron'])
-      (rum/mount
-       #_(debug-component)
-       (root-component @conn bus)
-       (.getElementById js/document "root"))))
+    ;; document.write(process.versions['electron'])
+    (js/console.log "What are you doing")
+    (rum/mount
+     #_(debug-component)
+     (root-component @conn bus)
+     (.getElementById js/document "root"))))
 
 ;; Single highlight, in DB
 ;; - Mutations find it? With a lookup ref [highlight true]
@@ -1484,3 +1408,5 @@
 ;;
 
 ;; Fulltext index all the strings and commit messages?
+
+;; Remember the scroll position when the chain remounts

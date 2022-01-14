@@ -1,5 +1,6 @@
 (ns test-driver
   (:require
+   [df.async :as a]
    ["puppeteer" :as pt]
    ["process" :as process]
    ["http" :as http]))
@@ -38,10 +39,7 @@
                          (.end res "Dingus")))
     (.listen 9997)))
 
-(defn ^:dev/after-load go []
-  (println "After load")
-  #_(setup-server)
-  (js/console.log "asdf"))
+
 
 (comment
   (str "file://" (js/process.cwd) "/srv/index.html"
@@ -52,7 +50,7 @@
                   (js/Buffer.from "utf-8")
                   (.toString "base64"))))))
 
-(defn main []
+#_(defn main []
   (println "Start main")
   #_(go)
   (.then (.launch pt #js {:headless true
@@ -85,3 +83,58 @@
                                                                                        (.then (fn [c]
                                                                                                 (println "Closed browser ")
                                                                                                 (js/process.exit 0))))))))))))))))))))))))
+(def ^:const ptr-opts
+  #js {:headless false
+       :defaultViewport #js {:width 1000 :height 800}})
+
+(defn tseq
+  [^js page i ts]
+  (println "TSeq")
+  
+  (a/let [outf (str "artifact/screenshot/ZZstate" i ".png")
+          _ (.type (.-keyboard page) ts #js {:delay 1})
+          ;; _ (.waitForTimeout page 50)
+          ;; _ (.screenshot page #js {#_ #_:fullPage true :path outf})
+          ;; _ (println "Wrote" outf)
+          ]
+    outf))
+
+(defn go []
+  (a/let [^js browser (.launch pt ptr-opts)
+          _ (.on browser "disconnected"
+                 (fn []
+                   (js/console.log "Chromeclosed")
+                   (js/process.exit 0)))
+          ^js page (.newPage browser)
+          ;; _ (.start (.-tracing page))
+          cdp-client (.createCDPSession (.target page))
+          _ (.send cdp-client "Overlay.setShowFPSCounter" #js{:show true})
+          _ (.goto page "http://localhost:8087")
+          
+          ;; _ (.stop (.-tracing page))
+          _ (tseq page 0 "z")
+          _ (reduce
+             (fn [p t]
+               (.then p (fn [] (tseq page t
+                                     (apply str
+                                            "x"
+                                            (repeat 999 "f")
+                                            #_(concat (repeat 599 "f")
+                                                      (repeat 599 "a")))
+                                     #_"ffaffaofuck\nfafcaaawaasfffdfffofuck\nfffaaffaffffofuck\naa"))))
+             (js/Promise.resolve nil)
+             (map inc (range 4)))
+          _ (when ( aget ptr-opts "headless")
+              (println "closing headless")
+              (.close browser))]
+    (println "Nice.")
+    #_(js/process.exit 0)))
+
+(defn main []
+  (println "Start main")
+  (go))
+
+(defn  ^:dev/after-load loady
+  []
+  
+  (println "You cannot be serious"))
