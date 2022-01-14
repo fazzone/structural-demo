@@ -8,6 +8,7 @@
                    (release-cljs! :br))
   screenshot (do
                #_(compile-cljs! :ptr)
+               (maybe-npm-install)
                (release-cljs! :ptr)
                (release-cljs! :br)
                (screenshots))}}

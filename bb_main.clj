@@ -16,7 +16,7 @@
     {"PUPPETEER_EXECUTABLE_PATH" found-chrome
      "PUPPETEER_SKIP_DOWNLOAD" "1"}))
 
-(defn npm-install []
+(defn maybe-npm-install []
   (when-not (fs/exists? "node_modules")
    (let [npm-ci (p/process ["npm" "ci"] {:extra-env puppeteer-env})]
      (binding [*in* (-> npm-ci :out io/reader)]
