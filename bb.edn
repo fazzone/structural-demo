@@ -1,0 +1,13 @@
+{:paths "."
+ :tasks
+ {:requires    ([bb-main :refer :all ])
+  repl         (start-repl)
+  electron     (run-electron)
+  release-cljs (do (release-cljs! :elec)
+                   (release-cljs! :ptr)
+                   (release-cljs! :br))
+  screenshot (do
+               #_(compile-cljs! :ptr)
+               (release-cljs! :ptr)
+               (release-cljs! :br)
+               (screenshots))}}
