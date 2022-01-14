@@ -9,6 +9,7 @@
   screenshot (do
                #_(compile-cljs! :ptr)
                (maybe-npm-install)
+               (maybe-install-puppeteer)
                (release-cljs! :ptr)
                (release-cljs! :br)
                (screenshots))}}

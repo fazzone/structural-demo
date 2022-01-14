@@ -98,6 +98,11 @@
   (when-not (fs/exists? "node_modules/electron")
     @(p/process ["npm" "i" "electron"] {:out :inherit})))
 
+(defn maybe-install-puppeteer
+  []
+  (when-not (fs/exists? "node_modules/puppeteer")
+    @(p/process ["npm" "i" "puppeteer"] {:out :inherit})))
+
 (def electron-exe
   (delay
     (maybe-install-electron)
