@@ -270,7 +270,7 @@
           :string  (pr-str (:token/value e))
           :number  (str (:token/value e))
           :comment (str (:token/value e) "\n")
-          :regex (str "#" (:token/value e))))
+          :regex (:token/value e)))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
