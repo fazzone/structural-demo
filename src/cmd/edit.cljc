@@ -26,18 +26,14 @@
             [:db/retract (:db/id spine) :seq/first (:db/id e)]]
            (cond
              (and prev next)            ; middle element
-
              [[:db/retract (:db/id spine) :seq/next (:db/id next)]
               [:db/add (:db/id prev) :seq/next (:db/id next)]]
              prev                       ; last element
-
              [[:db/retract (:db/id prev) :seq/next (:db/id spine)]
               [:db/retract (:db/id spine) :seq/next (:db/id next)]]
              next                       ; first element
-
              [[:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
               ;; keep our spine, retract next spine - preserve coll/type etc
-
               [:db/retractEntity (:db/id next)]
               (if-let [n (:seq/next next)]
                 [:db/add (:db/id spine) :seq/next (:db/id n)]
@@ -50,9 +46,7 @@
 ;; overwrite with something that has not existed before
 
 
-
 ;; if you have a tempid, you want this one
-
 
 
 (defn form-overwrite-tx
@@ -69,9 +63,7 @@
 ;; replace with something from somewhere else
 
 
-
 ;; if you have a second entity, you want this one
-
 
 
 (defn form-replace-tx
@@ -281,7 +273,6 @@
 ;; [a [b c] d] -> [a [b] c d]
 
 
-
 (defn barf-right-tx
   [e]
   (let [spine     (some-> e :seq/_first exactly-one)
@@ -336,7 +327,6 @@
 (defn form-split-tx
   [e]
   ;; split the parent, making sel the first of a new coll of the same type
-
   (let [spine (some-> e :seq/_first exactly-one)
         coll  (some-> e :coll/_contains exactly-one)
         prev  (some-> spine :seq/_next exactly-one)

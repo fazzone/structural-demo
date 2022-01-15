@@ -22,11 +22,9 @@
   (connect-sub! [this topic ch])
   (disconnect-sub! [this toipic ch])
   ;; history?
-
   (get-history [this txid])
   (save-history! [this txid tx-report])
   ;; hacks
-
   (zchan [this]))
 
 (defprotocol ICursor
@@ -101,9 +99,7 @@
 ;; One go-loop per mutation type is stupid because there is no way to do blocking apply
 
 
-
 ;; Is it allowed to reorder them?
-
 
 
 (defn register-simple!
@@ -233,7 +229,6 @@
                                        as (into #{} (map (fn [[e a v t]] a)) tx-data)]
                                    ;; (println "Actual tx-data:")
                                    ;; (run! prn tx-data)
-
                                    #_(println "Tempids" tempids)
                                    #_(run! prn tx-data)
                                    #_(println "Transacted" (count tx-data))

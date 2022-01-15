@@ -36,7 +36,6 @@
 
 (def ereactive
   ;; mixin for components taking [entity bus ...]
-
   {:init          (fn [{:rum/keys [react-component] :as state} props]
                     (let [[ent bus & args] (some-> state :rum/args)
                           ch               (async/chan)
@@ -49,7 +48,6 @@
                           (update-first-arg! react-component updated-entity)
                           (recur)))
                       ;; subscribe to updates about entity
-
                       (core/connect-sub! bus (:db/id ent) ch)
                       (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [old-state {::keys [nupdate] :as new-state}]
@@ -86,7 +84,6 @@
 
 (defn areactive
   ;; mixin for components taking [db bus ...]
-
   [& as]
   {:init
    (fn [{:rum/keys [react-component] :as state} props]
@@ -97,7 +94,6 @@
            (update-first-arg! react-component db)
            (recur)))
        ;; subscribe to updates about each attr
-
        (doseq [a as]
          (core/connect-sub! bus a ch))
        (assoc state ::areactive.chan ch)))

@@ -243,7 +243,6 @@
         [rmax cmax] computed-size
         width (* 3.5 size (inc cmax))
         ;; height (* 2.5 size (inc rmax))
-
         height (* 4.5 size (inc rmax))]
     #_(prn "Computer size" computed-size)
     #_(conscell-layout-bfs root)

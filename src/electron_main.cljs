@@ -11,7 +11,6 @@
                                  :webPreferences {:preload (str js/__dirname "/electron_preload.js")
                                                   #_#_:nodeIntegration true}})))
   ;; Path is relative to the compiled js file (main.js in our case)
-
   #_(js/console.log  "HJave to device here" (.-argv  js/process))
   (.loadURL ^js/electron.BrowserWindow @main-window
             (str "file://" js/__dirname "/index.html")

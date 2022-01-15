@@ -114,9 +114,7 @@
                      :seq/first  9}
                   #_(n->tx val))
        ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
-
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
-
        :reader-macro
        (let [[rmt & body] (n/children n)]
          (coll-tx :reader-macro (n/children n))
@@ -127,7 +125,6 @@
        :fn               (coll-tx :fn (n/children n))
        :quote            (coll-tx :quote (n/children n))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))

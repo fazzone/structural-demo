@@ -20,7 +20,6 @@
 ;; second movement type is plan B in case we are asked to delete first/last of chain
 
 
-
 (defn move-and-delete-tx
   [db mta mtb]
   (let [src (get-selected-form db)]
@@ -281,7 +280,6 @@
 ;; This is junk because of retracting the highlight properly
 
 
-
 (defn stitch*
   [sel e]
   (when-let [head (:seq/first e)]
@@ -459,7 +457,6 @@
    :insert-right                   (comp edit/insert-editing-after get-selected-form)
    :insert-left                    (comp edit/insert-editing-before get-selected-form)
    ;; :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
-
    :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
    :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))

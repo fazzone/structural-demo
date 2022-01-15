@@ -9,33 +9,25 @@
 ;; const puppeteer = require('puppeteer');
 
 
-
 ;; (async () => {
-
 
 
 ;;   const browser = await puppeteer.launch();
 
 
-
 ;;   const page = await browser.newPage();
-
 
 
 ;;   await page.goto('https://example.com');
 
 
-
 ;;   await page.screenshot({ path: 'example.png' });
-
 
 
 ;;   await browser.close();
 
 
-
 ;; })();
-
 
 
 (defonce refs (atom {}))
@@ -124,11 +116,9 @@
                    (js/process.exit 0)))
           ^js page (.newPage browser)
           ;; _ (.start (.-tracing page))
-
           cdp-client (.createCDPSession (.target page))
           _ (.send cdp-client "Overlay.setShowFPSCounter" #js {:show true})
           ;; _ (.goto page "http://localhost:8087")
-
           _ (println "Js dirname" js/__dirname)
           uu (str "file:///" (-> js/__dirname
                                  (path/dirname)
@@ -136,7 +126,6 @@
           _ (println "File url?" uu)
           _ (.goto page uu)
           ;; _ (.stop (.-tracing page))
-
           _ (tseq page 0 "z")
           _ (reduce
              (fn [p [i t]]

@@ -128,16 +128,12 @@
                                :margin-left "-0.0ex"}}
                  "⎌"]}
    ;; append is "n Space"? - kinda, last vs. tail pos
-
    ;; "o" {:label [:span {:style {:color "tomato"}} "append"]}
-
    "t" {:label [:span {:style {:color "tomato"}} "thread"]}
    "=" {:label [:span {:style {:color "tomato"}} "rename"]}
    "-" {:label [:span {:style {:color "tomato"}} "hide"]}
    ;; chainable, call more functions on it
-
    ;; needs to specify movement/up after  edit complete
-
    "q" {:label [:span {:style {:color "tomato"}} "comp"]
         :symbol [:div {:style {:font-size "120%"
                                :margin-left "0.2ex"}}
@@ -161,7 +157,6 @@
    "d" {:label "delete"
         :symbol [:div {:style {:font-size "120%"
                                ;; :font-size "210%"
-
                                :margin-left "0.0ex"
                                :margin-top "-0.2ex"}}
                  "⌦"

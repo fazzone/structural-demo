@@ -15,7 +15,6 @@
 ;; edit box
 
 
-
 (defn editbox-keydown-mutation
   [text key]
   (case key
@@ -82,7 +81,6 @@
      {
       :type        :text
       ;; :wrap :off
-
       :ref         "the-input"
       :value       (or value "")
       :style       {:width (str (max 1 (count value)) "ch")}

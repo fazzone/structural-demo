@@ -89,7 +89,6 @@
    "w"   :float
    "s"   :sink
    ;; "S-H"       :toplevel
-
    "h"         :parent
    "j"         :next
    "k"         :prev
@@ -109,7 +108,6 @@
    "q"         :compose
    "9"         :wrap
    ;; "9"         :new-list
-
    "0"     :parent
    "]"     :parent
    "p"     :slurp-right
@@ -184,7 +182,6 @@
       :coll/type :bar)]))
 
 ;; replace with non-breaking hyphen, lmao
-
 
 
 #_(-> text (gstring/replaceAll "-" "‑"))
@@ -512,9 +509,7 @@
     "Backspace" [::delete-with-movement :move/backward-up]
     "c"         [::duplicate-selected-form]
     ;; "i"         [::indent-form 1]
-
     ;; "S-I"       [::indent-form -1]
-
     "Tab"       [::indent-form 1]
     "S-Tab"     [::indent-form -1]
     "i"         [::check-invariants] #_[::reset-indent]
@@ -526,7 +521,6 @@
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     ;; "M-x"       [::execute-selected-as-mutation]
-
     "S-A"       {"a" [::linebreak-form]}
     "S-R"       {"f" [::reify-extract-selected]
                  "m" [::reify-last-mutation]
@@ -546,7 +540,6 @@
 (defn search*
   [db sa text]
   ;; U+10FFFF
-
   (d/index-range db sa text (str text "􏿿")))
 
 (rum/defc stupid-symbol-search
@@ -575,11 +568,8 @@
                 tt (token-text type value)]
             [:span.tk {:key e :class (token-class type value)} ^String tt])
           ;; 2n+1 and 2n-1
-
           ;; -(2n+1) = -2n-1 = (- 0 1 (* 2 n))
-
           ;; -(2n-1) = -2n+1 = (- 1 (* 2 n))
-
           [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
           [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds)))])))]))
 
@@ -609,13 +599,9 @@
         (str "#" (:db/id sel)
              " "
              ;; "\u2460"
-
              ;; "\u2779"
-
              ;; "\u2474"
-
              ;; "\u24fa"
-
              #_(pr-str
                 (apply max
                        (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
@@ -716,7 +702,6 @@
         top-closer?  (< (js/Math.abs (- pos off))
                         (js/Math.abs (- pos align-bottom)))
         ;; _ (println "Top closer?")
-
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
@@ -737,14 +722,12 @@
    (let [#_          #_el (js/document.querySelector ".selected")
          [el & more] (js/document.querySelectorAll ".selected")
          ;; _ (prn "More" more)
-
          tl    (some-> el (.closest ".form-card"))
          chain (some-> el (.closest ".chain"))
          bar   (some-> chain (.closest ".bar"))
          chain-height (some-> chain (.-clientHeight))
          bar-width    (some-> bar (.-clientWidth))
          ;; fit the entire toplevel if we can, otherwise just the selection
-
          tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
          elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
          vst  (if (< tlh chain-height) tl el)
@@ -824,7 +807,6 @@
                                               (fn [resp] (.text resp))))
                          'then (fn [p f] (.then (js/Promise.resolve p) f))
                          ;; 'stories dfg/stories
-
                          'ingest scivar-ingest
                          'sel scivar-sel
                          '->seq e/seq->seq
@@ -1022,13 +1004,11 @@
               #_(pr-str (e/->form (get-selected-form db-after)))
               #_(pr-str (invar/check-all (:state/bar (d/entity db-after ::state))))
               #_[:div ;; :details [:summary "SVG"]
-
                  [:div {:style {:display :flex :flex-direction :row}}
                   (cc/svg-viewbox (:state/bar (d/entity (:db-after other) ::state)) core/blackhole)
                   (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
               #_(pr-str input-tx)
               [:div ;; :details[:summary "txdata"]
-
                ^:inline (debug/datoms-table-eavt* tx-data)]
               #_[:div
                  (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
@@ -1091,7 +1071,6 @@
                                                                                :coll/contains #{(:db/id form-txdata)}
                                                                                :seq/first form-txdata}}}])))
         ;; se (d/entity @conn ::state)
-
         hz 44
         mv (atom nil)
         zch (core/zchan bus)]
@@ -1256,7 +1235,6 @@
           false))
         (println "We did it"))
     ;; document.write(process.versions['electron'])
-
     (rum/mount
      #_(debug-component)
      (root-component @conn bus)

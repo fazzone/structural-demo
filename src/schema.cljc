@@ -17,7 +17,6 @@
     :history-item/mutation {:db/valueType :db.type/ref}
     :history-item/tx       {:db/valueType :db.type/ref}
     ;; :state/selected-form {:db/valueType :db.type/ref}
-
     :form/editing      {:db/unique :db.unique/identity}
     :form/edit-initial {}
     :form/highlight    {:db/unique :db.unique/identity}
