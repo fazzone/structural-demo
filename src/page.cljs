@@ -17,8 +17,11 @@
    [comp.cons :as cc]
    [comp.edit-box :as eb]
    [comp.keyboard :as ck]
+   [comp.search]
+   [comp.code :as code]
    [cmd.move :as move]
    [cmd.nav :as nav]
+   [sys.eval.sci :as eval-sci]
    [cmd.insert :as insert]
    [cmd.edit :as edit]
    [cmd.mut :as mut]
@@ -57,10 +60,7 @@
      (defn open-url
        [u]
        (then (fetch-text u)
-             (fn [text] (send! [:open-chain text])))
-       #_(then (fetch u (fn [resp]
-                          (then (.text resp)
-                                (fn [text] (send! [:open-chain text])))))))
+             (fn [text] (send! [:open-chain text]))))
      (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/page.cljs")
      ^:form/highlight (open-file "src/macros.clj")]])
 
@@ -181,30 +181,6 @@
       :db/id "bar"
       :coll/type :bar)]))
 
-;; replace with non-breaking hyphen, lmao
-
-
-#_(-> text (gstring/replaceAll "-" "‑"))
-
-(declare fcc)
-
-(defn modeline-portal-id [eid] (str eid "mp"))
-
-(declare el-bfs)
-
-(rum/defc top-level-form-component < dbrx/ereactive
-  [e bus p]
-  [:div.form-card
-   {}
-   #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
-   [:div.top-level-form.code-font ^:inline (fcc e bus 0 p)]
-   [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
-
-(defn computed-indent
-  [e indent-prop]
-  (+ indent-prop
-     (or (:form/indent e)
-         0)))
 
 (comment
   [:span.c.dl
@@ -222,64 +198,8 @@
    "..."
    [:span.d.cl close]])
 
-(def render-counter (atom 0))
-
-(rum/defc indenter
-  [nl? ip fi]
-  (if (and (or (nil? fi) (zero? fi)) (not nl?))
-    nil
-    [:span.indent-chars (if-not nl? {} {:class "nl"})
-     (when nl? "\n")
-     (when fi
-       #_[:span.indenter
-        {:style {:color "cadetblue"}}
-        (apply str (repeat fi "-"))]
-       [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
-
-(rum/defc any-coll
-  [ct children classes bus indent proply]
-  (let [coll-class  (case ct
-                      (:list :vec :map :set :fn :tear) "dl"
-                      nil)
-        extra-class (case ct
-                      :uneval                                  "unev"
-                      (:deref :quote :syntax-quote :unquote
-                              :unquote-splicing :reader-macro) "pf"
-                      nil)
-        _           "«"
-        open-delim  (e/open-delim ct)
-        close-delim (e/close-delim ct)]
-    [:span {:class ["c" coll-class extra-class classes]}
-     #_[:span.inline-tag.debug
-        (str (swap! render-counter inc))
-        #_(str (:db/id e))]
-     (cond
-       extra-class [:span.d.pfc ^String open-delim]
-       open-delim  [:span.d ^String open-delim]
-       :else       nil)
-     (for [c children]
-       ^:inline (fcc c bus indent proply))
-     (when close-delim
-       [:span.d ^String close-delim])]))
-
-#_(defmethod display-coll :hidden  [c b i s p]
-  [:div {:style {:width "800px"}}
-   (delimited-coll "SVG{ " " }SVG" c b i s p)
-   (cc/svg-viewbox c b)
-   #_(cc/svg-viewbox c core/blackhole)]
-  #_[:span
-   (cond-> {:class (str "c " s)}
-     s (assoc :ref "selected"))
-   (case (:hidden/coll-type c)
-     :list "(···)"
-     :vec "[...]"
-     :map "{...}"
-     :set "#{...}"
-     "<...>")])
-
-(declare snapshot)
-
-(rum/defc display-undo-preview
+#_(declare snapshot)
+#_(rum/defc display-undo-preview
   [c b s top?]
   [:ul.undo-preview
    #_(when s {:class s :ref "selected"})
@@ -291,7 +211,7 @@
        (snapshot e b)
        (:db/id e)))])
 
-(rum/defc snapshot < dbrx/ereactive
+#_(rum/defc snapshot < dbrx/ereactive
   [e bus]
   (let [tx (int (:token/value e))
         r  (core/get-history bus tx)]
@@ -313,23 +233,6 @@
 
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
-
-(rum/defc nchainc
-  [chain bus]
-  [:div.chain.hide-scrollbar
-   {:key (:db/id chain)
-    :class ["map" (when (:form/highlight chain) "selected")]
-    :id (str "c" (:db/id chain))}
-   (for [f (e/seq->vec chain)]
-     (-> (top-level-form-component f bus nil)
-         (rum/with-key (:db/id f))))])
-
-(rum/defc nbarc [bar bus]
-  [:div.bar.hide-scrollbar
-   {:class (when (:form/highlight bar) "selected")}
-   (for [chain-head (e/seq->vec bar)]
-     (-> (fcc chain-head bus 0 nil)
-         (rum/with-key (:db/id chain-head))))])
 
 #_(defmethod display-coll :keyboard [k bus i]
     "No keyboardn"
@@ -371,106 +274,6 @@
 #_(defmethod display-coll :inspect [k bus i]
   "No inspect"
   #_(inspector (d/entity-db k) bus))
-
-(defn token-class
-  [t v]
-  (case t
-    :symbol   (case v
-                ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
-                 "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
-                 "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
-                "m"
-                ("first" "map" "filter" "apply" "reset!" "swap!"
-                 "get" "assoc" "update" "cons" "conj" "seq" "next"
-                 "prn" "println" "into" "set" "vector"
-                 "take" "drop" "take-while" "drop-while" "reduce"
-                 "concat")
-                "s"
-                "v")
-    :keyword  "k"
-    :string   "l"
-    :number   "n"
-    :regex    "re"
-    :verbatim "verbatim"
-    :comment  "comment"))
-
-(def xxx (apply str (repeat 999 "-")))
-
-(defn token-text
-  [t v]
-  #_(subs xxx 0 (if (number? v)
-                (count (str v))
-                (count v)))
-  (case t
-    :symbol v
-    :keyword  v #_(let [is (string/index-of k "/")]
-                    (if (> 0 is)
-                      k
-                      (rum/fragment
-                       [:span.kn (subs k 0 is)]
-                       (subs k is))))
-    :string (pr-str v)
-    :verbatim v
-    :number (str v)
-    :comment v
-    :regex (str "REGEX:" v)))
-
-(rum/defc fcc < dbrx/ereactive {:key-fn (fn [e b i p] (:db/id e))}
-  [e bus indent-prop proply]
-  (cond
-    (:form/editing e)
-    (eb/edit-box e bus)
-    (:token/type e)
-    (let [tt (:token/type e)
-          tv (:token/value e)
-          tc (token-class tt tv)
-          it (token-text tt tv)]
-      (rum/fragment
-       ^:inline (indenter (:form/linebreak e)
-                          indent-prop
-                          (:form/indent e))
-       [:span {:key      (:db/id e)
-               :class    (if (:form/highlight e)
-                           (str "tk selected " tc)
-                           (str "tk " tc))
-               :on-click (fn [ev]
-                           (.stopPropagation ev)
-                           (core/send! bus [:select (:db/id e)]))}
-        ^String it]))
-    (:coll/type e)
-    (case (:coll/type e)
-      nil          (comment "Probably a retracted entity, do nothing")
-      :chain       (nchainc e bus)
-      :bar         (nbarc e bus)
-      (rum/fragment
-       ^:inline (indenter (:form/linebreak e)
-                          indent-prop
-                          (:form/indent e))
-       (any-coll (:coll/type e)
-                 (e/seq->vec e)
-                 (when (:form/highlight e) "selected")
-                 bus
-                 (+ 2 indent-prop)
-                 proply
-                 #_(if-not (:form/highlight e)
-                     proply
-                     (zipmap
-                      (map :db/id (next (mut/get-numeric-movement-vec e)))
-                      (range 2 9))))))))
-
-(defn el-bfs
-  [top limit]
-  (loop [out   []
-         front [top]]
-    (cond
-      (empty? front) out
-      (= limit (count out)) out
-      :else (let [e (first front)]
-              (recur (cond-> out
-                       (:coll/type e) (conj e))
-                     (cond-> (subvec front 1)
-                       (:seq/next e) (conj (:seq/next e))
-                       (:seq/first e) (conj (:seq/first e))))))))
 
 (def special-key-map
   (merge
@@ -530,53 +333,9 @@
          (for [i (range  8)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
-(comment nchainc
-  (let [a (f 1 2 3)]
-    (when thing (q a)))
-  (when thing
-    (let [a (f 1 2 3)]
-      (q a))))
-
-(defn search*
-  [db sa text]
-  ;; U+10FFFF
-  (d/index-range db sa text (str text "􏿿")))
-
-(rum/defc stupid-symbol-search
-  [db sa text]
-  (println "SSS Text" (count text) (pr-str text))
-  (when (pos? (count text))
-    [:div.search
-     {}
-     #_(for [[v [[e] :as ds]] (->> (search* db sa text)
-                                   (group-by #(nth % 2))
-                                   (sort-by (comp - count second))
-                                   (take 5))]
-         (rum/fragment
-          (let [{:token/keys [type value]} (d/entity db e)]
-            [:span.tk {:key e :class (token-class type value)}
-             (token-text type value)])
-          [:span {:key (str "sr" e)} "x" (count ds)]
-          [:span {:key (str "id" e)} (pr-str (take 5 (map first ds)))]))
-     (let [results (->> (search* db sa text)
-                        (group-by #(nth % 2))
-                        (sort-by (comp - count second))
-                        (take 5))]
-       (for [[v [[e] :as ds]] results]
-         (rum/fragment
-          (let [{:token/keys [type value]} (d/entity db e)
-                tt (token-text type value)]
-            [:span.tk {:key e :class (token-class type value)} ^String tt])
-          ;; 2n+1 and 2n-1
-          ;; -(2n+1) = -2n-1 = (- 0 1 (* 2 n))
-          ;; -(2n-1) = -2n+1 = (- 1 (* 2 n))
-          [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
-          [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds)))])))]))
-
 (declare command-compose-feedback)
 
 (declare save-status)
-
 (rum/defc modeline-inner < rum/reactive
   [sel bus {:keys [^String text valid] :as edn-parse-state}]
   [:span {:class (str "modeline code-font"
@@ -592,28 +351,19 @@
           :error "Error"
           "")))]
    (if text
-     (stupid-symbol-search (d/entity-db sel) :token/value text)
+     (comp.search/results (d/entity-db sel)  :token/value text)
+     #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
      [:span.modeline-content
       (if-not sel
         "(no selection)"
         (str "#" (:db/id sel)
-             " "
-             ;; "\u2460"
-             ;; "\u2779"
-             ;; "\u2474"
-             ;; "\u24fa"
-             #_(pr-str
-                (apply max
-                       (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
-                             :when (not= :form/highlight a)]
-                         t)))
-             (:coll/type sel)))])])
+             " " (:coll/type sel)))])])
 
 (rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]
   (let [sel (get-selected-form db)
         rpa (reverse (nav/parents-vec sel))
-        nn (.getElementById js/document (modeline-portal-id (:db/id (first rpa))))]
+        nn (.getElementById js/document (code/modeline-portal-id (:db/id (first rpa))))]
     (when nn
       (-> (modeline-inner
            sel
@@ -630,7 +380,8 @@
     [:div.bar-container
      #_(breadcrumbs-always db bus)
      #_(favicon 200)
-     (fcc (:state/bar state) bus 0 nil)
+     (code/form (:state/bar state) bus 0 nil)
+     
      (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
@@ -705,16 +456,10 @@
         [best other] (if top-closer?
                        [off align-bottom]
                        [align-bottom off])]
-    #_(println "Delta" (- pos best) "Hysteresis(" scroll-hysteresis-px ") "  (< (- scroll-hysteresis-px)
-               (- pos best)
-               scroll-hysteresis-px))
     (if-not (< (- scroll-hysteresis-px)
                (- pos best)
                scroll-hysteresis-px)
-      (int best))
-    #_(if (< -1 (- pos best) 1)
-        other
-        best)))
+      (int best))))
 
 (defn scroll-to-selected!
   ([] (scroll-to-selected! true))
@@ -730,13 +475,15 @@
          ;; fit the entire toplevel if we can, otherwise just the selection
          tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
          elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
-         vst  (if (< tlh chain-height) tl el)
+         vst  (if (< tlh chain-height)
+                (do (js/console.log "VST=toplevel" tl) tl)
+                (do (js/console.log "VST=el" el) el))
          h    (if (< tlh chain-height) tlh elh)
          vpos (some-> chain (.-scrollTop))
          voff (some-> vst (.-offsetTop))
          new-chain-top (and tl
                             chain
-                            (< h chain-height)
+                            #_(< h chain-height)
                             (or always
                                 (not (< vpos voff (+ h voff)
                                         (+ vpos chain-height))))
@@ -764,17 +511,14 @@
                                              (+ vpos chain-height)))
                 "\nAlways scroll?" always)
      (when (> h chain-height)
-       (println "Too bigby " (- h chain-height) h chain-height))
+       (println "Too bigby " (- h chain-height) h chain-height)
+       (println "NCT" new-chain-top))
      (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
      (when new-bar-left  (.scrollTo bar   #js {:left new-bar-left})))))
 
 (def ensure-selected-in-view!
   (-> (fn [] (scroll-to-selected! false))
       (gfunc/debounce 10)))
-
-#_
-(defn ensure-selected-in-view! []
-  (scroll-to-selected! false))
 
 (def save-status (atom nil))
 
@@ -793,100 +537,44 @@
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
-   (let [a (core/app conn)
-         scivar-sel (sci/new-var "zsel")
-         scivar-ingest (sci/new-var "ingest")
-         s (sci/init
-             {:namespaces {'d {'datoms d/datoms  'touch d/touch}
-                           'p {'resolve (fn [p] (js/Promise.resolve p))
-                               'all (fn [a b c] (js/Promise.all a b c))}}
-              :bindings {'datafy datafy/datafy
-                         'nav datafy/nav
-                         'fetch-text (fn [z f]
-                                       (.then (js/fetch z)
-                                              (fn [resp] (.text resp))))
-                         'then (fn [p f] (.then (js/Promise.resolve p) f))
-                         ;; 'stories dfg/stories
-                         'ingest scivar-ingest
-                         'sel scivar-sel
-                         '->seq e/seq->seq
-                         'slurp (some-> (aget js/window "my_electron_bridge")
-                                        (aget "slurp"))
-                         'spit (some-> (aget js/window "my_electron_bridge")
-                                       (aget "spit"))
-                         'list-dir (some-> (aget js/window "my_electron_bridge")
-                                           (aget "list_dir"))
-                         'exit (some-> (aget js/window "my_electron_bridge")
-                                       (aget "exit"))
-                         'send! (fn [m] (core/send! (:bus a) m))}})]
+   (let [a (core/app conn)]
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
-     (doseq [[m f] mut/editing-commands] (core/register-simple! a m f))
+     (doseq [[m f] mut/editing-commands]
+       (core/register-simple! a m f))
      (doto a
-       (core/register-mutation!
-         :kbd
-         (fn [[_ kbd tkd] db bus]
-           (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
-             (core/send! bus [mut]))))
-       (core/register-mutation!
-         :eval-sci
-         (fn [_ db bus]
-           (let [et (->> (get-selected-form db)
-                         (move/move :move/most-upward))
-                 c (e/->string et)]
-             (try
-               (let [_ (sci/alter-var-root scivar-sel
-                                           (constantly (get-selected-form db)))
-                     _ (sci/alter-var-root
-                         scivar-ingest
-                         (constantly (fn [z]
-                                       (.then (js/Promise.resolve z)
-                                              (fn [ar]
-                                                (js/console.log "Ingest?" ar)
-                                                (cljs.pprint/pprint ar)
-                                                (core/send! bus
-                                                            [:ingest-result
-                                                             (:db/id et) ar])
-                                                ::ok)))))
-                     ans (sci/eval-string* s c)]
-                 (.then (js/Promise.resolve ans)
-                        (fn [ar]
-                          (when (not= ::ok ar)
-                            (prn 'AR ar)
-                            (core/send! bus [:eval-result et ar])))))
-               (catch :default e
-                 (core/send! bus [:eval-result et (or (ex-message e) (str e))])
-                 #_(js/console.log "SCI exception" e))))))
-       (core/register-mutation!
-         :form/highlight
-         (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       (core/register-mutation!
-         :form/edited-tx
-         (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation! :kbd
+                                (fn [[_ kbd tkd] db bus]
+                                  (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
+                                    (core/send! bus [mut]))))
        (core/register-mutation! :scroll (fn [_ db _] (scroll-to-selected!)))
+       (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation! :eval-sci (eval-sci/mutatef a))
+       #_(eval-sci/setup-sci!)
        (core/register-simple!
-         :zp
-         (fn [db _]
-           (let [_ (js/console.time "formatting")
-                 _ (js/console.time "preparing")
-                 _ (zp-hacks/set-options! {:map {:sort? nil}})
-                 q (-> (get-selected-form db)
-                       nav/parents-vec
-                       peek)
-                 _ (js/console.timeEnd "preparing")
-                 _ (js/console.time "stringifying")
-                 my-string (e/->string q)
-                 _ (js/console.timeEnd "stringifying")
-                 _ (js/console.time "zprint")
-                 p (zp-hacks/zprint-file-str my-string (:db/id q))
-                 _ (js/console.timeEnd "zprint")
-                 _ (js/console.time "parsing")
-                 pt (e/string->tx p)
-                 _ (js/console.timeEnd "parsing")
-                 _ (js/console.time "reconciling")
-                 ans (vec
-                       (mapcat (fn [a b]
-                                 (when-not
+        :zp
+        (fn [db _]
+          (let [_ (js/console.time "formatting")
+                _ (js/console.time "preparing")
+                _ (zp-hacks/set-options! {:map {:sort? nil}})
+                q (-> (get-selected-form db)
+                      nav/parents-vec
+                      peek)
+                _ (js/console.timeEnd "preparing")
+                _ (js/console.time "stringifying")
+                my-string (e/->string q)
+                _ (js/console.timeEnd "stringifying")
+                _ (js/console.time "zprint")
+                p (zp-hacks/zprint-file-str my-string (:db/id q))
+                _ (js/console.timeEnd "zprint")
+                _ (js/console.time "parsing")
+                pt (e/string->tx p)
+                _ (js/console.timeEnd "parsing")
+                _ (js/console.time "reconciling")
+                ans (vec
+                     (mapcat (fn [a b]
+                               (when-not
                                    (and (= (:coll/type a) (:coll/type b))
                                         (= (:token/type a) (:token/type b))
                                         (= (:token/value a) (:token/value b)))
@@ -896,288 +584,58 @@
                                    (println "B:")
                                    (println p)
                                    (throw (ex-info "cannot reconcile " {})))
-                                 (for [k [:form/indent :form/linebreak]
-                                       :when (not= (k a) (k b))]
-                                   (if (k b)
-                                     [:db/add (:db/id a) k (k b)]
-                                     [:db/retract (:db/id a) k (k a)])))
-                         (tree-seq :coll/type e/seq->vec q)
-                         (tree-seq :coll/type e/seq->vec pt)))]
-             (js/console.timeEnd "reconciling")
-             (js/console.timeEnd "formatting")
-             ans)
-           #_(scroll-to-selected!)))
+                               (for [k [:form/indent :form/linebreak]
+                                     :when (not= (k a) (k b))]
+                                 (if (k b)
+                                   [:db/add (:db/id a) k (k b)]
+                                   [:db/retract (:db/id a) k (k a)])))
+                             (tree-seq :coll/type e/seq->vec q)
+                             (tree-seq :coll/type e/seq->vec pt)))]
+            (js/console.timeEnd "reconciling")
+            (js/console.timeEnd "formatting")
+            ans)
+          #_(scroll-to-selected!)))
        (core/register-mutation!
-         :save
-         (fn [_ db bus]
-           (let [xhr (XhrIo.)
-                 sel (get-selected-form db)
-                 chain (-> sel
-                           (nav/parents-vec)
-                           (peek)
-                           :coll/_contains
-                           first)
-                 file (or (:chain/filename chain) "noname.clj")]
-             (println "Do save" chain)
-             (when chain
-               (reset! save-status {:at (:max-tx db)
-                                    :on (:db/id sel)
-                                    :status :saving})
-               (save* file (e/->string chain))
-               #_(do (.listen xhr
-                              EventType/COMPLETE
-                              (fn [ev]
-                                (reset! save-status {:on (:db/id sel)
-                                                     :at (:max-tx db)
-                                                     :status :ok
-                                                     :file file})))
-                     (.listen xhr
-                              EventType/ERROR
-                              (fn [_]
-                                (println "Save error!")
-                                (reset! save-status {:on (:db/id sel)
-                                                     :status :error})))
-                     (.send
-                       xhr
-                       (str "/save?file="
-                            (or (:chain/filename chain) "noname.clj"))
-                       "POST"
-                       (e/->string chain)
-                       #js {"Content-Type" "application/json;charset=UTF-8"})))
-             nil)))
-       #_(core/register-mutation! :execute
-                                  (fn [_ db bus]
-                                    (let [sel (get-selected-form db)]
-                                      (d/transact! conn))))))))
+        :save
+        (fn [_ db bus]
+          (let [sel (get-selected-form db)
+                chain (-> sel
+                          (nav/parents-vec)
+                          (peek)
+                          :coll/_contains
+                          first)
+                file (or (:chain/filename chain) "noname.clj")]
+            (when chain
+              (reset! save-status {:at (:max-tx db)
+                                   :on (:db/id sel)
+                                   :status :saving})
+              (save* file (e/->string chain)))
+            nil)))))))
 
-(rum/defc example < rum/static
-  [init-form muts]
-  (let [conn (d/create-conn s/schema)
-        form-txdata (e/->tx init-form)
-        {:keys [db-after tempids] :as init-report}
-        (d/transact! conn
-                     [{:db/ident ::state
-                       :state/bar {:db/id "bar"
-                                   :coll/type :bar
-                                   :seq/first {:coll/type :chain
-                                               :coll/_contains "bar"
-                                               :coll/contains #{(:db/id form-txdata)}
-                                               :seq/first form-txdata}}}])
-        toplevel-eid (get tempids (:db/id form-txdata))
-        reports (reductions
-                 (fn [{:keys [db-after]} [m & args]]
-                   (if-let [mut-fn (get mut/dispatch-table m)]
-                     (try
-                       (let [tx (apply mut-fn db-after args)]
-                         (assoc (d/with db-after tx) :input-tx tx))
-                       (catch :default e
-                         (reduced
-                          {:failure
-                           [:div [:p.form-title [:span {:style {:color "tomato"}}
-                                                 "Exception"]
-                                  " "
-                                  (ex-message e)]
-                            [:p {} (with-out-str (cljs.pprint/pprint (ex-data e)))]
-                            "Mutation"
-                            [:p {} (pr-str (into [m] args))]
-                            "At selected form"
-                            [:p {} (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]]})))
-                     (throw (ex-info "No mutation" {:m m}))))
-                 init-report
-                 muts)]
-    [:div {:style {:display "flex" :flex-direction "row" :width "1200px"}}
-     [:div {:style {:display "flex" :flex-direction "column" :width "100%"}}
-      (for [[i m {:keys [failure input-tx db-after tx-data]} other] (map vector (range) (cons "initial" muts) reports (cons nil reports))]
-        (if failure
-          [:div {} failure]
-          [:div {:key i :style {:display :flex
-                                :flex-direction :column
-                                :margin-top "2ex"
-                                :border "1px solid #ae81ff"}}
-           [:span (str "#" i " " (pr-str m))]
-           [:div {:style {:border "1px solid #777"}}
-            (when other (root-component (:db-after other) core/blackhole))]
-           [:div {:style {:border "1px solid #777"}}
-            (root-component db-after core/blackhole)]
-           (when (< 0 i)
-             [:div
-              #_(pr-str (e/->form (get-selected-form db-after)))
-              #_(pr-str (invar/check-all (:state/bar (d/entity db-after ::state))))
-              #_[:div ;; :details [:summary "SVG"]
-                 [:div {:style {:display :flex :flex-direction :row}}
-                  (cc/svg-viewbox (:state/bar (d/entity (:db-after other) ::state)) core/blackhole)
-                  (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
-              #_(pr-str input-tx)
-              [:div ;; :details[:summary "txdata"]
-               ^:inline (debug/datoms-table-eavt* tx-data)]
-              #_[:div
-                 (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
-
-(defn some-random-mutations
-  [n]
-  (->> #_[[[:insert-right] [:edit/finish "x"]]
-        [[:insert-right] [:edit/finish "y"]]
-        [[:flow-right]]
-        [[:flow-right]]
-        [[:flow-left]]
-        [[:flow-left]]
-        [[:raise]]
-        #_[[:clone]]
-        [[:next]]
-        [[:prev]]
-        [[:float]]
-        [[:float]]
-        [[:sink]]
-        [[:sink]]
-        #_[[:parent]]
-        [[:tail]]
-        [[:tail]]
-        [[:wrap]]
-        [[:delete-left]]
-        [[:delete-left]]
-        [[:wrap]]
-        [[:wrap]]
-        [[:delete-right]]
-        [[:delete-right]]
-        [[:insert-left] [:edit/finish "b"]]
-        [[:insert-left] [:edit/finish "a"]]
-        [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]]
-        #_[[:delete-right]]
-        #_[[:delete-left]]]
-       [
-        [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]] [[:slurp-right]]
-        [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]] [[:barf-right]]]
-       cycle
-       (take n)
-       vec
-       (shuffle)
-       (apply concat)
-       (vec)))
-
-(rum/defc player-mutation-view < rum/reactive
-  [a]
-  (let [v (rum/react a)]
-    (when v [:pre ^String v])))
-
-(rum/defc player
-  [init-form muts]
-  (let [form-txdata (e/->tx init-form)
-        {:keys [conn bus]} (setup-app (doto (d/create-conn s/schema)
-                                        (d/transact! [{:db/ident ::state
-                                                       :state/bar {:db/id "bar"
-                                                                   :coll/type :bar
-                                                                   :seq/first {:coll/type :chain
-                                                                               :coll/_contains "bar"
-                                                                               :coll/contains #{(:db/id form-txdata)}
-                                                                               :seq/first form-txdata}}}])))
-        ;; se (d/entity @conn ::state)
-        hz 44
-        mv (atom nil)
-        zch (core/zchan bus)]
-    (rum/use-effect!
-     (fn setup []
-       (println "Setup")
-       (async/go-loop [i 0
-                       [m & more] muts
-                       t nil]
-         (if (and t)
-           (swap! mv #(str "#" i " "
-                           (/ (inc i)
-                              (- (js/performance.now) t)
-                              (/ 1 1000))
-                           " "
-                           (pr-str m)
-                           "\n"
-                           %)))
-         (case m
-           ::random-insert (do (core/send! bus [:insert-right])
-                               (core/send! bus [:edit/finish (str "m" i)]))
-           (core/send! bus m))
-         #_(async/<! (async/timeout (/ 1000 hz)))
-         (async/<! (async/timeout 0))
-         (if-not more
-           (let [dms (- (js/performance.now) t)]
-            (println "Finished" (inc i) "iter "
-                     "Total ms" dms
-                     " Hertz"
-                     (* 1000 (/ (inc i) dms))))
-           (recur (inc i) more (or t (js/performance.now)))))
-       (fn cleanup []
-         (println "Cleanup")))
-     [])
-    [:div
-     (root-component @conn bus)
-     #_(player-mutation-view mv)]))
-
-(rum/defc debug-component
-  []
-  [:div {:style {:margin-top "2ex"}}
-   #_(player
-    '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
-    (some-random-mutations 10000))
-   (example
-    '[a ^:form/highlight [] b c]
-    #_[[:slurp-right] [:slurp-right]]
-    [[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
-   #_(example
-      '[a ^:form/highlight b c [a a a]]
-      [[:float] [:delete-left] [:flow-right] [:float]]
-      #_[[:last]])])
 
 (defonce the-singleton-db
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
-(letfn [(pubsub []
-          (let [subs (js/Set.)]
-            {:sub (fn [f]
-                    (.add subs f)
-                    (fn [] (.delete subs f)))
-             :pub (fn [m]
-                    (.forEach subs (fn [f] (f m))))}))]
-  (let [{:keys [pub sub]} (pubsub)
-        unsub (sub (fn [m] (println "Messg" m)))
-        _ (pub "Message")
-        _ (unsub)
-        _ (pub "M@")]))
-
-#_(defn stupid-github-crap
-  []
-  (-> (js/fetch "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
-      (.then #(.json %))
-      (.then #(do (js/console.log %) %))
-      (.then (fn [ref]
-               (println (js->clj ref))
-               (-> (js/fetch (-> ref js->clj (get "object") (get "url")))
-                   (.then #(.json %))
-                   (.then (fn [commit]
-                            (js/console.log commit)
-                            (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
-                                (.then #(.json %))
-                                (.then (fn [tree]
-                                         (js/console.log tree)))))))))))
+(comment
+  (letfn [(pubsub []
+            (let [subs (js/Set.)]
+              {:sub (fn [f]
+                      (.add subs f)
+                      (fn [] (.delete subs f)))
+               :pub (fn [m]
+                      (.forEach subs (fn [f] (f m))))}))]
+    (let [{:keys [pub sub]} (pubsub)
+          unsub (sub (fn [m] (println "Messg" m)))
+          _ (pub "Message")
+          _ (unsub)
+          _ (pub "M@")])))
 
 (defn fetch-json
   [u]
   (-> (js/fetch u)
       (.then #(.json %))
       (.then #(js->clj % :keywordize-keys true))))
-
-#_(defn stupid-github-crap
-  []
-  (-> (js/fetch "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
-      (.then #(.json %))
-      (.then #(do (js/console.log %) %))
-      (.then (fn [ref]
-               (println (js->clj ref))
-               (-> (js/fetch (-> ref js->clj (get "object") (get "url")))
-                   (.then #(.json %))
-                   (.then (fn [commit]
-                            (js/console.log commit)
-                            (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
-                                (.then #(.json %))
-                                (.then (fn [tree]
-                                         (js/console.log tree)))))))))))
 
 (defn stupid-github-crap
   []
@@ -1191,49 +649,10 @@
   (js/document.removeEventListener "keyup" global-keyup true)
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
-  (h/clear!)
-  #_(stupid-github-crap)
+  
   (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
-    #_(stupid-github-crap)
-    #_(go
-        (async/<!
-         (async/onto-chan!
-          (core/zchan bus)
-          [[:m1]
-           [:clone]
-           [:offer]]
-          #_(into
-             [[:hop-left]
-              [:tail]]
-             (concat
-              (repeat 99 [:flow-left])
-              (repeat 99 [:flow-right])))
-          #_[[:parent]
-             [:parent] [:parent]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:insert-right] [:edit/finish "a"]
-             [:prev] [:prev] [:prev] [:prev]
-             [:split]
-             [:parent]
-             [:splice]
-             [:flow-right] [:flow-right] [:flow-right] [:flow-right]
-             [:flow-left] [:flow-left] [:flow-left] [:flow-left] [:flow-left]
-             [:reify-undo]]
-          #_[[:clone]
-             [:delete-right] [:delete-right] [:delete-right]
-             [:undo] [:undo] [:undo]
-             [:insert-right]
-             [:edit/finish "nice"]
-             [:reify-undo]]
-          false))
-        (println "We did it"))
     ;; document.write(process.versions['electron'])
     (rum/mount
      #_(debug-component)

@@ -174,7 +174,7 @@
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
 
-(defn ingest-result
+#_(defn ingest-result
   [db et-eid c]
   #_(let [ee       (d/entity db :page/evalchain)
           new-node (-> (e/->tx* c)
@@ -187,6 +187,15 @@
            {:db/id (:db/id new-node)})))
   (let [et (d/entity db et-eid)
         top-level (peek (nav/parents-vec et))
+        new-node  (-> (e/->tx* c)
+                      (assoc :form/linebreak true)
+                      (update :db/id #(or % "new-node")))]
+    (into [new-node]
+          (edit/insert-before-tx top-level new-node))))
+
+(defn ingest-result
+  [et c]
+  (let [top-level (peek (nav/parents-vec et))
         new-node  (-> (e/->tx* c)
                       (assoc :form/linebreak true)
                       (update :db/id #(or % "new-node")))]
