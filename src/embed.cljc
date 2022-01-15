@@ -138,7 +138,7 @@
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))
-       :var              {:token/type :string :token/value (n/string n)}
+       :var              {:token/type :symbol :token/value (n/string n)}
        :regex            {:token/type :regex :token/value (n/string n)}
        
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
