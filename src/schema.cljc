@@ -34,4 +34,5 @@
     :alias/of {:db/valueType :db.type/ref}
     :eval/of     {:db/valueType :db.type/ref}
     :eval/result {:db/valueType :db.type/ref}
+    :eval/action {}
     :hidden/coll-type {}}))

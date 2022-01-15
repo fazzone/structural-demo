@@ -140,18 +140,6 @@
     (when (< -1 n (count nmv))
       (nth nmv n))))
 
-(defn ingest-result
-  [db et c]
-  (let [ee (d/entity db :page/evalchain)
-        new-node (-> (e/->tx* c)
-                     (assoc :form/linebreak true)
-                     (update :db/id #(or % "new-node")))]
-    (prn 'ingest et c)
-    (into [new-node]
-          (edit/insert-before-tx
-           (:seq/first ee)
-           {:db/id (:db/id new-node)}))))
-
 (defn eval-result-on-evalchain
   [db et-eid c]
   (let [ee (d/entity db :page/evalchain)
@@ -186,6 +174,25 @@
               (edit/insert-before-tx top-level new-node)))
     #_(into [new-node]
             (edit/insert-before-tx (:seq/first ee) new-node))))
+
+(defn ingest-result
+  [db et-eid c]
+  #_(let [ee       (d/entity db :page/evalchain)
+          new-node (-> (e/->tx* c)
+                       (assoc :form/linebreak true)
+                       (update :db/id #(or % "new-node")))]
+    (prn 'ingest et c)
+    (into [new-node]
+          (edit/insert-before-tx
+           (:seq/first ee)
+           {:db/id (:db/id new-node)})))
+  (let [et (d/entity db et-eid)
+        top-level (peek (nav/parents-vec et))
+        new-node  (-> (e/->tx* c)
+                      (assoc :form/linebreak true)
+                      (update :db/id #(or % "new-node")))]
+    (into [new-node]
+          (edit/insert-before-tx top-level new-node))))
 
 (defn insert-data
   [et c]

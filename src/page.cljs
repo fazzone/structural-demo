@@ -82,13 +82,12 @@
    "C-/" :undo
    "S-R" :reify-undo
    "S-_" :uneval
-   ;; "e"   :save
-
+   "S-W" :save
    "t"   :tear
    "S-@" :new-deref
-   "a"         :flow-left
-   "w"         :float
-   "s"         :sink
+   "a"   :flow-left
+   "w"   :float
+   "s"   :sink
    ;; "S-H"       :toplevel
 
    "h"         :parent
@@ -111,30 +110,30 @@
    "9"         :wrap
    ;; "9"         :new-list
 
-   "0"         :parent
-   "]"         :parent
-   "p"         :slurp-right
-   "S-P"       :barf-right
-   "Tab"       :indent
-   "S-Tab"     :dedent
-   "e"         :eval-sci
-   "S-("       :new-list
-   "["         :new-vec
-   "S-C"       :new-chain
-   "S-B"       :new-bar
-   "1"         :m1
-   "2"         :m2
-   "3"         :m3
-   "4"         :m4
-   "5"         :m5
-   "6"         :m6
-   "7"         :m7
-   "8"         :m8
-   "v"         :scroll
-   "-"         :hide
-   "i"         :insert-left
-   "S-Q"       :stringify
-   "S-+"       :plus})
+   "0"     :parent
+   "]"     :parent
+   "p"     :slurp-right
+   "S-P"   :barf-right
+   "Tab"   :indent
+   "S-Tab" :dedent
+   "e"     :eval-sci
+   "S-("   :new-list
+   "["     :new-vec
+   "S-C"   :new-chain
+   "S-B"   :new-bar
+   "1"     :m1
+   "2"     :m2
+   "3"     :m3
+   "4"     :m4
+   "5"     :m5
+   "6"     :m6
+   "7"     :m7
+   "8"     :m8
+   "v"     :scroll
+   "-"     :hide
+   "i"     :insert-left
+   "S-Q"   :stringify
+   "S-+"   :plus})
 
 (def init-tx-data
   (let [chains (concat
@@ -318,7 +317,8 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-(rum/defc nchainc [chain bus]
+(rum/defc nchainc
+  [chain bus]
   [:div.chain.hide-scrollbar
    {:key (:db/id chain)
     :class ["map" (when (:form/highlight chain) "selected")]
@@ -381,7 +381,7 @@
     :symbol   (case v
                 ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
                  "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
-                 "if-let" "when-let" "recur" "try" "catch" "nil")
+                 "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
                 "m"
                 ("first" "map" "filter" "apply" "reset!" "swap!"
                  "get" "assoc" "update" "cons" "conj" "seq" "next"
@@ -536,7 +536,7 @@
          (for [i (range  8)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
-(comment
+(comment nchainc
   (let [a (f 1 2 3)]
     (when thing (q a)))
   (when thing
@@ -767,7 +767,7 @@
                                        (+ hpos bar-width))))
                            (scroll-1d bar-width w hpos hoff))]
      #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
-     (println "================================Scroll"
+     #_(println "================================Scroll"
                 "\nChain-height" chain-height
                 "\nBar-width" bar-width
                 "\nTLH" h
@@ -797,13 +797,15 @@
 
 (defn save*
   [file contents]
-  (let [spit (some-> js/window
-                     (aget "my_electron_bridge")
+  (let [spit (some-> (aget js/window "my_electron_bridge")
                      (aget "spit"))]
+    (println "Spit=" spit)
     (when spit
-      (-> (spit file contents)
-          (.then  (fn [] (swap! save-status assoc :status :ok :file file)))
-          (.catch (fn [] (swap! save-status assoc :status :error)))))))
+      (let [pr (spit file contents)]
+        (prn pr)
+        (-> pr
+         (.then  (fn [] (swap! save-status assoc :status :ok :file file)))
+         (.catch (fn [] (swap! save-status assoc :status :error))))))))
 
 (defn setup-app
   ([]
@@ -866,7 +868,7 @@
                                                 (move/move :move/most-upward))
                                         c  (e/->string et)
                                         #_(->> (e/->form et)
-                                                (pr-str))]
+                                               (pr-str))]
                                     (println "Eval sci" c scivar-sel)
                                     (try
                                       (let [_   (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
@@ -922,24 +924,24 @@
                                           _         (js/console.timeEnd "parsing")
                                           _         (js/console.time "reconciling")
                                           ans       (vec
-                                               (mapcat
-                                                (fn [a b]
-                                                  (when-not (and (= (:coll/type a) (:coll/type b))
-                                                                 (= (:token/type a) (:token/type b))
-                                                                 (= (:token/value a) (:token/value b)))
-                                                    (println "!!!! cannot reconcile !!! ")
-                                                    (println "A:")
-                                                    (println my-string)
-                                                    (println "B:")
-                                                    (println p)
-                                                    (throw (ex-info "cannot reconcile " {})))
-                                                  (for [k     [:form/indent :form/linebreak]
-                                                        :when (not= (k a) (k b))]
-                                                    (if (k b)
-                                                      [:db/add (:db/id a) k (k b)]
-                                                      [:db/retract (:db/id a) k (k a)])))
-                                                (tree-seq :coll/type e/seq->vec q)
-                                                (tree-seq :coll/type e/seq->vec pt)))]
+                                                     (mapcat
+                                                      (fn [a b]
+                                                        (when-not (and (= (:coll/type a) (:coll/type b))
+                                                                       (= (:token/type a) (:token/type b))
+                                                                       (= (:token/value a) (:token/value b)))
+                                                          (println "!!!! cannot reconcile !!! ")
+                                                          (println "A:")
+                                                          (println my-string)
+                                                          (println "B:")
+                                                          (println p)
+                                                          (throw (ex-info "cannot reconcile " {})))
+                                                        (for [k     [:form/indent :form/linebreak]
+                                                              :when (not= (k a) (k b))]
+                                                          (if (k b)
+                                                            [:db/add (:db/id a) k (k b)]
+                                                            [:db/retract (:db/id a) k (k a)])))
+                                                      (tree-seq :coll/type e/seq->vec q)
+                                                      (tree-seq :coll/type e/seq->vec pt)))]
                                       (js/console.timeEnd "reconciling")
                                       (js/console.timeEnd "formatting")
                                       ans)
@@ -1125,7 +1127,7 @@
            ::random-insert (do (core/send! bus [:insert-right])
                                (core/send! bus [:edit/finish (str "m" i)]))
            (core/send! bus m))
-         #_(async/<! (async/timeout (/ 1000.0 hz)))
+         #_(async/<! (async/timeout (/ 1000 hz)))
          (async/<! (async/timeout 0))
          (if-not more
            (let [dms (- (js/performance.now) t)]
@@ -1156,7 +1158,7 @@
       [[:float] [:delete-left] [:flow-right] [:float]]
       #_[[:last]])])
 
-#_(defonce the-singleton-db
+(defonce the-singleton-db
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
@@ -1225,7 +1227,7 @@
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
   #_(stupid-github-crap)
-  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)]
+  (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
     #_(stupid-github-crap)
@@ -1272,4 +1274,3 @@
      #_(debug-component)
      (root-component @conn bus)
      (.getElementById js/document "root"))))
-

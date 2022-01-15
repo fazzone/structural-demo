@@ -11,7 +11,7 @@ function check_relative(p) {
 
 contextBridge.exposeInMainWorld('my_electron_bridge', {
     spit: (function (p, c) {
-        return fs.writeFile(rp, c);
+        return fs.writeFile(p, c);
     }),
     slurp: (function (p) {
         return fs.readFile(p, {encoding: 'utf-8'});

@@ -232,7 +232,6 @@
                                                 tx-data)
                                        as (into #{} (map (fn [[e a v t]] a)) tx-data)]
                                    ;; (println "Actual tx-data:")
-
                                    ;; (run! prn tx-data)
 
                                    #_(println "Tempids" tempids)
