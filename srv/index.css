@@ -11,33 +11,22 @@ body {
 
 a {
     color: #2c32ff;
-    /* font-weight: bolder; */
     text-decoration: none;
 }
 
 @font-face {
     font-family: iosevka-aile-light;
-    src: url(iosevka-aile-light.woff2);
+    src: url(font/iosevka-aile-light.woff2);
 }
 
 @font-face {
     font-family: iosevka-term-ss03-light;
-    src: url(iosevka-term-ss03-light.woff2);
+    src: url(font/iosevka-term-ss03-light.woff2);
 }
 
-@font-face {
-    font-family: bravura;
-    src: url(Bravura.woff2);
-}
+body        { font-family: iosevka-aile-light; }
+.prose-font { font-family: iosevka-aile-light; }
 
-
-
-body {
-    font-family: iosevka-aile-light;
-}
-.prose-font {
-    font-family: iosevka-aile-light;
-}
 .form-title {
     color: #fff;
     font-size: 18pt;
@@ -61,19 +50,10 @@ body {
     color: #777;
     line-height: 1.15
 }
-.d { }
-
-/* span.flex { */
-/*     display: flex; */
-/*     flex-wrap: wrap; */
-/* } */
 
 span.tk:hover {
     background-color: #4504b982;
     border-color: #4504b982;
-
-    /* background-color: radial-gradient(#000, #ae81ff); */
-    /* border: 1px solid #ae81ff; */
     cursor: pointer;
 }
 
