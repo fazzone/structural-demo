@@ -33,6 +33,31 @@
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
+
+(seq-tx [1 2 3 4])
+;; => #:seq{:first 1, :next #:seq{:first 2, :next #:seq{:first 3, :next #:seq{:first 4}}}}
+
+
+(defn svtx
+  [input]
+  (loop [acc      (transient [])
+         [x & xs] input
+         p        nil]
+    (if-not x
+      (persistent! acc)
+      (let [c (new-tempid)]
+       (recur
+        (cond-> acc
+          true (conj! [:db/add c :seq/first x])
+          p (conj! [:db/add p :seq/next c]))
+        xs
+        c)))))
+
+(defn in-new-db
+  [tx-data]
+  (d/with (deref (d/create-conn s/form-schema))
+          tx-data))
+
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]
@@ -107,7 +132,7 @@
        (let [[rmt & body] (n/children n)]
          (coll-tx :reader-macro (n/children n))
          #_(-> (coll-tx :reader-macro body)
-             (assoc :reader-macro/dispatch (n/string rmt))))
+               (assoc :reader-macro/dispatch (n/string rmt))))
        
        :namespaced-map (coll-tx :map (n/children n))
        :uneval         (coll-tx :uneval (n/children n))

@@ -55,13 +55,20 @@
        []
        (ingest (then (nav stories :topstories (:topstories stories))
                      (fn [x] (nav x x (first x))))))
-     (defn open-chain
+     (defn open-file
        [path]
        (then (slurp path)
              (fn [text]
                (send! [:open-chain text {:chain/filename path}]))))
-     
-     ^:form/highlight (open "src/macros.clj")]])
+     (defn open-url
+       [u]
+       (then (fetch-text u)
+             (fn [text] (send! [:open-chain text])))
+       #_(then (fetch u (fn [resp]
+                          (then (.text resp)
+                                (fn [text] (send! [:open-chain text])))))))
+     (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/page.cljs")
+     ^:form/highlight (open-file "src/macros.clj")]])
 
 (def default-keymap
   {"f"   :flow-right
@@ -792,7 +799,7 @@
                                        (+ hpos bar-width))))
                            (scroll-1d bar-width w hpos hoff))]
      #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
-     #_(println "================================Scroll"
+     (println "================================Scroll"
                 "\nChain-height" chain-height
                 "\nBar-width" bar-width
                 "\nTLH" h
@@ -807,7 +814,6 @@
                 "\nAlways scroll?" always)
      (when (> h chain-height)
        (println "Too bigby " (- h chain-height) h chain-height))
-     
      
      (when new-chain-top (.scrollTo chain #js{:top new-chain-top}))
      (when new-bar-left  (.scrollTo bar   #js{:left new-bar-left})))))
@@ -842,29 +848,32 @@
          scivar-sel    (sci/new-var "zsel")
          scivar-ingest (sci/new-var "ingest")
          _             (js/console.log "Bridge"
-                           (some-> js/window
-                                   (aget "my_electron_bridge")))
+                                       (some-> js/window
+                                               (aget "my_electron_bridge")))
          s             (sci/init {:namespaces {'d {'datoms d/datoms
                                                    'touch  d/touch}
                                                'p {'resolve (fn [p]
                                                               (js/console.log "Promise/resolve" p)
                                                               (js/Promise.resolve p))
                                                    'all     (fn [a b c]
-                                                          (js/console.log "Proomise/all" a b c )
-                                                          (js/Promise.all a b c)
-                                                          )}}
-                                  :bindings   {'jcl     (fn [z] (js/console.log z))
-                                               'datafy  datafy/datafy
-                                               'nav     datafy/nav
-                                               'fetch   (fn [z f]
-                                                          (-> z (js/fetch) (.then f)))
-                                               'then    (fn [p f] (.then (js/Promise.resolve p) f))
+                                                              (js/console.log "Proomise/all" a b c )
+                                                              (js/Promise.all a b c)
+                                                              )}}
+                                  :bindings   {'jcl        (fn [z] (js/console.log z))
+                                               'datafy     datafy/datafy
+                                               'nav        datafy/nav
+                                               'fetch-text (fn [z f]
+                                                             (.then (js/fetch z)
+                                                                    (fn [resp]
+                                                                      (.text resp)))
+                                                             #_(-> z (js/fetch) (.then f)))
+                                               'then       (fn [p f] (.then (js/Promise.resolve p) f))
                                                ;; 'stories dfg/stories
-                                               'ingest  scivar-ingest
-                                               'sel     scivar-sel
-                                               '->seq   e/seq->seq
+                                               'ingest     scivar-ingest
+                                               'sel        scivar-sel
+                                               '->seq      e/seq->seq
                                                
-                                               'slurp (some-> (aget js/window "my_electron_bridge")
+                                               'slurp    (some-> (aget js/window "my_electron_bridge")
                                                               (aget "slurp"))
                                                'spit     (some-> (aget js/window "my_electron_bridge")
                                                                  (aget "spit"))
@@ -872,7 +881,7 @@
                                                                  (aget "list_dir"))
                                                'exit     (some-> (aget js/window "my_electron_bridge")
                                                                  (aget "exit"))
-                                               'send! (fn [m]
+                                               'send!    (fn [m]
                                                         (core/send! (:bus a) m))}})]
      #_(doseq [[m f] mut/dispatch-table]
          (core/register-simple! a m f))
@@ -938,21 +947,21 @@
                                            #_(scroll-to-selected!)))
        (core/register-simple! :zp (fn [db _]
                                     (let [_         (js/console.time "formatting")
-                                          _  (js/console.time "preparing")
+                                          _         (js/console.time "preparing")
                                           _         (zp-hacks/set-options! {:map {:sort? nil}})
                                           q         (-> (get-selected-form db) nav/parents-vec peek)
-                                          _  (js/console.timeEnd "preparing")
-                                          _ (js/console.time "stringifying")
+                                          _         (js/console.timeEnd "preparing")
+                                          _         (js/console.time "stringifying")
                                           my-string (e/->string q)
-                                          _ (js/console.timeEnd "stringifying")
-                                          _ (js/console.time "zprint")
-                                          p   (zp-hacks/zprint-file-str my-string (:db/id q))
-                                          _ (js/console.timeEnd "zprint")
-                                          _ (js/console.time "parsing")
-                                          pt  (e/string->tx p)
-                                          _ (js/console.timeEnd "parsing")
-                                          _ (js/console.time "reconciling")
-                                          ans (vec
+                                          _         (js/console.timeEnd "stringifying")
+                                          _         (js/console.time "zprint")
+                                          p         (zp-hacks/zprint-file-str my-string (:db/id q))
+                                          _         (js/console.timeEnd "zprint")
+                                          _         (js/console.time "parsing")
+                                          pt        (e/string->tx p)
+                                          _         (js/console.timeEnd "parsing")
+                                          _         (js/console.time "reconciling")
+                                          ans       (vec
                                                (mapcat
                                                 (fn [a b]
                                                   (when-not (and (= (:coll/type a) (:coll/type b))
