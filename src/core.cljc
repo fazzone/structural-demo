@@ -171,22 +171,7 @@
 (def ^:const txmax 0x7FFFFFFF)
 
 
-(defn publish-tx-report!
-  [the-bus db tx-data tempids]
-  (let [new-entities (set (vals tempids))
-        es           (into #{} (comp (filter (comp not new-entities))
-                                     (map (fn [[e a v t]] e))) tx-data)
-        as           (into #{} (map (fn [[e a v t]] a)) tx-data)]
-    #_(println "Actual tx-data:")
-    #_(run! prn tx-data)
-    #_(println "Tempids" tempids)
-    #_(run! prn tx-data)
-    #_(println "Transacted" (count tx-data))
-    (doseq [e es]
-      (when-not (empty? (d/datoms db :eavt e))
-        (send! the-bus [e (d/entity db e)])))
-    (doseq [a as]
-      (send! the-bus [a db]))))
+
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]
@@ -244,18 +229,35 @@
 (defn app
   [conn]
   (let [the-bus (context)]
-    (-> {:bus the-bus
+    (-> {:bus     the-bus
          :history (atom ())
-         :conn (doto conn
-                 #_(d/listen! (fn [{:keys [db-after db-before tx-data tempids] :as report}]
-                                (if-let [txid (get tempids :db/current-tx)]
+         :conn    (doto conn
+                    #_(d/listen! (fn [{:keys [db-after db-before tx-data tempids] :as report}]
+                                   (if-let [txid (get tempids :db/current-tx)]
                                   (do (save-history! the-bus txid report)
                                       (reset! history (cons report @history)))
                                   (println "No current-tx?"))
                                 (publish-tx-report! the-bus db-after tx-data tempids)))
                  
-                 (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
-                              (publish-tx-report! the-bus db-after tx-data tempids))))}
+                    (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
+                                 (let [emax (:max-eid db-before)
+                                       es (into #{}
+                                                (keep (fn [[e a v t]]
+                                                        (when-not (> e emax)
+                                                          e)))
+                                                tx-data)
+                                       as (into #{} (map (fn [[e a v t]] a)) tx-data)]
+                                   
+                                   ;; (println "Actual tx-data:")
+                                   ;; (run! prn tx-data)
+                                   #_(println "Tempids" tempids)
+                                   #_(run! prn tx-data)
+                                   #_(println "Transacted" (count tx-data))
+                                   (doseq [e es]
+                                     (when-not (empty? (d/datoms db-after :eavt e))
+                                       (send! the-bus [e (d/entity db-after e)])))
+                                   (doseq [a as]
+                                     (send! the-bus [a db-after]))))))}
         (map->App)
         (setup-undo!))))
 

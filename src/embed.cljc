@@ -33,15 +33,6 @@
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
-#_(-> (p/parse-string-all (slurp "subtree/small.clj"))
-    (n/children)
-    first
-    (n/children)
-    (nth 5)
-    (n/children)
-    )
-;; => (<token: fn> <whitespace: " "> <vector: [It]> <newline: "\n"> <whitespace: "    "> <comment: ";; This is wrong\n"> <whitespace: "    "> <token: What>)
-
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]
@@ -73,25 +64,7 @@
                    linebreak? (atom nil)
                    isf        (atom 0)]
                (cond-> {:db/id id :coll/type coll-type}
-                 (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil [])))
-                 
-                 #_ (merge (seq-tx (for [x     xs
-                                         :when (case (n/tag x)
-                                                 (:comma :whitespace)
-                                                 (do (swap! isf + (count (n/string x)))
-                                                     false)
-                                                 :newline
-                                                 (do (when (n/linebreak? x)
-                                                       (reset! linebreak? true)
-                                                       (reset! isf 0))
-                                                     false)
-                                                 true)]
-                                     (let [i @isf]
-                                       (cond-> (n->tx x)
-                                         true        (assoc :coll/_contains id)
-                                         (< 1 i)     (assoc :form/indent i)
-                                         @linebreak? (assoc :form/linebreak (do (reset! linebreak? false)
-                                                                                true))))))))))]
+                 (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil []))))))]
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
@@ -110,28 +83,30 @@
        :vector  (coll-tx :vec (n/children n))
        :map     (coll-tx :map (n/children n))
        :set     (coll-tx :set (n/children n))
-       :forms   (coll-tx :vec (n/children n))
+       :forms   (coll-tx :chain (n/children n))
        :deref   (coll-tx :deref (n/children n))
        :comma   nil
        :comment {:token/type :comment :token/value (string/trimr (n/string n))}
        :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                       mta                (n/sexpr mta-n)]
-                  #_(println "Mta-n" (n/string mta-n)
-                             "Mta" mta
-                             "Val" (n/string val)
-                             "More" more)
+                  (println "Mta-n" (n/string mta-n)
+                           "Mta" mta
+                           "Val" (n/string val)
+                           "More" more)
                   (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-                  (n->tx val)
-                  )
-       
-
+                  (coll-tx :meta (n/children n))
+                  #_{:coll/type :meta
+                     :coll/contains #{"m" "v"}
+                     :seq/first  9
+                     }
+                  #_(n->tx val))
        
        ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
        :reader-macro
        (let [[rmt & body] (n/children n)]
-         #_(coll-tx :map (n/children n))
-         (-> (coll-tx :reader-macro body)
+         (coll-tx :reader-macro (n/children n))
+         #_(-> (coll-tx :reader-macro body)
              (assoc :reader-macro/dispatch (n/string rmt))))
        
        :namespaced-map (coll-tx :map (n/children n))
@@ -239,12 +214,13 @@
     :fn               "#("
     :tear             "«"
     :uneval           "#_"
+    :meta             "^"
     :deref            "@"
     :quote            "'"
     :syntax-quote     "`"
     :unquote          "~"
     :unquote-splicing "~@"
-    :reader-macro     "#?"
+    :reader-macro     "#"
     nil))
 
 (defn close-delim
@@ -273,7 +249,8 @@
           :keyword (str (:token/value e))
           :string  (pr-str (:token/value e))
           :number  (str (:token/value e))
-          :comment (:token/value e)))
+          :comment (:token/value e)
+          :regex (str "#" (:token/value e))))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
@@ -353,6 +330,8 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
 
 
 

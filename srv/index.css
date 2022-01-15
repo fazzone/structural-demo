@@ -78,22 +78,23 @@ span.tk:hover {
 }
 
 /* syntax coloring */
-span.tk.s  { color: #81a2be; }
-span.tk.k  { color: #70c0b1; }
-span.kn    { color: #e7c547; }
-span.tk.m  { color: #c397d8; }
-span.tk.v  { color: #eee; }
-/* span.tk.p  { color: #70c0b1; } */
-span.tk.n  { color: #f0c674; }
-span.tk.l  { color: #b5bd68; white-space: pre;}
-span.unev span.tk { color: #777; }
-span.unev span.d { color: #777; }
-span.unev span.kn { color: #777; }
+.tk.s       { color: #81a2be; }
+.tk.k       { color: #70c0b1; }
+.kn         { color: #e7c547; }
+.tk.m       { color: #c397d8; }
+.tk.v       { color: #eee; }
+.tk.n       { color: #f0c674; }
+.tk.l       { color: #b5bd68; }
+.unev .d    { color: #777; }
+.unev .tk   { color: #777; }
+.unev .kn   { color: #777; }
+.tk.comment { color: #777; }
 
+
+.tk.l { white-space: pre; }
 .tk.comment {
     white-space: pre;
     border-left: 0;
-    color: #777;
 }
 .tk.comment.selected { color: #999; }
 
@@ -108,17 +109,6 @@ span.unev span.kn { color: #777; }
 
 .selected .d { color: #a6a6a0; }
 .selected > .d { color: #fff; }
-
-.cursor_blink {
-  animation: blinker 1s linear infinite;
-}
-
-@keyframes blinker {
-    0%   { background-color: #000; }
-    50%  { background-color: tomato;}
-    100% { background-color: #000; }
-
-}
 
 .selected > .display-keyboard {
     /* this is a hack because the selection has to be display: inline */
@@ -316,7 +306,6 @@ div.bp {
 
 span.indenter {
     transition: margin-left 0.08s ease-in-out;
-    /* transition-timing-function: linear; */
 }
 
 .modeline-outer {
@@ -530,3 +519,5 @@ span.key-compose-echo {
     width: unset;
     border: 1px solid cadetblue;
 }
+
+

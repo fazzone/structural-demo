@@ -388,15 +388,6 @@
 
 (defn offer-tx
   [sel]
-  (println "Offer" (e/->string sel))
-  (println "Offer first" (e/->string (:seq/first sel)) )
-  (println "Offer nexct" (e/->string (:seq/next sel)) )
-  (println "Offer last"
-           (e/->string
-            (loop [s sel]
-              (if-let [n (:seq/next s)]
-                (recur n)
-                s))))
   (cond
     (:token/type sel)
     [[:db/retract (:db/id sel) :token/value (:token/value sel)]

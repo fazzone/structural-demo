@@ -300,27 +300,25 @@
            (first)
            (stitch* sel)))
 
-(defn tear-str
-  [s]
-  (let [[head & more :as sp] (string/split s #"[./\-]")]
-    (when more sp)))
-
 (defn tear*
   [sel]
   (when-let [vs (:token/value sel)]
-    (let [[head & more] (string/split vs #"[./\-]")]
+    (let [tt (:token/type sel)
+          [head & more] (string/split vs #"[./\-]")]
       (into [[:db/add (:db/id sel) :token/value head]
-             [:db/add (:db/id sel) :token/type (:token/type sel)]
              (when more
                [:db/add "newnode" :seq/next "newtail"])
              (when more
                (-> (for [e more]
-                     {:token/value e :coll/_contains "newnode"})
+                     {:token/value e
+                      :token/type tt
+                      :coll/_contains "newnode"})
                    (e/seq-tx)
                    (assoc :db/id "newtail")))]
             (concat
              (edit/form-wrap-tx sel :tear)
              (move-selection-tx (:db/id sel) "newnode"))))))
+
 (defn tear-tx
   [sel]
   (or (restitch sel sel)
@@ -420,11 +418,12 @@
   [sel text props]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
-        nf (-> (e/string->tx text)
-               (update :db/id #(or % "cft"))
-               (assoc :coll/type :chain))]
-    (edit/insert-after-tx chain
-                          (merge {:db/id "newchain"} nf {:coll/type :chain} props))))
+        new-node (-> (e/string->tx-all text)
+                     (update :db/id #(or % "cft"))
+                     (assoc :coll/type :chain)
+                     (merge props))]
+    (into [new-node]
+          (edit/insert-after-tx chain new-node))))
 
 (def movement-commands
   {:select          (fn [e eid] (d/entity (d/entity-db e) eid))
@@ -496,6 +495,8 @@
                                                                                   :form/edit-initial ";; "}
                                                                            (:form/indent sel)
                                                                            (assoc  :form/indent  (:form/indent sel ))) ))))
+   :open-chain (fn [db t props]
+                 (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    eval-result-above-toplevel
    :ingest-result                  ingest-result

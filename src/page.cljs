@@ -49,12 +49,19 @@
 (def test-form-data-bar
   '[["Chain 1"
      (def thing
-       [1 (+ 2 3 ^:form/highlight foo  ) [:a :c] "ok"])
+       [1 (+ 2 3 foo  ) [:a :c] "ok"])
      
      (defn hn-test
        []
        (ingest (then (nav stories :topstories (:topstories stories))
-                     (fn [x] (nav x x (first x))))))]])
+                     (fn [x] (nav x x (first x))))))
+     (defn open-chain
+       [path]
+       (then (slurp path)
+             (fn [text]
+               (send! [:open-chain text {:chain/filename path}]))))
+     
+     ^:form/highlight (open "src/macros.clj")]])
 
 (def default-keymap
   {"f"   :flow-right
@@ -137,7 +144,7 @@
   (let [chains (concat
 
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
                 (map e/->tx test-form-data-bar)
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     
@@ -256,30 +263,15 @@
         open-delim  (e/open-delim ct)
         close-delim (e/close-delim ct)]
     [:span {:class ["c" coll-class extra-class classes]}
-     #_(str ct (pr-str (map :db/id children)))
      #_[:span.inline-tag.debug
-       (str (swap! render-counter inc))
-       #_(str (:db/id e))]
+        (str (swap! render-counter inc))
+        #_(str (:db/id e))]
      (cond
        extra-class [:span.d.pfc ^String open-delim]
        open-delim  [:span.d ^String open-delim]
        :else       nil)
      (for [c children]
-       ^:inline (fcc c bus indent proply)
-       #_(let [{:form/keys [linebreak indent]} c
-               rc                              (fcc c bus indent proply)]
-           (rum/fragment
-            (cond
-              (and indent linebreak) [:span.indent-chars {} "\n"
-                                      [:span.indenter {:style {:margin-left (str indent "ch")}}]]
-              
-              linebreak [:span.indent-chars {} "\n"]
-              indent    [:span.indent-chars {}
-                         [:span.indenter {:style {:margin-left (str indent "ch")}}]])
-          
-            ^:inline rc))
-       #_(-> (fcc c bus indent proply)
-             (rum/with-key (:db/id c))))
+       ^:inline (fcc c bus indent proply))
      (when close-delim
        [:span.d ^String close-delim])]))
 
@@ -341,7 +333,7 @@
 (rum/defc nchainc [chain bus]
   [:div.chain.hide-scrollbar
    {:key (:db/id chain)
-    :class (when (:form/highlight chain) "selected")
+    :class ["map" (when (:form/highlight chain) "selected")]
     :id (str "c" (:db/id chain))}
    (for [f (e/seq->vec chain)]
      (-> (top-level-form-component f bus nil)
@@ -423,8 +415,13 @@
     :verbatim "verbatim"
     :comment  "comment"))
 
+(def xxx (apply str (repeat 999 "-")))
+
 (defn token-text
-  [t ^String v]
+  [t v]
+  #_(subs xxx 0 (if (number? v)
+                (count (str v))
+                (count v)))
   (case t
     :symbol v
     :keyword  v #_(let [is (string/index-of k "/")]
@@ -660,11 +657,13 @@
           (rum/portal nn)))))
 
 (declare setup-app)
+
 (rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)]
     [:div.bar-container
      #_(breadcrumbs-always db bus)
+     #_(favicon 200)
      (fcc (:state/bar state) bus 0 nil)
      (modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -872,7 +871,9 @@
                                                'list-dir (some-> (aget js/window "my_electron_bridge")
                                                                  (aget "list_dir"))
                                                'exit     (some-> (aget js/window "my_electron_bridge")
-                                                                 (aget "exit"))}})]
+                                                                 (aget "exit"))
+                                               'send! (fn [m]
+                                                        (core/send! (:bus a) m))}})]
      #_(doseq [[m f] mut/dispatch-table]
          (core/register-simple! a m f))
      (doseq [[m f] mut/movement-commands]
@@ -1410,3 +1411,4 @@
 ;; Fulltext index all the strings and commit messages?
 
 ;; Remember the scroll position when the chain remounts
+;; Offer is broken on strings

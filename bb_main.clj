@@ -121,9 +121,11 @@
      (quote (+ 1 1))
      #_(quote (user/release-cljs!)))
   
-  (let [result (sync-prepl-exec (quote (do
-                                         (shadow.cljs.devtools.api/release :elec)
-                                         (shadow.cljs.devtools.api/release :br))))]
+  (let [result (sync-prepl-exec (quote
+                                 :done
+                                 #_(do
+                                     (shadow.cljs.devtools.api/release :elec)
+                                     (shadow.cljs.devtools.api/release :br))))]
     (if-not (= ":done" result)
       (println "Failed to build")
       (reset! electron-process

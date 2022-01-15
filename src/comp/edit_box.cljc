@@ -72,13 +72,14 @@
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input") (editing-when-mounted "the-input")
   [{::keys [text]} e bus]
+  (println "Edit box" 'text text 'e e)
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)
-                    (e/->string e))
+                    (:token/value e))
                 @text)
         form-eid (:db/id e)]
     [:input.edit-box.code-font
-      #_ :textarea.edit-box.code-font
+     #_ :textarea.edit-box.code-font
      {
       :type        :text
       ;; :wrap :off
