@@ -6,16 +6,27 @@
    ["http" :as http]
    ["path" :as path]))
 
-
 ;; const puppeteer = require('puppeteer');
 
+
 ;; (async () => {
+
+
 ;;   const browser = await puppeteer.launch();
+
+
 ;;   const page = await browser.newPage();
+
+
 ;;   await page.goto('https://example.com');
+
+
 ;;   await page.screenshot({ path: 'example.png' });
 
+
 ;;   await browser.close();
+
+
 ;; })();
 
 
@@ -30,7 +41,6 @@
                          [:flow-left]
                          [:barf-right]]}})
 
-
 (defn setup-server
   []
   (doto (.createServer http
@@ -39,8 +49,6 @@
                          (.writeHead res 200)
                          (.end res "Dingus")))
     (.listen 9997)))
-
-
 
 (comment
   (str "file://" (js/process.cwd) "/srv/index.html"
@@ -66,7 +74,7 @@
                                        {:Does :This
                                         :Work [1 2 3 4]}))
                            (fn [qqq]
-                             (.on page "console" (fn [^ js e] (js/console.log "[page]" (.text e))))
+                             (.on page "console" (fn [^js e] (js/console.log "[page]" (.text e))))
                              (-> (.start (.-tracing page)
                                          #js {:path "artifact/screenshot/profile.json"})
                                  (.then (fn [_]
@@ -84,6 +92,7 @@
                                                                                        (.then (fn [c]
                                                                                                 (println "Closed browser ")
                                                                                                 (js/process.exit 0))))))))))))))))))))))))
+
 (def ^:const ptr-opts
   #js {:headless true
        :defaultViewport #js {:width 1000 :height 800}})
@@ -91,13 +100,11 @@
 (defn tseq
   [^js page i ts]
   (println "TSeq")
-  
   (a/let [outf (str "artifact/screenshot/state" i ".png")
           _ (.type (.-keyboard page) ts #js {:delay 20})
           _ (.waitForTimeout page 50)
-          _ (.screenshot page #js {#_ #_:fullPage true :path outf})
-          ;; _ (println "Wrote" outf)
-          ]
+          _ (.screenshot page #js {#_#_:fullPage true :path outf})
+          ;; _ (println "Wrote" outf)]
     outf))
 
 (defn go []
@@ -109,16 +116,14 @@
           ^js page (.newPage browser)
           ;; _ (.start (.-tracing page))
           cdp-client (.createCDPSession (.target page))
-          _ (.send cdp-client "Overlay.setShowFPSCounter" #js{:show true})
+          _ (.send cdp-client "Overlay.setShowFPSCounter" #js {:show true})
           ;; _ (.goto page "http://localhost:8087")
           _ (println "Js dirname" js/__dirname)
           uu (str "file:///" (-> js/__dirname
                                  (path/dirname)
                                  (path/join "index.html")))
           _ (println "File url?" uu)
-
           _ (.goto page uu)
-          
           ;; _ (.stop (.-tracing page))
           _ (tseq page 0 "z")
           _ (reduce

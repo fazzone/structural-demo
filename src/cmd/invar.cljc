@@ -7,7 +7,7 @@
 (defn check-linkage
   [e]
   (when-let [contained (:coll/contains e)]
-    (let [contained (set (map :db/id contained ))
+    (let [contained (set (map :db/id contained))
           linked (set (map :db/id (e/seq->vec e)))
           cbnl (seq (set/difference contained linked))
           lbnc (seq (set/difference linked contained))]
@@ -48,14 +48,12 @@
       (println "Tempids")
       (prn (:tempids tx-report))
       (println "Tx data")
-      (run! prn tx-data)
-      )
+      (run! prn tx-data))
     (check-all bar)
     (println "Tempids")
     (prn (:tempids tx-report))
     (println "Tx data")
-    (run! prn tx-data)
-    )
+    (run! prn tx-data))
   #_(let [changed (dedupe (for [[_ _ v _] tx-data]
                             v))]
       (doseq [c changed]
@@ -64,7 +62,7 @@
 #_(defn check
   [e]
   (when-let [contained (:coll/contains e)]
-    (let [c-id (-> (map :db/id contained )
+    (let [c-id (-> (map :db/id contained)
                    set
                    (conj (:db/id e)))
           ts (tree-seq :coll/type e/seq->vec e)
@@ -75,13 +73,9 @@
       (println "D-id" (conj c-id (:db/id e)))
       (println "Missing" missing)
       (doseq [m missing]
-        (prn (d/touch (d/entity (d/entity-db e) m) )))
+        (prn (d/touch (d/entity (d/entity-db e) m))))
       (println "Explored")
       (doseq [t ts]
-        (prn (d/touch t )))
+        (prn (d/touch t)))
       (println "Extra" extra)
-      (println "Cmonn" (set/intersection explored c-id ))))
-  
-  )
-
-
+      (println "Cmonn" (set/intersection explored c-id)))))

@@ -12,8 +12,8 @@
    [core :as core :refer [get-selected-form
                           move-selection-tx]]))
 
-
 ;; edit box
+
 
 (defn editbox-keydown-mutation
   [text key]
@@ -30,14 +30,11 @@
     (" " "S- ")       (cond
                         (empty? text)
                         [:edit/reject]
-                        
                         (= "\"" (first text))
                         (println "Quotedstring")
-                        
                         :else
                         [:edit/finish-and-edit-next-node text])
     nil))
-
 
 (defn focus-ref-on-mount
   [ref-name]
@@ -49,6 +46,7 @@
                 state)})
 
 (def global-editing-flag (atom false))
+
 (defn editing-when-mounted
   [ref-name]
   (letfn [(setgef [state v]
@@ -65,7 +63,7 @@
 (defn event->kbd
   [^KeyboardEvent ev]
   (str (when (.-altKey ev) "M-")
-       (when (.-ctrlKey ev ) "C-")
+       (when (.-ctrlKey ev) "C-")
        (when (.-shiftKey ev) "S-")
        (.-key ev)))
 
@@ -79,7 +77,7 @@
                 @text)
         form-eid (:db/id e)]
     [:input.edit-box.code-font
-     #_ :textarea.edit-box.code-font
+     #_:textarea.edit-box.code-font
      {
       :type        :text
       ;; :wrap :off
@@ -94,9 +92,8 @@
                                :text new-text
                                :valid (some? token)
                                :type (some-> token first val)})
-                      #_(prn "PTT" token )
-                      nil
-                      )
+                      #_(prn "PTT" token)
+                      nil)
       :on-key-down (fn [ev]
                      (when-let [mut (editbox-keydown-mutation
                                      value
@@ -105,6 +102,4 @@
                        (.stopPropagation ev)
                        (core/send! bus mut)
                        #_(async/put! bus mut)))
-      ;; :on-blur #(pub! [:edit/finish @text])
-      }]))
-
+      ;; :on-blur #(pub! [:edit/finish @text])}]))

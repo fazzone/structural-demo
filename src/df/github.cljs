@@ -47,13 +47,10 @@
       (cond-> item
         (contains? item :url)
         (update :url #(as-url %))
-
         (contains? item :time)
         (update :time #(as-date (* % 1000)))
-
         (contains? item :created)
         (update :created #(as-date (* % 1000)))
-
         (contains? item :type)
         (update :type keyword)))))
 
@@ -61,24 +58,24 @@
 
 (defn fetch-user [user]
   (m/let [res (fetch-hn (str "/user/" user ".json"))]
-    (vary-meta res assoc `nav #'nav-hn)))
+    (vary-meta res assoc `nav "#'nav-hn")))
 
 (defn nav-item [_coll _k v]
   (println "NAVitem" v)
   (m/let [res (fetch-hn (str "/item/" v ".json"))]
     (println "The res!!!")
-    (vary-meta res assoc `nav #'nav-hn)))
+    (vary-meta res assoc `nav "#'nav-hn")))
 
 (def stories
   (with-meta
     #{:topstories :newstories :beststories
       :askstories :showstories :jobstories}
-    {`nav #'nav-hn}))
+    {`nav "#'nav-hn"}))
 
 (defn fetch-stories [type]
   (println "Fstories")
   (m/let [res (fetch-hn (str "/" (name type) ".json"))]
-    (vary-meta (take 15 res) assoc `nav #'nav-item)))
+    (vary-meta (take 15 res) assoc `nav "#'nav-item")))
 
 (defn nav-hn [coll k v]
   (println "NAv HN")
@@ -89,5 +86,5 @@
                                    user-doc) v v)
     (= k :by)               (fetch-user v)
     (= k :parent)           (nav-item coll k v)
-    (#{:kids :submitted} k) (vary-meta v assoc `nav #'nav-item)
+    (#{:kids :submitted} k) (vary-meta v assoc `nav "#'nav-item")
     :else v))

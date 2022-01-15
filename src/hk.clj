@@ -9,7 +9,6 @@
   (:import
    [java.io PushbackReader]))
 
-
 (defn read-all
   [ins]
   (let [rdr (-> ins io/reader (PushbackReader.))]
@@ -17,8 +16,6 @@
        (when (.ready rdr)
          (some-> (read rdr)
                  (cons (lazy-seq (iter)))))))))
-
-
 
 (defn handler
   [{:keys [request-method uri] :as req}]
@@ -30,16 +27,16 @@
       (.mkdirs (.getParentFile outf))
       (io/copy (:body req) outf)
       {:status 200 :body (str "wrote " (str outf))})
-    
     (or (ring-resp/file-response (str "srv" uri))
         {:status 404 :body "not found"})))
 
 (def my-app
-  (-> #'handler
+  (-> "#'handler"
       (rm-kp/wrap-keyword-params)
       (rm-p/wrap-params)))
 
 (defonce servers (atom []))
+
 (do @servers)
 
 (defn start-dev

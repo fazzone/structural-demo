@@ -1,7 +1,5 @@
 (ns electron-main
-  (:require ["electron" :as electron :refer [app Menu BrowserWindow crashReporter]])
-  
-  )
+  (:require ["electron" :as electron :refer [app Menu BrowserWindow crashReporter]]))
 
 (def main-window (atom nil))
 
@@ -11,8 +9,7 @@
                        (clj->js {:width 1920
                                  :height 1200
                                  :webPreferences {:preload (str js/__dirname "/electron_preload.js")
-                                                  #_ #_:nodeIntegration true}})))
-  
+                                                  #_#_:nodeIntegration true}})))
   ;; Path is relative to the compiled js file (main.js in our case)
   #_(js/console.log  "HJave to device here" (.-argv  js/process))
   (.loadURL ^js/electron.BrowserWindow @main-window
@@ -28,11 +25,9 @@
               :productName "MyAwesomeApp"
               :submitURL "https://example.com/submit-url"
               :autoSubmit false}))
-
   #_(.on app "window-all-closed" #(when-not (= js/process.platform "darwin")
                                     (.quit app)))
   (.on app "window-all-closed" #(.quit app))
-  
   #_(js/console.log  "Electron main" (.-argv  js/process))
   #_(println "Electron main" (.-argv  js/process))
   (.on app "ready" init-browser))

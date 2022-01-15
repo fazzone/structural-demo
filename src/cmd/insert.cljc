@@ -14,7 +14,7 @@
   (try
     (println "Try to parse as code" (pr-str s))
     (e/string->tx s)
-    (catch #?(:cljs js/Error :clj Exception) e
+    (catch #? (:cljs js/Error :clj Exception) e
       (println "No edn" s)
       (js/console.log e)
       nil)))
@@ -24,7 +24,7 @@
   (println "PTT" eid (pr-str s))
   (when-not (empty? s)
     (some-> (or (try-parse-edn s)
-                (and (string/starts-with? s "\"" )
+                (and (string/starts-with? s "\"")
                      (try-parse-edn (str s "\"")))
                 nil)
             (assoc :db/id eid))))
@@ -33,13 +33,10 @@
   [form-eid value]
   [{:db/id :db/current-tx
     :edit/of form-eid}
-   
    [:db/retract form-eid :token/value]
    [:db/retract form-eid :token/type]
-   
    (parse-token-tx value form-eid)
    [:db/add form-eid :form/edited-tx :db/current-tx]
-
    [:db/retract form-eid :form/editing true]
    [:db/retract form-eid :form/edit-initial]])
 
@@ -81,6 +78,3 @@
   [ed text]
   (into (accept-edit-tx (:db/id ed) text)
         (edit/insert-editing-after ed)))
-
-
-

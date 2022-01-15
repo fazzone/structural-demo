@@ -7,7 +7,7 @@
   [k->l keycap]
   [:div {:class ["key"
                  (when (= 1 (count keycap))
-                     " single-width")]} 
+                     " single-width")]}
    [:div.keycap keycap]
    (when-let [legend (k->l keycap)]
      (if-not (string? legend)
@@ -18,14 +18,11 @@
   [lookup keycap]
   [:div {:class ["key"
                  (when (= 1 (count keycap))
-                   " single-width")]} 
-
+                   " single-width")]}
    [:div.keycap-parent [:div.keycap keycap]]
-   
-   (when-let [symbol (:symbol (lookup keycap )) ]
+   (when-let [symbol (:symbol (lookup keycap))]
      [:div.key-symbol-parent [:div.key-symbol symbol]])
-
-   (when-let [label (:label (lookup keycap )) ]
+   (when-let [label (:label (lookup keycap))]
      [:div.key-label label])])
 
 (defn thread-first
@@ -40,17 +37,14 @@
                                  (cons acc)))
       :else       (list* '-> arg func acc))))
 
-
-
 (def mutation->label
   {
-   :flow-right {:label "flow->" :symbol [:span.symbol1 "==>"] }
-   :flow-left  {:label "<-flow" :symbol [:span.symbol1 "<=="] }
+   :flow-right {:label "flow->" :symbol [:span.symbol1 "==>"]}
+   :flow-left  {:label "<-flow" :symbol [:span.symbol1 "<=="]}
    :raise      {:label  "raise"
                 :symbol [:div {:style {:transform   "rotate(225deg)"
                                        :margin-top  "0.5ex"
-                                       :margin-left "-0.5ex"
-                                       }} "=>>"]}
+                                       :margin-left "-0.5ex"}} "=>>"]}
    :float      {:label  "float"
                 :symbol [:div {:style {:margin-top  "0.5ex"
                                        :margin-left "-0.5ex"
@@ -63,70 +57,55 @@
    :eval-sci   {:label  [:span {:style {:color "tomato"}} "eval"]
                 :symbol [:div {:style {:font-size   "220%"
                                        :margin-top  "-1.175ex"
-                                       :margin-left "0ex"
-                                       }}
-                         "\u2026"]}
+                                       :margin-left "0ex"}}
+                         "…"]}
    :hide {:label [:span {:style {:color "tomato"}} "hide"]}
-   
    :compose {:label  [:span {:style {:color "tomato"}} "comp"]
              :symbol [:div {:style {:font-size   "120%"
-                                    :margin-left "0.2ex"
-                                    }}
-                      "\u25ef"]}
-   
+                                    :margin-left "0.2ex"}}
+                      "◯"]}
    :slurp-right {:label [:span {:style {:color "tomato"}} "push)→"]}
    :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
-   
    :tear {:label ["-tear-"]
-          #_ #_:symbol
+          #_#_:symbol
           [:div {:style {:font-size   "130%"
                          :margin-left "0.0ex"
                          :margin-top  "-0.2ex"}}
-           "\u2702"]}
-   
+           "✂"]}
    :hop-left  {:label "<-hop"}
    :hop-right {:label "hop->"}
-   
    :find-next {:label "next"}
    :undo {:label "undo"}
-   
    :insert-left  {:label "ins<-"}
    :insert-right {:label "->ins"}
-
    :wrap         {:label "(wrap)"}
    :new-vec      {:label "new []"}
    :delete-right {:label  "del->"
                   :symbol [:div {:style {:font-size   "120%"
                                          :margin-left "0.0ex"
                                          :margin-top  "-0.2ex"}}
-                           "\u2326"]}
+                           "⌦"]}
    :delete-left  {:label "<-del"}
-   
    :scroll {:label "view"}
    :parent {:label  "parent"
             :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
    :next   {:label  "next"
             :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
    :prev   {:label  "prev"
-            :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"] }
-   :tail   { :label "tail"
+            :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"]}
+   :tail   {:label "tail"
             :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
-
-   
-   
    :clone     {:label "clone" :symbol [:div.symbol3 "++"]}
    :linebreak {:label "linebreak"}})
 
 (def defaultkl
   {
-   "f" {:label "flow->" :symbol [:span.symbol1 "==>"] }
-   "a"{:label "<-flow" :symbol [:span.symbol1 "<=="] }
-
+   "f" {:label "flow->" :symbol [:span.symbol1 "==>"]}
+   "a" {:label "<-flow" :symbol [:span.symbol1 "<=="]}
    "r" {:label "raise"
         :symbol [:div {:style {:transform "rotate(225deg)"
                                :margin-top "0.5ex"
-                               :margin-left "-0.5ex"
-                               }} "=>>"]}
+                               :margin-left "-0.5ex"}} "=>>"]}
    "w" {:label "float"
         :symbol [:div {:style {:margin-top "0.5ex"
                                :margin-left "-0.5ex"
@@ -139,79 +118,59 @@
    "e" {:label [:span {:style {:color "tomato"}} "eval"]
         :symbol [:div {:style {:font-size "220%"
                                :margin-top "-1.175ex"
-                               :margin-left "0ex"
-                               }}
-                 "\u2026"]}
+                               :margin-left "0ex"}}
+                 "…"]}
    "y" {:label [:span {:style {:color "tomato"}} ""]
         :symbol [:div {:style {:font-size "140%" :margin-left "0.3ex"}} "λ"]}
    "u" {:label [:span {:style {:color "tomato"}} "undo"]
         :symbol [:div {:style {:font-size "160%"
                                :margin-top "-0.4ex"
-                               :margin-left "-0.0ex"
-                               }}
-                 "\u238c"]
-        }
+                               :margin-left "-0.0ex"}}
+                 "⎌"]}
    ;; append is "n Space"? - kinda, last vs. tail pos
    ;; "o" {:label [:span {:style {:color "tomato"}} "append"]}
    "t" {:label [:span {:style {:color "tomato"}} "thread"]}
    "=" {:label [:span {:style {:color "tomato"}} "rename"]}
    "-" {:label [:span {:style {:color "tomato"}} "hide"]}
-   
    ;; chainable, call more functions on it
    ;; needs to specify movement/up after  edit complete
    "q" {:label [:span {:style {:color "tomato"}} "comp"]
         :symbol [:div {:style {:font-size "120%"
-                               :margin-left "0.2ex"
-                               }}
-                 "\u25ef"]}
-   
+                               :margin-left "0.2ex"}}
+                 "◯"]}
    "m" {:label [:span {:style {:color "tomato"}} "modify"]}
    "n" {:label [:span {:style {:color "tomato"}} "next"]}
    "b" {:label [:span {:style {:color "tomato"}} "bind"]}
    "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
    "o" {:label [:span {:style {:color "tomato"}} "←)pull"]}
-   
-   
    "z" {:label "<-hop"}
    "x" {:label "hop->"}
-   
-   
    "/" {:label [:span {:style {:color "tomato"}} "search"]}
    "," {:label [:span {:style {:color "tomato"}} "prefix"]}
-
-   
    "g" {:label [:span {:style {:color "tomato"}} "goto"]}
    ";" {:label [:span {:style {:color "tomato"}} "doc"]}
-
-
    " " {:label "insert"}
    "0" {:label "parent"}
    "9" {:label "(wrap)"}
    "[" {:label "new []"}
    "]" {:label "parent"}
-
    "d" {:label "delete"
         :symbol [:div {:style {:font-size "120%"
                                ;; :font-size "210%"
                                :margin-left "0.0ex"
-                               :margin-top "-0.2ex"
-                               }}
-                 "\u2326"
+                               :margin-top "-0.2ex"}}
+                 "⌦"
                  #_
                  "×"]}
    "v" {:label "view"}
-   
    "h" {:label "parent"
         :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
    "j" {:label "next"
         :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
    "k" {:label "prev"
-        :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"] }
-   "l" { :label "tail"
+        :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"]}
+   "l" {:label "tail"
         :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
-
-   
-   
    "i"         {:label "indent"}
    "c"         {:label "clone" :symbol [:div.symbol3 "++"]}
    "Enter"     {:label "linebreak"}

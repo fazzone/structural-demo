@@ -2,8 +2,7 @@
   (:require
    [embed :as e]
    [core :refer [get-selected-form
-                 move-selection-tx] ]))
-
+                 move-selection-tx]]))
 
 (defmulti move (fn [t _] t))
 
@@ -35,7 +34,6 @@
 (defmethod move :move/flow [_ e]
   (or (:seq/first e)
       (flow* e))
-  
   #_(if-let [f (:seq/first e)]
     (do (println "Flowfirst" e)
         f)
@@ -66,7 +64,7 @@
 (defn movement-tx
   [db movement-type]
   (let [src (get-selected-form db)
-        dst (move movement-type src)] 
+        dst (move movement-type src)]
     (when dst
       (move-selection-tx (:db/id src) (:db/id dst)))
     #_(if-not dst
@@ -83,7 +81,7 @@
                 n
                 (if-let [nn (move movement-type n)]
                   (recur (inc i) nn)
-                  n)))] 
+                  n)))]
     (if-not dst
       (println "Cannot" movement-type "from" sel)
       (move-selection-tx (:db/id sel) (:db/id dst)))))

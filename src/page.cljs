@@ -13,12 +13,10 @@
    [rum.core :as rum]
    [cljs.core.async :as async]
    [sci.core :as sci]
-   
    [db-reactive :as dbrx]
    [comp.cons :as cc]
    [comp.edit-box :as eb]
    [comp.keyboard :as ck]
-
    [cmd.move :as move]
    [cmd.nav :as nav]
    [cmd.insert :as insert]
@@ -30,13 +28,10 @@
    [zprint.core :as zp-hacks]
    [core :as core
     :refer [get-selected-form
-            move-selection-tx]]
-   
-   )
+            move-selection-tx]])
   (:import
    [goog.net XhrIo]
    [goog.net EventType])
-  
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
@@ -49,8 +44,7 @@
 (def test-form-data-bar
   '[["Chain 1"
      (def thing
-       [1 (+ 2 3 foo  ) [:a :c] "ok"])
-     
+       [1 (+ 2 3 foo) [:a :c] "ok"])
      (defn hn-test
        []
        (ingest (then (nav stories :topstories (:topstories stories))
@@ -79,25 +73,18 @@
    "S-I" :zp
    "o"   :offer
    ";"   :new-comment
-   
    "S-S" :split
    "M-s" :splice
-   
    "S-Z" :drag-left
    "S-X" :drag-right
-   
    "n"   :find-next
    "S-N" :find-first
-   
    "C-/" :undo
    "S-R" :reify-undo
-   
    "S-_" :uneval
    ;; "e"   :save
    "t"   :tear
-   
    "S-@" :new-deref
-   
    "a"         :flow-left
    "w"         :float
    "s"         :sink
@@ -146,27 +133,22 @@
    "S-Q"       :stringify
    "S-+"       :plus})
 
-
 (def init-tx-data
   (let [chains (concat
-
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
                 (map e/->tx test-form-data-bar)
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
-    
     [{:db/ident ::state
       :state/bar "bar"}
      {:db/ident ::evalchain
       :db/id "evalchain"
       :coll/type :vec
       :seq/first {:token/type :string :token/value "No more evals" :coll/_contains "evalchain"}}
-
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec}
      {:db/ident ::inspect
-      
       :db/id "inspect"
       :coll/type :inspect}
      {:db/ident ::default-keymap
@@ -181,7 +163,6 @@
           (assoc ch
                  :coll/type :chain
                  :coll/_contains "bar"))
-        
         [{:db/ident ::meta-chain
           :coll/type :chain
           :coll/_contains "bar"
@@ -200,9 +181,9 @@
       :db/id "bar"
       :coll/type :bar)]))
 
-
-
 ;; replace with non-breaking hyphen, lmao
+
+
 #_(-> text (gstring/replaceAll "-" "‑"))
 
 (declare fcc)
@@ -210,12 +191,12 @@
 (defn modeline-portal-id [eid] (str eid "mp"))
 
 (declare el-bfs)
-(rum/defc top-level-form-component < dbrx/ereactive 
+
+(rum/defc top-level-form-component < dbrx/ereactive
   [e bus p]
   [:div.form-card
    {}
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
-   
    [:div.top-level-form.code-font ^:inline (fcc e bus 0 p)]
    [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
 
@@ -244,17 +225,16 @@
 (def render-counter (atom 0))
 
 (rum/defc indenter
-  [nl? ip fi] 
+  [nl? ip fi]
   (if (and (or (nil? fi) (zero? fi)) (not nl?))
     nil
     [:span.indent-chars (if-not nl? {} {:class "nl"})
      (when nl? "\n")
      (when fi
        #_[:span.indenter
-        {:style {:color "cadetblue"} }
+        {:style {:color "cadetblue"}}
         (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
-
 
 (rum/defc any-coll
   [ct children classes bus indent proply]
@@ -266,7 +246,7 @@
                       (:deref :quote :syntax-quote :unquote
                               :unquote-splicing :reader-macro) "pf"
                       nil)
-        _           "«" 
+        _           "«"
         open-delim  (e/open-delim ct)
         close-delim (e/close-delim ct)]
     [:span {:class ["c" coll-class extra-class classes]}
@@ -282,7 +262,6 @@
      (when close-delim
        [:span.d ^String close-delim])]))
 
-
 #_(defmethod display-coll :hidden  [c b i s p]
   [:div {:style {:width "800px"}}
    (delimited-coll "SVG{ " " }SVG" c b i s p)
@@ -292,13 +271,11 @@
    (cond-> {:class (str "c " s)}
      s (assoc :ref "selected"))
    (case (:hidden/coll-type c)
-     :list "(\u00b7\u00b7\u00b7)"
+     :list "(···)"
      :vec "[...]"
      :map "{...}"
      :set "#{...}"
      "<...>")])
-
-
 
 (declare snapshot)
 
@@ -332,7 +309,7 @@
            [:div.alternate-reality
             {}
             ^:inline (-> (peek (nav/parents-vec (get-selected-form (:db-after r))))
-                         (fcc core/blackhole 0 nil)),]))])))
+                         (fcc core/blackhole 0 nil))]))])))
 
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
@@ -346,7 +323,6 @@
      (-> (top-level-form-component f bus nil)
          (rum/with-key (:db/id f))))])
 
-
 (rum/defc nbarc [bar bus]
   [:div.bar.hide-scrollbar
    {:class (when (:form/highlight bar) "selected")}
@@ -354,19 +330,15 @@
      (-> (fcc chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
 
-
 #_(defmethod display-coll :keyboard [k bus i]
     "No keyboardn"
     [:div.display-keyboard
      (ck/keyboard-diagram
       k
-      #_(d/entity (d/entity-db k) )
-      )
-   
+      #_(d/entity (d/entity-db k)))
      [:div {:style {:width "6ex"
                     :font-size "9pt"}}
       (ck/kkc {} "F")]])
-
 
 #_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
   (println "DCA" c)
@@ -391,10 +363,9 @@
        (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
        #_(concat
         (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
-        (->> (d/datoms (d/entity-db sel) :avet  )
+        (->> (d/datoms (d/entity-db sel) :avet)
              (filter (fn [[e a v t]]
                        (= v (:db/id sel)))))))]]))
-
 
 #_(defmethod display-coll :inspect [k bus i]
   "No inspect"
@@ -443,14 +414,11 @@
     :comment v
     :regex (str "REGEX:" v)))
 
-
-
 (rum/defc fcc < dbrx/ereactive {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
   (cond
     (:form/editing e)
     (eb/edit-box e bus)
-    
     (:token/type e)
     (let [tt (:token/type e)
           tv (:token/value e)
@@ -467,10 +435,7 @@
                :on-click (fn [ev]
                            (.stopPropagation ev)
                            (core/send! bus [:select (:db/id e)]))}
-        
-        
         ^String it]))
-    
     (:coll/type e)
     (case (:coll/type e)
       nil          (comment "Probably a retracted entity, do nothing")
@@ -517,8 +482,8 @@
     "M-S-("  [::wrap-and-edit-first :list]
     "q"      [::wrap-and-edit-first :list]
     "9"      [::wrap-selected-form :list]
-    "["      [::edit-new-wrapped :vec ]
-    "S-{"    [::edit-new-wrapped :map ]
+    "["      [::edit-new-wrapped :vec]
+    "S-{"    [::edit-new-wrapped :map]
     "r"      [::raise-selected-form]
     "S-X"    [::extract-to-new-top-level]
     "Escape" [::select-chain]
@@ -537,24 +502,21 @@
     "n"      [::move :move/most-nested]
     "d"      [::delete-with-movement :move/forward-up]
     "e"      [::eval]
-    
     "z"   [::hop-left]
     "x"   [::hop-right]
-    "S-Z" [::drag-left] 
-    
+    "S-Z" [::drag-left]
     "Backspace" [::delete-with-movement :move/backward-up]
     "c"         [::duplicate-selected-form]
     ;; "i"         [::indent-form 1]
     ;; "S-I"       [::indent-form -1]
     "Tab"       [::indent-form 1]
     "S-Tab"     [::indent-form -1]
-    "i"         [::check-invariants] #_ [::reset-indent]
+    "i"         [::check-invariants] #_[::reset-indent]
     "Enter"     [::linebreak-form]
     "M-p"       ["placeholder"]
     "M-n"       ["placeholder"]
     "-"         ["placeholder"]
     "S-Q"         ["placeholder"]
-
     "S-M"       [::recursively-set-indent true]
     "S-O"       [::recursively-set-indent false]
     ;; "M-x"       [::execute-selected-as-mutation]
@@ -570,18 +532,14 @@
 (comment
   (let [a (f 1 2 3)]
     (when thing (q a)))
-  
   (when thing
     (let [a (f 1 2 3)]
-      (q a)))
-  )
+      (q a))))
 
 (defn search*
   [db sa text]
   ;; U+10FFFF
-  (d/index-range db sa text (str text "\udbff\udfff")))
-
-
+  (d/index-range db sa text (str text "􏿿")))
 
 (rum/defc stupid-symbol-search
   [db sa text]
@@ -598,7 +556,7 @@
             [:span.tk {:key e :class (token-class type value)}
              (token-text type value)])
           [:span {:key (str "sr" e)} "x" (count ds)]
-          [:span {:key (str "id" e)} (pr-str (take 5 (map first ds ))) ]))
+          [:span {:key (str "id" e)} (pr-str (take 5 (map first ds)))]))
      (let [results (->> (search* db sa text)
                         (group-by #(nth % 2))
                         (sort-by (comp - count second))
@@ -612,10 +570,12 @@
           ;; -(2n+1) = -2n-1 = (- 0 1 (* 2 n))
           ;; -(2n-1) = -2n+1 = (- 1 (* 2 n))
           [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
-          [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds ))) ])))]))
+          [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds)))])))]))
 
 (declare command-compose-feedback)
+
 (declare save-status)
+
 (rum/defc modeline-inner < rum/reactive
   [sel bus {:keys [^String text valid] :as edn-parse-state}]
   [:span {:class (str "modeline code-font"
@@ -630,7 +590,6 @@
           :ok (str file "@" at)
           :error "Error"
           "")))]
-   
    (if text
      (stupid-symbol-search (d/entity-db sel) :token/value text)
      [:span.modeline-content
@@ -642,7 +601,6 @@
              ;; "\u2779"
              ;; "\u2474"
              ;; "\u24fa"
-             
              #_(pr-str
                 (apply max
                        (for [[_ a _ t] (d/datoms (d/entity-db sel) :eavt (:db/id sel))
@@ -678,12 +636,13 @@
 (defn event->kbd
   [^KeyboardEvent ev]
   (str (when (.-altKey ev) "M-")
-       (when (.-ctrlKey ev )
+       (when (.-ctrlKey ev)
          "C-")
        (when (.-shiftKey ev) "S-")
        (.-key ev)))
 
 (def initial-compose-state {:bindings special-key-map :compose nil})
+
 (def key-compose-state (atom initial-compose-state))
 
 (def keyboard-bus (atom nil))
@@ -694,7 +653,6 @@
     (when-not @eb/global-editing-flag
       (let [kbd (event->kbd ev)
             {:keys [bindings compose]} @key-compose-state
-            
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
         #_(prn "Key" kbd mut)
@@ -703,7 +661,6 @@
                   (and compose (nil? mut)))
           (.preventDefault ev)
           (.stopPropagation ev))
-        
         #_(if-not mut
             (reset! key-compose-state initial-compose-state)
             (cond
@@ -714,9 +671,8 @@
               :else (do (println "Bad key entry" mut)
                         (reset! key-compose-state initial-compose-state))))))))
 
-
 (defonce global-keydown
-  (fn [ev] 
+  (fn [ev]
     (global-keydown* ev)))
 
 (defn global-keyup*
@@ -737,6 +693,7 @@
        (pr-str bindings)])))
 
 (def ^:const scroll-hysteresis-px 32)
+
 (defn scroll-1d
   [size h pos off]
   #_(println "S1D" size h pos off)
@@ -764,36 +721,29 @@
    (let [#_          #_el (js/document.querySelector ".selected")
          [el & more] (js/document.querySelectorAll ".selected")
          ;; _ (prn "More" more)
-         
          tl    (some-> el (.closest ".form-card"))
          chain (some-> el (.closest ".chain"))
          bar   (some-> chain (.closest ".bar"))
-         
          chain-height (some-> chain (.-clientHeight))
          bar-width    (some-> bar (.-clientWidth))
-         
-         ;; fit the entire toplevel if we can, otherwise just the selection 
+         ;; fit the entire toplevel if we can, otherwise just the selection
          tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
          elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
          vst  (if (< tlh chain-height) tl el)
          h    (if (< tlh chain-height) tlh elh)
          vpos (some-> chain (.-scrollTop))
          voff (some-> vst (.-offsetTop))
-         
          new-chain-top (and tl
                             chain
                             (< h chain-height)
-                            
                             (or always
                                 (not (< vpos voff (+ h voff)
                                         (+ vpos chain-height))))
                             (scroll-1d chain-height h vpos voff))
-         
          w    (some-> chain (.getBoundingClientRect) (.-width) (js/Math.ceil))
          hpos (some-> bar (.-scrollLeft))
          hoff (some-> chain (.-offsetLeft))
-         
-         new-bar-left (and bar 
+         new-bar-left (and bar
                            (or always
                                (not (< hpos hoff (+ w hoff)
                                        (+ hpos bar-width))))
@@ -814,9 +764,8 @@
                 "\nAlways scroll?" always)
      (when (> h chain-height)
        (println "Too bigby " (- h chain-height) h chain-height))
-     
-     (when new-chain-top (.scrollTo chain #js{:top new-chain-top}))
-     (when new-bar-left  (.scrollTo bar   #js{:left new-bar-left})))))
+     (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
+     (when new-bar-left  (.scrollTo bar   #js {:left new-bar-left})))))
 
 (def ensure-selected-in-view!
   (-> (fn [] (scroll-to-selected! false))
@@ -856,9 +805,8 @@
                                                               (js/console.log "Promise/resolve" p)
                                                               (js/Promise.resolve p))
                                                    'all     (fn [a b c]
-                                                              (js/console.log "Proomise/all" a b c )
-                                                              (js/Promise.all a b c)
-                                                              )}}
+                                                              (js/console.log "Proomise/all" a b c)
+                                                              (js/Promise.all a b c))}}
                                   :bindings   {'jcl        (fn [z] (js/console.log z))
                                                'datafy     datafy/datafy
                                                'nav        datafy/nav
@@ -872,7 +820,6 @@
                                                'ingest     scivar-ingest
                                                'sel        scivar-sel
                                                '->seq      e/seq->seq
-                                               
                                                'slurp    (some-> (aget js/window "my_electron_bridge")
                                                               (aget "slurp"))
                                                'spit     (some-> (aget js/window "my_electron_bridge")
@@ -899,10 +846,9 @@
                                   (let [et (->> (get-selected-form db)
                                                 (move/move :move/most-upward))
                                         c  (e/->string et)
-                                        #_ (->> (e/->form et)
+                                        #_(->> (e/->form et)
                                                 (pr-str))]
                                     (println "Eval sci" c scivar-sel)
-                                    
                                     (try
                                       (let [_   (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
                                             _   (sci/alter-var-root scivar-ingest
@@ -925,7 +871,6 @@
                                                          (or
                                                           (ex-message e)
                                                           (str e))])
-                                        
                                         #_(js/console.log "SCI exception" e))))))
        (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
@@ -934,16 +879,12 @@
                                                    p (.-parentNode s)]
                                                (js/console.log s p)
                                                (.setAttribute s "class" (string/replace (.getAttribute s "class") "selected" ""))
-                                               (.setAttribute p "class" (str (.getAttribute p "class" ) " selected"))
-
-                                               )
-
+                                               (.setAttribute p "class" (str (.getAttribute p "class") " selected")))
                                            #_(let [q (peek (nav/parents-vec (get-selected-form db)))]
                                                (js/console.log
                                                 (zp-hacks/zprint-file-str
                                                  (e/->string q)
                                                  (:db/id q))))
-                                           
                                            #_(scroll-to-selected!)))
        (core/register-simple! :zp (fn [db _]
                                     (let [_         (js/console.time "formatting")
@@ -983,7 +924,6 @@
                                       (js/console.timeEnd "reconciling")
                                       (js/console.timeEnd "formatting")
                                       ans)
-                                           
                                     #_(scroll-to-selected!)))
        (core/register-mutation! :save
                                 (fn [_ db bus]
@@ -996,7 +936,6 @@
                                                   first)
                                         file  (or (:chain/filename chain) "noname.clj")]
                                     (println "Do save" chain)
-                                    
                                     (when chain
                                       (reset! save-status {:at (:max-tx db) :on (:db/id sel) :status :saving})
                                       (save* file (e/->string chain))
@@ -1019,13 +958,10 @@
           :execute
           (fn [_ db bus]
             (let [sel (get-selected-form db)]
-              (d/transact! conn )
-            
-              )))))))
-
+              (d/transact! conn))))))))
 
 (rum/defc example < rum/static
-  [init-form muts] 
+  [init-form muts]
   (let [conn (d/create-conn s/schema)
         form-txdata (e/->tx init-form)
         {:keys [db-after tempids] :as init-report}
@@ -1037,9 +973,7 @@
                                                :coll/_contains "bar"
                                                :coll/contains #{(:db/id form-txdata)}
                                                :seq/first form-txdata}}}])
-        
         toplevel-eid (get tempids (:db/id form-txdata))
-        
         reports (reductions
                  (fn [{:keys [db-after]} [m & args]]
                    (if-let [mut-fn (get mut/dispatch-table m)]
@@ -1055,7 +989,7 @@
                                   (ex-message e)]
                             [:p {} (with-out-str (cljs.pprint/pprint (ex-data e)))]
                             "Mutation"
-                            [:p {} (pr-str (into [m] args) )]
+                            [:p {} (pr-str (into [m] args))]
                             "At selected form"
                             [:p {} (with-out-str (cljs.pprint/pprint (d/touch (get-selected-form db-after))))]]})))
                      (throw (ex-info "No mutation" {:m m}))))
@@ -1079,14 +1013,12 @@
              [:div
               #_(pr-str (e/->form (get-selected-form db-after)))
               #_(pr-str (invar/check-all (:state/bar (d/entity db-after ::state))))
-              
               #_[:div ;; :details [:summary "SVG"]
                  [:div {:style {:display :flex :flex-direction :row}}
                   (cc/svg-viewbox (:state/bar (d/entity (:db-after other) ::state)) core/blackhole)
                   (cc/svg-viewbox (:state/bar (d/entity db-after ::state)) core/blackhole)]]
               #_(pr-str input-tx)
               [:div ;; :details[:summary "txdata"]
-               
                ^:inline (debug/datoms-table-eavt* tx-data)]
               #_[:div
                  (debug/datoms-table-eavt* (d/datoms db-after :eavt))]])]))]]))
@@ -1132,7 +1064,6 @@
        (apply concat)
        (vec)))
 
-
 (rum/defc player-mutation-view < rum/reactive
   [a]
   (let [v (rum/react a)]
@@ -1159,7 +1090,7 @@
        (async/go-loop [i 0
                        [m & more] muts
                        t nil]
-         (if (and t )
+         (if (and t)
            (swap! mv #(str "#" i " "
                            (/ (inc i)
                               (- (js/performance.now) t)
@@ -1190,16 +1121,14 @@
 
 (rum/defc debug-component
   []
-  [:div {:style {:margin-top "2ex"}  }
+  [:div {:style {:margin-top "2ex"}}
    #_(player
     '[a b c ^:form/highlight [a s d f] [l e l] [O] d]
     (some-random-mutations 10000))
-   
    (example
     '[a ^:form/highlight [] b c]
     #_[[:slurp-right] [:slurp-right]]
     [[:delete-right] [:barf-right] [:barf-right] [:delete-right] [:flow-left] [:barf-right]])
-   
    #_(example
       '[a ^:form/highlight b c [a a a]]
       [[:float] [:delete-left] [:flow-right] [:float]]
@@ -1236,16 +1165,13 @@
                             (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
                                 (.then #(.json %))
                                 (.then (fn [tree]
-                                         (js/console.log tree)
-                                         ))
-                                ))))))))
+                                         (js/console.log tree)))))))))))
 
 (defn fetch-json
   [u]
   (-> (js/fetch u)
       (.then #(.json %))
       (.then #(js->clj % :keywordize-keys true))))
-
 
 #_(defn stupid-github-crap
   []
@@ -1261,36 +1187,26 @@
                             (-> (js/fetch (-> commit js->clj (get "tree") (get "url")))
                                 (.then #(.json %))
                                 (.then (fn [tree]
-                                         (js/console.log tree)
-                                         ))
-                                ))))))))
-
+                                         (js/console.log tree)))))))))))
 
 (defn stupid-github-crap
   []
   (a/let [ref    (fetch-json "https://api.github.com/repos/babashka/sci/git/ref/heads/master")
-          commit (fetch-json (-> ref :object :url)) 
+          commit (fetch-json (-> ref :object :url))
           tree   (fetch-json (-> commit :tree :url))]
-    
-    #_(cljs.pprint/pprint tree))) 
+    #_(cljs.pprint/pprint tree)))
 
 (defn  ^:dev/after-load init []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
-  
-  
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (h/clear!)
-  
   #_(stupid-github-crap)
-  
-  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)] 
-    
+  (let [{:keys [conn bus]} (setup-app #_the-singleton-db)]
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
     #_(stupid-github-crap)
-    
     #_(go
         (async/<!
          (async/onto-chan!
@@ -1328,7 +1244,6 @@
              [:reify-undo]]
           false))
         (println "We did it"))
-    
     ;; document.write(process.versions['electron'])
     (rum/mount
      #_(debug-component)
@@ -1336,88 +1251,201 @@
      (.getElementById js/document "root"))))
 
 ;; Single highlight, in DB
+
+
 ;; - Mutations find it? With a lookup ref [highlight true]
+
+
 ;; - Mutations set it? In the tx-data
+
+
 ;; - fcc renders it?  From the entity
+
+
 ;; Single highlight outside
+
+
 ;; - Find? Protocol method
+
+
 ;; - Set?
+
+
 ;; -- Actions either:
+
+
 ;; -- -- Pure movement
+
+
 ;; -- -- Pure mutation, leaves selection the same
+
+
 ;; -- -- Create something and select it
+
+
 ;; -- -- Do something then select something which existed already (deletion)
+
+
 ;; -- -- What about doing a modification and selecting something which didn't already exist?
+
+
 ;; -- When you want to move the selection from a mutation:
+
+
 ;; -- Either the target already exists so you can find it ahead of time
+
+
 ;; -- Or it does not in which case you must be creating it and can supply a tempid
+
+
 ;; - Render? Equality check with protocol method
+
+
 ;; Multi highlight in DB
+
+
 ;; - Find? Lookup ref [highlight me]
+
+
 ;; - Set? In the tx-data
+
+
 ;; - Render? From the entity - but what if cursors overlap?
+
+
 ;; Multi highlight outside
 
 
 ;; Fix the modeline changing size and reflowing
+
+
 ;; Implement deletion-chain / reparenting
+
+
 ;; Implement comma
-;; 
+
+
+;;
+
 
 ;; Make the mutations all take the selection as the parameter
+
+
 ;; Make the mutations set the selection with a special tempid
+
+
 ;; Move all mention of form/highlight to core api methods
+
+
 ;; Reimplement it as atom holding an entity and see what happens
+
 
 ;; Scroll is not cleanly unmounted on reload?
 
 
 ;; Dogfooding
+
+
 ;; Round trip:
+
+
 ;; text file -> rewrite clj parser -> db -> string
 
+
 ;; Scroll on settimeout so we don't query the dom and mutate it again immediately
+
+
 ;; Buffer all of the comments you write and use them as a commit msg
 
+
 ;; keyword-value, symbol-value etc...
+
+
 ;; REALLY stupid compared to token/type because of multiple queries
 
+
 ;; Derefs, syntax quotes, etc - give them seq/first but make them not collections?
+
+
 ;; Have to change stuff to check seq/first before coll/type...
+
+
 ;; But if we check coll/type don't we always check seq/first anyway so it doesn't matter?
+
 
 ;; Insert within chain should automatically give ()s
 
+
 ;; Fix scrolling
 
+
 ;; If you want to re-use the exact same db state for undos and inverse mutations:
+
+
 ;; -- You need to increment max-tx and use that as a unique identifier for a state
+
+
 ;; -- You cannot store historical tx-reports because they might be backwards
+
+
 ;; --
 
+
 ;; Highlight the inactive chain/selections...
+
+
 ;; COW clone?????
 
+
 ;; Aliases are a huge problem for scrolling because how do you know what to center?
+
+
 ;; Suppose I alias the same form and put one copy at each corner of the screen, then what?
+
+
 ;; The best it can really do is pick the one under the alias with the highest db/id
+
+
 ;; Even if it does then, then how do you implement go-to-next-alias?
+
+
 ;; That's not even to mention the fact that it FORCES queryselectorall?
 
 
 ;; C-1   reparents the form to register 1
+
+
 ;; --    yanks from register 1
+
+
 ;; --    duplicates register 1 at cursor
-;; --    executes register 1  
+
+
+;; --    executes register 1
+
 
 ;; C-1    taken by chrome
+
+
 ;; S-1    inserting special forms
-;; M-1    - 
+
+
+;; M-1    -
+
+
 ;; C-S-1  -
+
+
 ;; C-M-1  -
+
+
 ;;
+
 
 ;; Fulltext index all the strings and commit messages?
 
+
 ;; Remember the scroll position when the chain remounts
+
+
 ;; Offer is broken on strings

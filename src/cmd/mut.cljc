@@ -17,7 +17,9 @@
    (move-selection-tx (:db/id (get-selected-form db))
                       eid)))
 
-;; second movement type is plan B in case we are asked to delete first/last of chain 
+;; second movement type is plan B in case we are asked to delete first/last of chain
+
+
 (defn move-and-delete-tx
   [db mta mtb]
   (let [src (get-selected-form db)]
@@ -34,7 +36,6 @@
                       (-> (:form/indent sel)
                           (or 0)))]]))
 
-
 (defn linebreak-selected-form-tx
   [db]
   (let [sel           (get-selected-form db)
@@ -44,9 +45,6 @@
      (when parent-indent
        [:db/add (:db/id sel) :form/indent parent-indent])]))
 
-
-
-
 (defn recursively-set-indent-tx
   [db indent]
   (->> (get-selected-form db)
@@ -55,7 +53,6 @@
        (keep (fn [e]
                (when (:coll/type e)
                  [:db/add (:db/id e) :form/linebreak indent])))))
-
 
 #_(defn select-1based-nth-reverse-parent
   [sel n]
@@ -120,18 +117,12 @@
            add? (cons x)))))
    nmv #{}))
 
-
 (comment
   (run! prn
         (map e/->form
              (no-double-colls-lazy (lazy-bfs (e/->entity
                                          '(defn bar [{:keys [a b]}]))))))
-
-  (map :db/id (lazy-bfs (e/->entity '[:a :b :c [[[:dd [:bv [:ok]]]]]])))
-  
-  )
-
-
+  (map :db/id (lazy-bfs (e/->entity '[:a :b :c [[[:dd [:bv [:ok]]]]]]))))
 
 (defn get-numeric-movement-vec
   [sel]
@@ -143,7 +134,7 @@
 (defn numeric-movement
   [n sel]
   (when-let [nmv (get-numeric-movement-vec sel)]
-    #_(println "NMove" n sel )
+    #_(println "NMove" n sel)
     #_(run! prn (map vector (range) nmv))
     (when (< -1 n (count nmv))
       (nth nmv n))))
@@ -166,7 +157,7 @@
         nn {:db/id "nn"
             :token/type :verbatim
             :token/value (pr-str c)}
-        tx 
+        tx
         (into [nn]
               (edit/insert-before-tx (:seq/first ee) nn))]
     (println "TXXX" tx)
@@ -188,7 +179,6 @@
              (for [[e a v t a?] (d/datoms db :avet :eval/of)
                    :when a?]
                (edit/form-delete-tx (d/entity db e)))))
-    
     #_(into [new-node]
             (if (= (:db/id et) (:db/id (:eval/of prev)))
               (edit/form-overwrite-tx prev (:db/id new-node))
@@ -221,7 +211,6 @@
       hct
       [[:db/retract (:db/id e) :hidden/coll-type hct]
        [:db/add (:db/id e) :coll/type hct]]
-      
       ct
       [[:db/add (:db/id e) :hidden/coll-type ct]
        [:db/add (:db/id e) :coll/type :hidden]])))
@@ -231,7 +220,7 @@
   (let [new-node {:db/id       "eval-result"
                   :token/type  :string
                   :token/value (pr-str (e/->form sel))}]
-    (prn "RPPRS" new-node )
+    (prn "RPPRS" new-node)
     (into [new-node]
           (concat
            (edit/form-overwrite-tx sel "eval-result")
@@ -239,10 +228,11 @@
 
 (defn unary-arith
   [f e]
-  (when (= :number (:token/type e)) 
+  (when (= :number (:token/type e))
     [[:db/add (:db/id e) :token/value (f (:token/value e))]]))
 
 (def plus*  (partial unary-arith inc))
+
 (def minus* (partial unary-arith dec))
 
 (defn hoist-tx
@@ -280,9 +270,9 @@
     (concat (edit/form-wrap-tx sel :uneval)
             (when dst (move-selection-tx (:db/id sel) (:db/id dst))))))
 
-
-
 ;; This is junk because of retracting the highlight properly
+
+
 (defn stitch*
   [sel e]
   (when-let [head (:seq/first e)]
@@ -304,7 +294,7 @@
   [sel]
   (when-let [vs (:token/value sel)]
     (let [tt (:token/type sel)
-          [head & more] (string/split vs #"[./\-]")]
+          [head & more] (string/split vs ##"[./\-]")]
       (into [[:db/add (:db/id sel) :token/value head]
              (when more
                [:db/add "newnode" :seq/next "newtail"])
@@ -336,7 +326,7 @@
   [sel]
   (when-let [text (:token/value sel)]
     (let [db  (d/entity-db sel)
-          ln  (str text "\udbff\udfff")
+          ln  (str text "􏿿")
           ir  (filter (fn [[e a v t]] (= v text)) (d/index-range db :token/value text ln))
           fnf (find-next* (:db/id sel) ir)]
       (d/entity
@@ -348,7 +338,7 @@
 (defn find-first
   ([sel]
    (when-let [text (:token/value sel)]
-     (let [ln  (str text "\udbff\udfff")
+     (let [ln  (str text "􏿿")
            ir  (d/index-range (d/entity-db sel) :token/value text ln)
            dst (apply min (map first ir))]
        (when (and dst (not= dst (:db/id sel)))
@@ -370,7 +360,7 @@
   [sel]
   (let [new-node {:db/id "newbar"
                   :coll/type :bar
-                  :coll/contains #{"newchain"} 
+                  :coll/contains #{"newchain"}
                   :seq/first {:db/id "newchain"
                               :coll/contains #{"newnode"}
                               :coll/type :chain
@@ -393,14 +383,12 @@
         target      (or (:chain/selection other-chain)
                         (:seq/first other-chain))
         target-tl   (peek (nav/parents-vec target))
-        
         new-sel (move/move :move/backward-up sel)]
     (into (edit/form-unlink-tx sel)
           (cond
             target-tl
             (concat (edit/insert-before-tx target-tl sel)
                     (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
-      
             (and chain (nil? other-chain))
             (let [new-chain {:db/id "newchain"
                              :coll/type :chain
@@ -410,8 +398,8 @@
                       (chain-inserter chain new-chain)
                       (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
 
-
 (def drag-left-tx  (partial drag* :move/prev-sibling edit/insert-before-tx))
+
 (def drag-right-tx (partial drag* :move/next-sibling edit/insert-after-tx))
 
 (defn chain-from-text
@@ -455,17 +443,15 @@
 (def editing-commands
   {:float (comp edit/exchange-with-previous-tx get-selected-form)
    :sink  (comp edit/exchange-with-next-tx get-selected-form)
-   
    :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
    :hop-left     nav/hop-left
    :hop-right    nav/hop-right
-   
    :uneval                         (comp uneval-and-next get-selected-form)
    :insert-right                   (comp edit/insert-editing-after get-selected-form)
    :insert-left                    (comp edit/insert-editing-before get-selected-form)
    ;; :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
    :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
-   :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)) 
+   :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-edit-next-node (fn [db text] (->> text (insert/finish-edit-and-edit-next-tx (d/entity db [:form/editing true]))))
    :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
@@ -490,11 +476,11 @@
                                      (let [sel (get-selected-form db)]
                                        (into [[:db/add (:db/id sel) :form/linebreak true]]
                                              (edit/insert-editing-before sel sel
-                                                                         (cond-> {:token/type :comment 
+                                                                         (cond-> {:token/type :comment
                                                                                   :form/linebreak true
                                                                                   :form/edit-initial ";; "}
                                                                            (:form/indent sel)
-                                                                           (assoc  :form/indent  (:form/indent sel ))) ))))
+                                                                           (assoc  :form/indent  (:form/indent sel)))))))
    :open-chain (fn [db t props]
                  (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
@@ -519,6 +505,4 @@
 
 (def dispatch-table
   (merge movement-commands
-         editing-commands
-         ))
-
+         editing-commands))
