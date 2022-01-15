@@ -94,9 +94,7 @@
                                :text new-text
                                :valid (some? token)
                                :type (some-> token first val)})
-                      #_(prn "PTT" token )
-                      nil
-                      )
+                      nil)
       :on-key-down (fn [ev]
                      (when-let [mut (editbox-keydown-mutation
                                      value
@@ -104,7 +102,5 @@
                        (.preventDefault ev)
                        (.stopPropagation ev)
                        (core/send! bus mut)
-                       #_(async/put! bus mut)))
-      ;; :on-blur #(pub! [:edit/finish @text])
-      }]))
+                       #_(async/put! bus mut)))}]))
 

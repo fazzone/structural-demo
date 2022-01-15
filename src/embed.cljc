@@ -33,11 +33,6 @@
     (cond-> {:seq/first x}
       (next xs) (assoc :seq/next (seq-tx (next xs))))))
 
-
-(seq-tx [1 2 3 4])
-;; => #:seq{:first 1, :next #:seq{:first 2, :next #:seq{:first 3, :next #:seq{:first 4}}}}
-
-
 (defn svtx
   [input]
   (loop [acc      (transient [])
@@ -274,7 +269,7 @@
           :keyword (str (:token/value e))
           :string  (pr-str (:token/value e))
           :number  (str (:token/value e))
-          :comment (:token/value e)
+          :comment (str (:token/value e) "\n")
           :regex (str "#" (:token/value e))))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
