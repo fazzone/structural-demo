@@ -2,11 +2,10 @@
   (:require
    [db-reactive :as dbrx]
    [clojure.set :as set]
-   [embed  :as e ]
+   [embed  :as e]
    [rum.core :as rum]))
 
 (declare onecell)
-
 
 #_(defn conscell-layout-bfs
   [top]
@@ -19,11 +18,8 @@
       (recur
        (cond-> (or front [])
          (:seq/next e) (conj (:seq/next e))
-         (:seq/first e) (conj (:seq/first e))
-         )
-       (conj out e))
-      )))
-
+         (:seq/first e) (conj (:seq/first e)))
+       (conj out e)))))
 
 #_(defn conscell-layout-bfs
   [top]
@@ -39,7 +35,6 @@
            (cond-> (pop front)
              car (conj car)
              cdr (conj cdr))
-
            (conj out e))))))
 
 #_(defn conscell-layout-bfs
@@ -52,21 +47,18 @@
     (cond
       (< 99 i)
       out
-      
       (seq nextfront)
       (let [e (peek nextfront)]
         #_(println "Next " (:db/id e))
         (recur  (inc i) (conj out e)
                 (cond-> (pop nextfront) (:seq/next e) (conj (:seq/next e)))
                 (cond-> firstfront (:seq/first e) (conj (:seq/first e)))))
-      
       (seq firstfront)
       (let [e (first firstfront)]
         #_(println "First " (:db/id e))
         (recur  (inc i) (into out [{:db/id :FF} e])
                 (cond-> nextfront (:seq/next e) (conj (:seq/next e)))
                 (cond-> (subvec firstfront 1) (:seq/first e) (conj (:seq/first e)))))
-      
       :else out)))
 
 (defn conscell-layout-bfs
@@ -86,18 +78,15 @@
                 (conj out e)
                 (cond-> (pop nextfront) (:seq/next e) (conj (:seq/next e)))
                 (cond-> firstfront (:seq/first e) (conj [npc (:seq/first e)]))))
-      
       (seq firstfront)
       (let [[prev-npc e] (peek firstfront)]
-        (println "first" (:db/id e)  (inc fpc) prev-npc) 
+        (println "first" (:db/id e)  (inc fpc) prev-npc)
         (recur prev-npc
                (inc fpc)
                (into out [{:db/id :FF} e])
                (cond-> nextfront (:seq/next e) (conj (:seq/next e)))
                (cond-> (pop firstfront) (:seq/first e) (conj [prev-npc (:seq/first e)]))))
-      
       :else out)))
-
 
 (defn compute-thing
   [top]
@@ -106,7 +95,6 @@
          id->depth {}]
     (if (empty? front)
       (do
-        
         (doseq [i (sort (vec (set (concat (keys id->length)
                                           (keys id->depth)))))]
           (prn i (id->length i) (id->depth i)))
@@ -131,8 +119,6 @@
                   (map vector
                        (map :db/id downwards)
                        (iterate dec (count downwards))))))))))
-
-
 
 (defn compute-conscell-extents
   [root]
@@ -166,8 +152,6 @@
     (go root start-row start-col)
     @acc))
 
-
-
 #_(defn conscell-collides?
   [node proposed-row proposed-col]
   (let [go (fn go [subnode row col]
@@ -183,16 +167,12 @@
 
 (defn conscell-collides?
   [root row col check-row check-col]
-  (println "Check collision" (:db/id root) "@" check-row check-col )
+  (println "Check collision" (:db/id root) "@" check-row check-col)
   (let [go (fn go [node row col]
-             
              (println "Check" (:db/id node) "@" row col)
              (if (and (= row check-row)
                       (= col check-col))
-               
                [(:db/id node) row col]
-               
-               
                (or (some-> (:seq/next node)
                            (go row (inc col)))
                    (some-> (:seq/first node)
@@ -220,7 +200,6 @@
           [:text {:x x :y (- y 4)} (pr-str ct)])
         [:rect {:x x :y y :fill :none :width size :height size}]
         [:rect {:x (+ x size) :y y :fill :none :width size :height size}]))
-     
      (when-let [cdr (:seq/next node)]
        (let [arrowleft  (+ x (* 3 half))
              [rmax-below cmax-after] (compute-conscell-extents (:seq/next node))
@@ -243,8 +222,7 @@
                         0))]
          (rum/fragment
           (onecell car bus size droop col (assoc taken [row col] (:db/id node)))
-          
-          [:path {:marker-end "url(#head)" 
+          [:path {:marker-end "url(#head)"
                   :d          (str "M" (str (+ x half)) "," (str (+ y half))
                                    " V" (str (- (* height droop) half)))}]))))))
 
@@ -255,7 +233,7 @@
     [:g {:stroke "#ae81ff" :fill "#ae81ff"}
      (onecell* node bus size row col taken)]))
 
-(rum/defcs svg-viewbox < 
+(rum/defcs svg-viewbox <
   {:init (fn [state props]
            (assoc state
                   :computed-size (some-> state :rum/args first (compute-conscell-extents))
@@ -265,8 +243,8 @@
         [rmax cmax] computed-size
         width (* 3.5 size (inc cmax))
         ;; height (* 2.5 size (inc rmax))
-        height (* 4.5 size (inc rmax))
-        ]
+
+        height (* 4.5 size (inc rmax))]
     #_(prn "Computer size" computed-size)
     #_(conscell-layout-bfs root)
     #_(compute-thing root)
@@ -280,7 +258,6 @@
           :transform (str "translate(" size "," size ")")
           :fill "#fff"
           :stroke-width 1}
-      
       (onecell root bus size 0 0 taken-pos)]
      #_(for [i (range 9)]
          [:rect {:key i
@@ -290,5 +267,3 @@
                  :y 0
                  :width (* i 3.5 size)
                  :height (* i 4 size)}])]))
-
-

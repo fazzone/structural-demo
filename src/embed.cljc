@@ -8,14 +8,12 @@
    [clojure.string :as string]
    [datascript.core :as d]))
 
-
-
 (def some-map
   {:this :is
    :my :map
-   #_ #_ :ignored :value})
+   #_#_:ignored :value})
 
-(defonce tempid-counter (atom 0) )
+(defonce tempid-counter (atom 0))
 
 (defn new-tempid [] (swap! tempid-counter dec))
 
@@ -62,10 +60,8 @@
                (case (n/tag x)
                  (:comma :whitespace)
                  (recur xs id (+ isf (count (n/string x))) nl acc)
-
                  :newline
                  (recur xs id 0 true acc)
-
                  :comment
                  (recur xs id 0 true
                         (conj acc
@@ -73,7 +69,6 @@
                                 true      (assoc :coll/_contains id)
                                 nl        (assoc :form/linebreak nl)
                                 (< 0 isf) (assoc :form/indent isf))))
-
                  (recur xs id 0 nil
                         (conj acc (cond-> (n->tx x isf)
                                     true      (assoc :coll/_contains id)
@@ -98,7 +93,6 @@
              (true? v)   {:token/type :symbol :token/value "true"}
              (false? v)  {:token/type :symbol :token/value "false"}
              :else       (throw (ex-info (str "What token is this? " (pr-str n)) {})))))
-       
        :list    (coll-tx :list (n/children n))
        :vector  (coll-tx :vec (n/children n))
        :map     (coll-tx :map (n/children n))
@@ -117,37 +111,33 @@
                   (coll-tx :meta (n/children n))
                   #_{:coll/type :meta
                      :coll/contains #{"m" "v"}
-                     :seq/first  9
-                     }
+                     :seq/first  9}
                   #_(n->tx val))
-       
        ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
+
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
+
        :reader-macro
        (let [[rmt & body] (n/children n)]
          (coll-tx :reader-macro (n/children n))
          #_(-> (coll-tx :reader-macro body)
                (assoc :reader-macro/dispatch (n/string rmt))))
-       
        :namespaced-map (coll-tx :map (n/children n))
        :uneval         (coll-tx :uneval (n/children n))
-       
        :fn               (coll-tx :fn (n/children n))
        :quote            (coll-tx :quote (n/children n))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
        :syntax-quote     (coll-tx :syntax-quote (n/children n))
        :unquote          (coll-tx :unquote (n/children n))
        :unquote-splicing (coll-tx :unquote-splicing (n/children n))
        :var              {:token/type :symbol :token/value (n/string n)}
        :regex            {:token/type :regex :token/value (n/string n)}
-       
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
 
 (defn string->tx
   [s]
-  (n->tx (p/parse-string s )))
-
-
+  (n->tx (p/parse-string s)))
 
 (declare ->tx)
 
@@ -158,7 +148,7 @@
               (cond-> {:db/id id :coll/type coll-type}
                 (seq xs) (merge (seq-tx (for [x xs]
                                           (assoc (->tx x) :coll/_contains id)))))))]
-    (cond 
+    (cond
       (symbol? e)     {:token/type :symbol :token/value (str e)}
       (keyword? e)    {:token/type :keyword :token/value (str e)}
       (string? e)     {:token/type :string :token/value e}
@@ -169,8 +159,7 @@
       (map? e)        (coll-tx :map (flatten-map e))
       (set? e)        (coll-tx :set e)
       (sequential? e) (coll-tx :list e)
-      
-      #?@(:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
+      #?@ (:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
                  (instance? js/URL e)  {:token/type :string :token/value (str e)}])
       :else (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
 
@@ -178,7 +167,7 @@
   [e]
   (merge (meta e) (->tx* e)))
 
-#?(:clj
+#? (:clj
    (defn seq->vec
      ([e]
       (seq->vec e []))
@@ -187,7 +176,7 @@
         (recur (:seq/next e) (conj a f))
         a))))
 
-#?(:cljs
+#? (:cljs
    (defn seq->vec
      [e]
      (let [out #js []
@@ -222,8 +211,6 @@
         :number (:token/value e)
         :string (:token/value e))))
 
-
-
 (defn open-delim
   [ct]
   (case ct
@@ -251,7 +238,7 @@
     :map  "}"
     :set  "}"
     :fn   ")"
-    :tear "»" 
+    :tear "»"
     nil))
 
 (defn ->string
@@ -277,9 +264,7 @@
            (open-delim ct)
            (cond
              (nil? x) nil
-             
              (nil? xs) (str (sep x) (->string x (+ 2 i)))
-             
              :else
              (loop [p        nil
                     [y & ys] xs
@@ -296,16 +281,13 @@
                                     (->string y (+ 2 i))))))))
            (close-delim ct))))))))
 
-
-
-
 (defn string->tx-all
   [s]
   (n->tx
    (n/forms-node
     (filter (comp not #{:whitespace :newline} n/tag)
             (n/children (p/parse-string-all s)))))
-  #_(n->tx (p/parse-string-all s )))
+  #_(n->tx (p/parse-string-all s)))
 
 (defn ->chain
   [text]
@@ -315,14 +297,12 @@
                   [txe])]
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
 
-
 (defn ->entity
   [data]
   (let [txe (update (->tx data) :db/id #(or % "top"))
         r (d/with (deref (d/create-conn s/form-schema))
                   [txe])]
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
-
 
 (defn roundtrip
   [data]
@@ -338,7 +318,7 @@
   (= data (roundtrip data)))
 
 (comment
-  (test-roundtrip '( :a :b {:keys [db-after tempids]}))
+  (test-roundtrip '(:a :b {:keys [db-after tempids]}))
   (test-roundtrip
    '(defn test-roundtrip
       [data]
@@ -350,15 +330,3 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
-
-
-
-
-
-
-
-
-
-
-
-

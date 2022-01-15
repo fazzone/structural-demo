@@ -13,5 +13,3 @@
 (defmacro macro->tx [a]
   (e/string->tx-all
    (clojure.core/slurp a)))
-
-

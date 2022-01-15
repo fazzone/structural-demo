@@ -21,31 +21,40 @@
          prev  (some-> spine :seq/_next first)]
      (into [(if r?
               [:db/retractEntity (:db/id e)]
-              (let [coll (exactly-one (:coll/_contains e)) ]
+              (let [coll (exactly-one (:coll/_contains e))]
                 [:db/retract (:db/id coll) :coll/contains (:db/id e)]))
             [:db/retract (:db/id spine) :seq/first (:db/id e)]]
            (cond
              (and prev next)            ; middle element
+
              [[:db/retract (:db/id spine) :seq/next (:db/id next)]
               [:db/add (:db/id prev) :seq/next (:db/id next)]]
-       
              prev                       ; last element
+
              [[:db/retract (:db/id prev) :seq/next (:db/id spine)]
               [:db/retract (:db/id spine) :seq/next (:db/id next)]]
-       
              next                       ; first element
+
              [[:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
               ;; keep our spine, retract next spine - preserve coll/type etc
+
               [:db/retractEntity (:db/id next)]
               (if-let [n (:seq/next next)]
                 [:db/add (:db/id spine) :seq/next (:db/id n)]
                 [:db/retract (:db/id spine) :seq/next (:db/id next)])])))))
 
 (defn form-delete-tx [e] (form-delete* e true))
+
 (defn form-unlink-tx [e] (form-delete* e false))
 
 ;; overwrite with something that has not existed before
+
+
+
 ;; if you have a tempid, you want this one
+
+
+
 (defn form-overwrite-tx
   "rplaca"
   [e replacement-eid]
@@ -58,7 +67,13 @@
        [:db/add (:db/id spine) :seq/first replacement-eid]])))
 
 ;; replace with something from somewhere else
+
+
+
 ;; if you have a second entity, you want this one
+
+
+
 (defn form-replace-tx
   [e r]
   (let [old-parent (first (:coll/_contains r))
@@ -105,7 +120,7 @@
                    :seq/first (:db/id target)}}
        [:db/add (:db/id coll) :coll/contains (:db/id new-node)]
        (when-let [next (:seq/next spine)]
-         [:db/add "insert-before-cons" :seq/next (:db/id next) ])])))
+         [:db/add "insert-before-cons" :seq/next (:db/id next)])])))
 
 (defn insert-into-empty-tx
   [target new-node]
@@ -126,7 +141,7 @@
   (let [new-node (merge {:db/id "newnode"
                          :form/editing true
                          :form/edit-initial ""}
-                        props)] 
+                        props)]
     (into [new-node]
           (concat (inserter target new-node)
                   (move-selection-tx (:db/id from) (:db/id new-node))))))
@@ -155,11 +170,11 @@
 
 (defn form-duplicate-tx
   [e]
-  (letfn [(dup-spine [parent head] 
+  (letfn [(dup-spine [parent head]
             (if-let [x (:seq/first head)]
-              (cond-> {:seq/first (assoc (form-duplicate-tx x) :coll/_contains parent )}
+              (cond-> {:seq/first (assoc (form-duplicate-tx x) :coll/_contains parent)}
                 (:seq/next head) (assoc :seq/next (dup-spine parent (:seq/next head))))))]
-    (cond 
+    (cond
       (:token/type e) {:token/type (:token/type e)
                        :token/value (:token/value e)}
       (:coll/type e)  (let [us (e/new-tempid)]
@@ -206,18 +221,16 @@
            (form-overwrite-tx sel "first")
            (move-selection-tx (:db/id sel) "first")))))
 
-
 (defn begin-edit-existing-node-tx
   [e]
   [[:db/add (:db/id e) :form/editing true]])
-
 
 (defn edit-new-wrapped*
   [inserter target from ct init opts]
   (let [new-node (merge opts
                         {:db/id "newnode"
                          :coll/type ct
-                         :coll/contains "inner" 
+                         :coll/contains "inner"
                          :seq/first {:db/id "inner"
                                      :coll/_contains "newnode"
                                      :form/edit-initial (or init  "")
@@ -266,6 +279,9 @@
          [:db/retract (:db/id spine) :seq/next (:db/id next)])])))
 
 ;; [a [b c] d] -> [a [b] c d]
+
+
+
 (defn barf-right-tx
   [e]
   (let [spine     (some-> e :seq/_first exactly-one)
@@ -279,21 +295,17 @@
     #_(println "E" (:db/id e) "Spine" (:db/id spine) "Coll" (:db/id coll) "Next" (:db/id next) "PU" (:db/id penult) "LC" (:db/id last-cons))
     (cond
       (nil? (:coll/type e)) (recur coll)
-      
       (= :bar (:coll/type coll)) nil
-      
       (= (:db/id e) (:db/id last-cons))
       (when (:seq/first e)
         [[:db/retract (:db/id e) :coll/contains (:db/id (:seq/first e))]
          [:db/retract (:db/id e) :seq/first (:db/id (:seq/first e))]
          [:db/add (:db/id coll) :coll/contains (:db/id (:seq/first e))]
-         
          {:db/id (:db/id spine)
           :seq/next {:db/id     "bnc"
                      :seq/first (:db/id (:seq/first e))}}
          (when next
            [:db/add "bnc" :seq/next (:db/id next)])])
-      
       :else
       [[:db/add (:db/id coll) :coll/contains (:db/id (:seq/first last-cons))]
        [:db/retract (:db/id e) :coll/contains (:db/id (:seq/first last-cons))]
@@ -312,7 +324,7 @@
        (edit-new-wrapped* insert-before-tx target from :list "" props)
        (insert-editing* insert-before-tx target from props)))))
 
-(defn insert-editing-after 
+(defn insert-editing-after
   ([sel] (insert-editing-after sel sel))
   ([target from] (insert-editing-after target from nil))
   ([target from props]
@@ -323,7 +335,8 @@
 
 (defn form-split-tx
   [e]
-  ;; split the parent, making sel the first of a new coll of the same type 
+  ;; split the parent, making sel the first of a new coll of the same type
+
   (let [spine (some-> e :seq/_first exactly-one)
         coll  (some-> e :coll/_contains exactly-one)
         prev  (some-> spine :seq/_next exactly-one)
@@ -373,7 +386,7 @@
                                                                  (:seq/first e)
                                                                  prev
                                                                  coll)))))
-             #_ (into [
+             #_(into [
                        (if prev
                          [:db/add (:db/id prev) :seq/next (:db/id (:seq/first coll))]
                          [:db/add (:db/id coll) :seq/first (:db/id (:seq/first coll))])
@@ -392,15 +405,11 @@
     (:token/type sel)
     [[:db/retract (:db/id sel) :token/value (:token/value sel)]
      [:db/add (:db/id sel) :form/editing true]]
-    
     (nil? (:seq/first sel))
     (insert-editing* insert-into-empty-tx sel sel nil)
-    
     :else
     (let [last-cons (loop [s sel]
                       (if-let [n (:seq/next s)]
-                        (recur n) 
+                        (recur n)
                         s))]
       (insert-editing-after (:seq/first last-cons) sel))))
-
-

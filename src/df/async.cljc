@@ -1,6 +1,6 @@
 (ns ^:no-doc df.async
   (:refer-clojure :exclude [let promise])
-  #?(:cljs (:require-macros df.async)))
+  #? (:cljs (:require-macros df.async)))
 
 (defmacro do [& body]
   (reduce
@@ -17,4 +17,3 @@
                  `(.then (js/Promise.resolve ~v)
                          (fn [~n] ~body)))
                `(df.async/do ~@body))))
-

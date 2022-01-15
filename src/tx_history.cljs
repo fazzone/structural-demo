@@ -5,10 +5,12 @@
    [cljs.core.async :as async]
    [rum.core :as rum]))
 
-
 (def log2size 8)
+
 (def history-index (atom 0))
+
 (def history-size (bit-shift-left 1 log2size))
+
 (def history-buffer (js/Array. history-size))
 
 (defn clear!
@@ -52,7 +54,6 @@
       (if (get @toggle ::self)
         "Hide history"
         "Show history")]
-
      (when (get @toggle ::self)
        [:div
         [:button
@@ -82,7 +83,6 @@
                   [:div
                    "kbd"
                    [:pre (pr-str (:kbd tx-meta))]
-                   
                    "input"
                    [:pre (with-out-str
                            (cljs.pprint/pprint (:input-tx-data tx-meta)))]
@@ -94,7 +94,7 @@
                        [:button
                         {:on-click (fn [ev]
                                      (async/put! the-bus
-                                                 [:page/import-data-toplevel mut ]))}
+                                                 [:page/import-data-toplevel mut]))}
                         "Edit mutation"])
                    [:button
                     {:on-click (fn [ev]
@@ -112,8 +112,6 @@
   []
   (revert-txdata
    (:tx-data (aget history-buffer (first (backwards-index-seq))))))
-
-
 
 (def last-tx-report (atom nil))
 

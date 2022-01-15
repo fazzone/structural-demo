@@ -24,13 +24,11 @@
                                          :seq/first ftx}}}])))
 
 (defn run
-  [init-form muts] 
+  [init-form muts]
   (let [conn (d/create-conn s/schema)
         form-txdata (e/->tx init-form)
         {:keys [db-after tempids] :as init-report}
-        (d/transact! conn
-                     )
-        
+        (d/transact! conn)
         reports (reductions
                  (fn [{:keys [db-after]} [m & args]]
                    (if-let [mut-fn (get mut/dispatch-table m)]
@@ -76,12 +74,10 @@
                        (recur (inc i) db mutations))
         mut-error  {:i i ::mut-error (ex-message (:e mut-error)) :muts (conj mutations mut)}
         tx-error   {:i i ::tx-error (ex-message (:e tx-error)) :muts (conj mutations mut)}
-        (< i maxn) (recur (inc i) ndb (conj mutations mut))  
+        (< i maxn) (recur (inc i) ndb (conj mutations mut))
         :else      nil))))
 
-
 (comment
-
   (+ 18 18 9 9 9)
   (def the-future
     (future
@@ -90,4 +86,3 @@
          (prn i)
          (when-let [r (search-for-failure '[a ^:form/highlight b c] 9544)]
            (prn r)))))))
-

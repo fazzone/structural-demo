@@ -25,7 +25,7 @@
                     (.setState rc (fn setstate-arx [state props]
                                     (let [rst (aget state :rum/state)]
                                       (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                                      state)))))] 
+                                      state)))))]
     (js/window.setTimeout
      flush-cbq
      0))
@@ -35,7 +35,8 @@
                     state))))
 
 (def ereactive
-  ;; mixin for components taking [entity bus ...] 
+  ;; mixin for components taking [entity bus ...]
+
   {:init          (fn [{:rum/keys [react-component] :as state} props]
                     (let [[ent bus & args] (some-> state :rum/args)
                           ch               (async/chan)
@@ -48,20 +49,17 @@
                           (update-first-arg! react-component updated-entity)
                           (recur)))
                       ;; subscribe to updates about entity
+
                       (core/connect-sub! bus (:db/id ent) ch)
                       (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [old-state {::keys [nupdate] :as new-state}]
-                    
                     (when @nupdate
                       (reset! nupdate false)
                       true)
-                    
                     #_(let [[e _ & old-props] (:rum/args old-state)
                             [_ _ & new-props] (:rum/args new-state)]
                         #_(println " " (:db/id e) "Old props" old-props
                                    "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
-                      
-                      
                         #_(cond
                             (not= old-props new-props) true
                             (some? @nupdate)           (not (reset! nupdate false)))))
@@ -84,12 +82,11 @@
                       state))
    :did-mount (fn [state]
                 #_(js/console.log (rum/dom-node state))
-                state
-                )
-   })
+                state)})
 
 (defn areactive
   ;; mixin for components taking [db bus ...]
+
   [& as]
   {:init
    (fn [{:rum/keys [react-component] :as state} props]
@@ -100,6 +97,7 @@
            (update-first-arg! react-component db)
            (recur)))
        ;; subscribe to updates about each attr
+
        (doseq [a as]
          (core/connect-sub! bus a ch))
        (assoc state ::areactive.chan ch)))
@@ -110,15 +108,3 @@
        (doseq [a as]
          (core/disconnect-sub! bus a ch)))
      state)})
-
-
-
-
-
-
-
-
-
-
-
-

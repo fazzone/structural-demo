@@ -5,7 +5,6 @@
    [datascript.core :as d]
    [rum.core :as rum]))
 
-
 (rum/defc datoms-table-ave [ds ah vh eh]
   [:div.datoms-table.ave
    [:div (or ah "A")]
@@ -33,9 +32,9 @@
             [:code {:key (+ (* 3 i) 1)}
              (let [s (str a)
                    n 20]
-               (if (> n (count s) )
+               (if (> n (count s))
                  s
-                 [:abbr {:title s} (subs s 0 n) ]))]
+                 [:abbr {:title s} (subs s 0 n)]))]
             [:code {:key (+ (* 3 i) 2)} (str v)]))))])
 
 (rum/defc datoms-table-eavt* [ds]
@@ -48,7 +47,7 @@
      [:td {:style {:width "10em"}} "T"]
      #_[:td "added?"]]]
    [:tbody
-    {} 
+    {}
     (->> ds
          (map-indexed
           (fn [i [e a v t a?]]
@@ -71,7 +70,7 @@
      [:td {:style {:width "10em"}} "T"]
      #_[:td "added?"]]]
    [:tbody
-    {} 
+    {}
     (->> datoms
          (map-indexed
           (fn [i [e a v t r]]
@@ -82,7 +81,7 @@
              [:td [:code [:a {:on-click (fn [ev] (pr :t t))} (str t)]]]
              #_[:td [:code (str r)]]])))]])
 
-(rum/defcs db-viewer < (rum/local "" ::state )
+(rum/defcs db-viewer < (rum/local "" ::state)
   [{::keys [state]} db]
   [:div.db-viewer
    (datoms-table* (d/datoms db :eavt)

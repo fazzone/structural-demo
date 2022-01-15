@@ -47,13 +47,10 @@
       (cond-> item
         (contains? item :url)
         (update :url #(as-url %))
-
         (contains? item :time)
         (update :time #(as-date (* % 1000)))
-
         (contains? item :created)
         (update :created #(as-date (* % 1000)))
-
         (contains? item :type)
         (update :type keyword)))))
 
