@@ -242,8 +242,8 @@
     nil))
 
 (defn ->string
-  ([e] (->string e 0))
-  ([e i]
+  ([e] (->string e 0 nil))
+  ([e i last?]
    (letfn [(sep [{:form/keys [linebreak indent]}]
              (str (when linebreak "\n")
                   (let [ci (or indent 0)]
@@ -256,29 +256,30 @@
           :keyword (str (:token/value e))
           :string  (pr-str (:token/value e))
           :number  (str (:token/value e))
-          :comment (str (:token/value e) "\n")
-          :regex (:token/value e)))
+          :regex   (:token/value e)
+          :comment (if-not last?
+                     (:token/value e)
+                     (str (:token/value e) "\n"))))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
            (open-delim ct)
            (cond
-             (nil? x) nil
-             (nil? xs) (str (sep x) (->string x (+ 2 i)))
+             (nil? x)  nil
+             (nil? xs) (str (sep x) (->string x (+ 2 i) true))
              :else
              (loop [p        nil
                     [y & ys] xs
-                    s        (str (sep x) (->string x (+ 2 i)))]
+                    s        (str (sep x) (->string x (+ 2 i) (nil? y)))]
                (if (nil? y)
                  s
-                 (let []
-                   (recur y ys (str s
-                                    (case ct :chain "\n\n"
-                                          (when (not (or (:form/linebreak y)
-                                                         (:form/indent y)))
-                                            " "))
-                                    (sep y)
-                                    (->string y (+ 2 i))))))))
+                 (recur y ys (str s
+                                  (case ct :chain "\n\n"
+                                        (when (not (or (:form/linebreak y)
+                                                       (:form/indent y)))
+                                          " "))
+                                  (sep y)
+                                  (->string y (+ 2 i) (nil? ys)))))))
            (close-delim ct))))))))
 
 (defn string->tx-all
