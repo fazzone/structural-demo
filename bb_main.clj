@@ -1,5 +1,6 @@
 (ns bb-main
   (:require [babashka.deps :as deps]
+            [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as string]
             [babashka.fs :as fs]
@@ -164,7 +165,11 @@
 (comment
   (sync-prepl-exec
    (quote
-    (shadow/release :br)
+    (do
+      (shadow/release :br)
+      (shadow/release :elec)
+      (System/exit 0))
+    
     #_(shadow/compile :ptr)
     #_(release-cljs!)
     #_(do
@@ -200,4 +205,29 @@
     (throw (ex-info "Shadow failed" {:b b}))
     :ok))
 
+
+
+(def electron-files
+  [electron-main
+   "srv/electron_preload.js"
+   "srv/font/iosevka-aile-light.woff2"
+   "srv/font/iosevka-term-ss03-light.woff2"
+   "srv/index.html"
+   "srv/index.css"
+   "srv/js/main.js"
+   #_"package.json"
+   ])
+
+(defn package-electron
+  [out]
+  (doseq [e electron-files]
+    (let [of (fs/path out e)]
+      (fs/create-dirs (fs/parent of))
+      ((if (fs/directory? e) fs/copy-tree fs/copy)
+         e
+         (fs/path out e)
+         {:replace-existing true}))))
+
+(comment
+  (package-electron "/tmp/temperloy"))
 

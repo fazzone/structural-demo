@@ -808,178 +808,165 @@
          (.catch (fn [] (swap! save-status assoc :status :error))))))))
 
 (defn setup-app
-  ([]
-   (setup-app
-    (doto (d/create-conn s/schema)
-      (d/transact! init-tx-data))))
+  ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
-   (let [a             (core/app conn)
-         scivar-sel    (sci/new-var "zsel")
+   (let [a (core/app conn)
+         scivar-sel (sci/new-var "zsel")
          scivar-ingest (sci/new-var "ingest")
-         _             (js/console.log "Bridge"
-                                       (some-> js/window
-                                               (aget "my_electron_bridge")))
-         s             (sci/init {:namespaces {'d {'datoms d/datoms
-                                                   'touch  d/touch}
-                                               'p {'resolve (fn [p]
-                                                              (js/console.log "Promise/resolve" p)
-                                                              (js/Promise.resolve p))
-                                                   'all     (fn [a b c]
-                                                              (js/console.log "Proomise/all" a b c)
-                                                              (js/Promise.all a b c))}}
-                                  :bindings   {'jcl        (fn [z] (js/console.log z))
-                                               'datafy     datafy/datafy
-                                               'nav        datafy/nav
-                                               'fetch-text (fn [z f]
-                                                             (.then (js/fetch z)
-                                                                    (fn [resp]
-                                                                      (.text resp)))
-                                                             #_(-> z (js/fetch) (.then f)))
-                                               'then       (fn [p f] (.then (js/Promise.resolve p) f))
-                                               ;; 'stories dfg/stories
+         s (sci/init
+             {:namespaces {'d {'datoms d/datoms  'touch d/touch}
+                           'p {'resolve (fn [p] (js/Promise.resolve p))
+                               'all (fn [a b c] (js/Promise.all a b c))}}
+              :bindings {'datafy datafy/datafy
+                         'nav datafy/nav
+                         'fetch-text (fn [z f]
+                                       (.then (js/fetch z)
+                                              (fn [resp] (.text resp))))
+                         'then (fn [p f] (.then (js/Promise.resolve p) f))
+                         ;; 'stories dfg/stories
 
-                                               'ingest     scivar-ingest
-                                               'sel        scivar-sel
-                                               '->seq      e/seq->seq
-                                               'slurp    (some-> (aget js/window "my_electron_bridge")
-                                                              (aget "slurp"))
-                                               'spit     (some-> (aget js/window "my_electron_bridge")
-                                                                 (aget "spit"))
-                                               'list-dir (some-> (aget js/window "my_electron_bridge")
-                                                                 (aget "list_dir"))
-                                               'exit     (some-> (aget js/window "my_electron_bridge")
-                                                                 (aget "exit"))
-                                               'send!    (fn [m]
-                                                        (core/send! (:bus a) m))}})]
-     #_(doseq [[m f] mut/dispatch-table]
-         (core/register-simple! a m f))
+                         'ingest scivar-ingest
+                         'sel scivar-sel
+                         '->seq e/seq->seq
+                         'slurp (some-> (aget js/window "my_electron_bridge")
+                                        (aget "slurp"))
+                         'spit (some-> (aget js/window "my_electron_bridge")
+                                       (aget "spit"))
+                         'list-dir (some-> (aget js/window "my_electron_bridge")
+                                           (aget "list_dir"))
+                         'exit (some-> (aget js/window "my_electron_bridge")
+                                       (aget "exit"))
+                         'send! (fn [m] (core/send! (:bus a) m))}})]
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
-     (doseq [[m f] mut/editing-commands]
-       (core/register-simple! a m f))
+     (doseq [[m f] mut/editing-commands] (core/register-simple! a m f))
      (doto a
-       (core/register-mutation! :kbd
-                                (fn [[_ kbd tkd] db bus]
-                                  (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
-                                    (core/send! bus [mut]))))
-       (core/register-mutation! :eval-sci
-                                (fn [_ db bus]
-                                  (let [et (->> (get-selected-form db)
-                                                (move/move :move/most-upward))
-                                        c  (e/->string et)
-                                        #_(->> (e/->form et)
-                                               (pr-str))]
-                                    (println "Eval sci" c scivar-sel)
-                                    (try
-                                      (let [_   (sci/alter-var-root scivar-sel (constantly (get-selected-form db)))
-                                            _   (sci/alter-var-root scivar-ingest
-                                                                    (constantly (fn [z]
-                                                                                  (.then (js/Promise.resolve z)
-                                                                                         (fn [ar]
-                                                                                           (js/console.log "Ingest?" ar)
-                                                                                           (cljs.pprint/pprint ar)
-                                                                                           (core/send! bus [:ingest-result (:db/id et) ar])
-                                                                                           ::ok)))))
-                                            ans (sci/eval-string* s c)]
-                                        (.then (js/Promise.resolve ans)
-                                               (fn [ar]
-                                                 (when (not= ::ok ar)
-                                                   (prn 'AR ar)
-                                                   (core/send! bus [:eval-result et ar])))))
-                                      (catch :default e
-                                        (core/send! bus [:eval-result
-                                                         et
-                                                         (or
-                                                          (ex-message e)
-                                                          (str e))])
-                                        #_(js/console.log "SCI exception" e))))))
-       (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       (core/register-mutation! :scroll  (fn [_ db _]
-                                           #_(let [s (js/document.querySelector ".selected")
-                                                   p (.-parentNode s)]
-                                               (js/console.log s p)
-                                               (.setAttribute s "class" (string/replace (.getAttribute s "class") "selected" ""))
-                                               (.setAttribute p "class" (str (.getAttribute p "class") " selected")))
-                                           #_(let [q (peek (nav/parents-vec (get-selected-form db)))]
-                                               (js/console.log
-                                                (zp-hacks/zprint-file-str
-                                                 (e/->string q)
-                                                 (:db/id q))))
-                                           #_(scroll-to-selected!)))
-       (core/register-simple! :zp (fn [db _]
-                                    (let [_         (js/console.time "formatting")
-                                          _         (js/console.time "preparing")
-                                          _         (zp-hacks/set-options! {:map {:sort? nil}})
-                                          q         (-> (get-selected-form db) nav/parents-vec peek)
-                                          _         (js/console.timeEnd "preparing")
-                                          _         (js/console.time "stringifying")
-                                          my-string (e/->string q)
-                                          _         (js/console.timeEnd "stringifying")
-                                          _         (js/console.time "zprint")
-                                          p         (zp-hacks/zprint-file-str my-string (:db/id q))
-                                          _         (js/console.timeEnd "zprint")
-                                          _         (js/console.time "parsing")
-                                          pt        (e/string->tx p)
-                                          _         (js/console.timeEnd "parsing")
-                                          _         (js/console.time "reconciling")
-                                          ans       (vec
-                                                     (mapcat
-                                                      (fn [a b]
-                                                        (when-not (and (= (:coll/type a) (:coll/type b))
-                                                                       (= (:token/type a) (:token/type b))
-                                                                       (= (:token/value a) (:token/value b)))
-                                                          (println "!!!! cannot reconcile !!! ")
-                                                          (println "A:")
-                                                          (println my-string)
-                                                          (println "B:")
-                                                          (println p)
-                                                          (throw (ex-info "cannot reconcile " {})))
-                                                        (for [k     [:form/indent :form/linebreak]
-                                                              :when (not= (k a) (k b))]
-                                                          (if (k b)
-                                                            [:db/add (:db/id a) k (k b)]
-                                                            [:db/retract (:db/id a) k (k a)])))
-                                                      (tree-seq :coll/type e/seq->vec q)
-                                                      (tree-seq :coll/type e/seq->vec pt)))]
-                                      (js/console.timeEnd "reconciling")
-                                      (js/console.timeEnd "formatting")
-                                      ans)
-                                    #_(scroll-to-selected!)))
-       (core/register-mutation! :save
-                                (fn [_ db bus]
-                                  (let [xhr   (XhrIo.)
-                                        sel   (get-selected-form db)
-                                        chain (-> sel
-                                                  (nav/parents-vec)
-                                                  (peek)
-                                                  :coll/_contains
-                                                  first)
-                                        file  (or (:chain/filename chain) "noname.clj")]
-                                    (println "Do save" chain)
-                                    (when chain
-                                      (reset! save-status {:at (:max-tx db) :on (:db/id sel) :status :saving})
-                                      (save* file (e/->string chain))
-                                      #_(do
-                                          (.listen xhr EventType/COMPLETE
-                                                   (fn [ev]
-                                                     (reset! save-status {:on     (:db/id sel)
-                                                                          :at     (:max-tx db)
-                                                                          :status :ok
-                                                                          :file   file})))
-                                          (.listen xhr EventType/ERROR
-                                                   (fn [_] (println "Save error!")
-                                                     (reset! save-status {:on (:db/id sel) :status :error})))
-                                          (.send xhr (str "/save?file=" (or (:chain/filename chain) "noname.clj"))
-                                                 "POST"
-                                                 (e/->string chain)
-                                                 #js {"Content-Type" "application/json;charset=UTF-8"})))
-                                    nil)))
-       #_(core/register-mutation!
-          :execute
-          (fn [_ db bus]
-            (let [sel (get-selected-form db)]
-              (d/transact! conn))))))))
+       (core/register-mutation!
+         :kbd
+         (fn [[_ kbd tkd] db bus]
+           (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
+             (core/send! bus [mut]))))
+       (core/register-mutation!
+         :eval-sci
+         (fn [_ db bus]
+           (let [et (->> (get-selected-form db)
+                         (move/move :move/most-upward))
+                 c (e/->string et)]
+             (try
+               (let [_ (sci/alter-var-root scivar-sel
+                                           (constantly (get-selected-form db)))
+                     _ (sci/alter-var-root
+                         scivar-ingest
+                         (constantly (fn [z]
+                                       (.then (js/Promise.resolve z)
+                                              (fn [ar]
+                                                (js/console.log "Ingest?" ar)
+                                                (cljs.pprint/pprint ar)
+                                                (core/send! bus
+                                                            [:ingest-result
+                                                             (:db/id et) ar])
+                                                ::ok)))))
+                     ans (sci/eval-string* s c)]
+                 (.then (js/Promise.resolve ans)
+                        (fn [ar]
+                          (when (not= ::ok ar)
+                            (prn 'AR ar)
+                            (core/send! bus [:eval-result et ar])))))
+               (catch :default e
+                 (core/send! bus [:eval-result et (or (ex-message e) (str e))])
+                 #_(js/console.log "SCI exception" e))))))
+       (core/register-mutation!
+         :form/highlight
+         (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation!
+         :form/edited-tx
+         (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       (core/register-mutation! :scroll (fn [_ db _] (scroll-to-selected!)))
+       (core/register-simple!
+         :zp
+         (fn [db _]
+           (let [_ (js/console.time "formatting")
+                 _ (js/console.time "preparing")
+                 _ (zp-hacks/set-options! {:map {:sort? nil}})
+                 q (-> (get-selected-form db)
+                       nav/parents-vec
+                       peek)
+                 _ (js/console.timeEnd "preparing")
+                 _ (js/console.time "stringifying")
+                 my-string (e/->string q)
+                 _ (js/console.timeEnd "stringifying")
+                 _ (js/console.time "zprint")
+                 p (zp-hacks/zprint-file-str my-string (:db/id q))
+                 _ (js/console.timeEnd "zprint")
+                 _ (js/console.time "parsing")
+                 pt (e/string->tx p)
+                 _ (js/console.timeEnd "parsing")
+                 _ (js/console.time "reconciling")
+                 ans (vec
+                       (mapcat (fn [a b]
+                                 (when-not
+                                   (and (= (:coll/type a) (:coll/type b))
+                                        (= (:token/type a) (:token/type b))
+                                        (= (:token/value a) (:token/value b)))
+                                   (println "!!!! cannot reconcile !!! ")
+                                   (println "A:")
+                                   (println my-string)
+                                   (println "B:")
+                                   (println p)
+                                   (throw (ex-info "cannot reconcile " {})))
+                                 (for [k [:form/indent :form/linebreak]
+                                       :when (not= (k a) (k b))]
+                                   (if (k b)
+                                     [:db/add (:db/id a) k (k b)]
+                                     [:db/retract (:db/id a) k (k a)])))
+                         (tree-seq :coll/type e/seq->vec q)
+                         (tree-seq :coll/type e/seq->vec pt)))]
+             (js/console.timeEnd "reconciling")
+             (js/console.timeEnd "formatting")
+             ans)
+           #_(scroll-to-selected!)))
+       (core/register-mutation!
+         :save
+         (fn [_ db bus]
+           (let [xhr (XhrIo.)
+                 sel (get-selected-form db)
+                 chain (-> sel
+                           (nav/parents-vec)
+                           (peek)
+                           :coll/_contains
+                           first)
+                 file (or (:chain/filename chain) "noname.clj")]
+             (println "Do save" chain)
+             (when chain
+               (reset! save-status {:at (:max-tx db)
+                                    :on (:db/id sel)
+                                    :status :saving})
+               (save* file (e/->string chain))
+               #_(do (.listen xhr
+                              EventType/COMPLETE
+                              (fn [ev]
+                                (reset! save-status {:on (:db/id sel)
+                                                     :at (:max-tx db)
+                                                     :status :ok
+                                                     :file file})))
+                     (.listen xhr
+                              EventType/ERROR
+                              (fn [_]
+                                (println "Save error!")
+                                (reset! save-status {:on (:db/id sel)
+                                                     :status :error})))
+                     (.send
+                       xhr
+                       (str "/save?file="
+                            (or (:chain/filename chain) "noname.clj"))
+                       "POST"
+                       (e/->string chain)
+                       #js {"Content-Type" "application/json;charset=UTF-8"})))
+             nil)))
+       #_(core/register-mutation! :execute
+                                  (fn [_ db bus]
+                                    (let [sel (get-selected-form db)]
+                                      (d/transact! conn))))))))
 
 (rum/defc example < rum/static
   [init-form muts]
