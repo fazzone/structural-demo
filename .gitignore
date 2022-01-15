@@ -1,0 +1,6 @@
+.shadow-cljs/*
+.cpcache/*
+.nrepl-port
+node_modules/*
+srv/js/cljs-runtime/*
+subtree/*
