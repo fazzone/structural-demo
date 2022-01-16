@@ -10,7 +10,7 @@
 (rum/defc inspect-inner < (dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
   (let [sel (get-selected-form db)]
-    [:div.inspector
+    [:div.inspector.code-font
      [:span.form-title (str "Inspect #" (:db/id sel))]
      [:div ^:inline (cd/datoms-table-eavt*
                      (concat (d/datoms db :eavt  (:db/id sel))
@@ -19,6 +19,4 @@
                                    d (d/datoms db :avet a (:db/id sel))]
                                d)))]]))
 
-(defn inspect
-  [me bus]
-  (inspect-inner (d/entity-db me) bus))
+(defn inspect [me bus] (inspect-inner (d/entity-db me) bus))

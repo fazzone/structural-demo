@@ -8,32 +8,35 @@
    [clojure.datafy :as datafy]
    [core :as core :refer [get-selected-form]]))
 
-
-(def electron-bridge #?(:cljs (aget js/window "my_electron_bridge")
+(def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                         :clj nil))
 
 (defn sci-opts
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
    {:namespaces (-> {'d {'datoms d/datoms 'touch d/touch}
-                     #?@(:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
-                                    'all     (fn [a b c] (js/Promise.all a b c))}])}
+                     #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
+                                     'all     (fn [a b c] (js/Promise.all a b c))}])}
                     (merge namespaces))
     :bindings   (-> {'send! (fn [m] (core/send! bus m))
                      '->seq e/seq->seq
-                     
                      'datafy datafy/datafy
                      'nav    datafy/nav
                      ;; 'stories dfg/stories
-                     #?@(:clj ['slurp slurp
+                     #?@ (:clj ['slurp slurp
                                 'spit spit]
-                         :cljs ['fetch-text (fn [z f]
-                                              (.then (js/fetch z)
-                                                     (fn [resp] (.text resp))))
-                                'then (fn [p f] (.then (js/Promise.resolve p) f))
-                                'slurp    (some-> electron-bridge (aget "slurp"))
-                                'spit     (some-> electron-bridge (aget "spit"))
-                                'list-dir (some-> electron-bridge (aget "list_dir"))])}
+                          :cljs ['fetch-text (fn [z f]
+                                               (.then (js/fetch z)
+                                                      (fn [resp] (.text resp))))
+                                 'then (fn [p f] (.then (js/Promise.resolve p) f))
+                                 'slurp      (some-> electron-bridge (aget "slurp"))
+                                 'spit       (some-> electron-bridge (aget "spit"))
+                                 'list-dir   (some-> electron-bridge (aget "list_dir"))
+                                 'new-window (fn [u name features]
+                                               (js/window.open
+                                                (or u js/window.location)
+                                                name
+                                                features))])}
                     (merge bindings))}))
 
 (defn mutatef
@@ -57,9 +60,9 @@
         (try
           (let [ans (sci/binding [sel# eval-target]
                       (sci/eval-string* ctx eval-string))]
-            #?(:clj (success ans)
+            #? (:clj (success ans)
                :cljs (.then (js/Promise.resolve ans)
                             success)))
           (catch :default ex
+            (js/console.log ex)
             (failure ex)))))))
-

@@ -141,7 +141,6 @@
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     [{:db/ident ::state
       :state/bar "bar"}
-     
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec}
@@ -176,7 +175,6 @@
       :db/id "bar"
       :coll/type :bar)]))
 
-
 (comment
   [:span.c.dl
    {}
@@ -194,6 +192,7 @@
    [:span.d.cl close]])
 
 #_(declare snapshot)
+
 #_(rum/defc display-undo-preview
   [c b s top?]
   [:ul.undo-preview
@@ -229,19 +228,12 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-
 #_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
   (println "DCA" c)
   [:div.alias
    (when s {:class s :ref "selected"})
    [:div.form-title "Alias " (:db/id c) " of " (:db/id of)]
    (fcc of b i s)])
-
-#_(defmethod display-coll :eval-result [c b i s]
-  [:div.eval-result-outer
-   [:span.eval-result
-    (str "[" (:db/id c) "] " (:db/id (:eval/of c)) "=>")
-    (fcc (:eval/result c) b 0)]])
 
 (def special-key-map
   (merge
@@ -301,16 +293,12 @@
          (for [i (range  8)]
            [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
 
-(declare command-compose-feedback)
-
 (declare setup-app)
 
 (rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)]
     [:div.bar-container
-     #_(breadcrumbs-always db bus)
-     #_(favicon 200)
      (code/form (:state/bar state) bus 0 nil)
      (ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -337,21 +325,11 @@
             {:keys [bindings compose]} @key-compose-state
             mut (get bindings kbd)
             next-kbd (conj (or compose []) kbd)]
-        #_(prn "Key" kbd mut)
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (or (some? mut)
                   (and compose (nil? mut)))
           (.preventDefault ev)
-          (.stopPropagation ev))
-        #_(if-not mut
-            (reset! key-compose-state initial-compose-state)
-            (cond
-              (vector? mut) (do (reset! key-compose-state initial-compose-state)
-                                (core/send! @keyboard-bus
-                                            (with-meta mut {:kbd (string/join " " next-kbd)})))
-              (map? mut) (reset! key-compose-state {:bindings mut :compose next-kbd})
-              :else (do (println "Bad key entry" mut)
-                        (reset! key-compose-state initial-compose-state))))))))
+          (.stopPropagation ev))))))
 
 (defonce global-keydown
   (fn [ev]
@@ -365,30 +343,17 @@
   (fn [ev]
     (global-keyup* ev)))
 
-(rum/defc command-compose-feedback < rum/reactive
-  []
-  (let [{:keys [bindings compose]} (rum/react key-compose-state)]
-    (when compose
-      [:span.code-font.key-compose-echo
-       (pr-str compose)
-       " "
-       (pr-str bindings)])))
-
 (def ^:const scroll-hysteresis-px 32)
 
 (defn scroll-1d
   [size h pos off]
-  #_(println "S1D" size h pos off)
   (let [align-bottom (- off (- size h))
-        top-closer?  (< (js/Math.abs (- pos off))
-                        (js/Math.abs (- pos align-bottom)))
-        ;; _ (println "Top closer?")
-        [best other] (if top-closer?
+        top-closer? (< (js/Math.abs (- pos off))
+                       (js/Math.abs (- pos align-bottom)))
+        [best other] (if (or top-closer? (> h size))
                        [off align-bottom]
                        [align-bottom off])]
-    (if-not (< (- scroll-hysteresis-px)
-               (- pos best)
-               scroll-hysteresis-px)
+    (if-not (< (- scroll-hysteresis-px) (- pos best) scroll-hysteresis-px)
       (int best))))
 
 (defn scroll-to-selected!
@@ -459,8 +424,6 @@
         (-> pr
          (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
          (.catch (fn [] (swap! ml/save-status assoc :status :error))))))))
-
-
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
@@ -539,7 +502,6 @@
               (save* file (e/->string chain)))
             nil)))))))
 
-
 (defonce the-singleton-db
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
@@ -571,17 +533,20 @@
           tree   (fetch-json (-> commit :tree :url))]
     #_(cljs.pprint/pprint tree)))
 
-(defn  ^:dev/after-load init []
+(defn ^:dev/after-load init
+  []
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.removeEventListener "keyup" global-keyup true)
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
-  
   (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
-    ;; document.write(process.versions['electron'])
-    (rum/mount
-       #_(debug-component)
-       (root-component @conn bus)
-       (.getElementById js/document "root"))))
+    (when-let [req-title (some-> js/window.location.search
+                                 js/URLSearchParams.
+                                 (.get "title"))]
+      (println "Set the title!" req-title)
+      (set! js/document.title req-title))
+    (rum/mount #_(debug-component)
+               (root-component @conn bus)
+               (.getElementById js/document "root"))))

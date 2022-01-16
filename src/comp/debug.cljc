@@ -29,13 +29,12 @@
               [:tr {:key   i
                     :class (str "eavt-row"
                                 (when-not a? " retraction"))}
-               [:td [:code (str e)]]
-               [:td [:code (str a)]]
-               [:td [:code
-                     (let [s (str v)]
-                       (if (> sv (count s))
-                         s
-                         [:abbr {:title s} (subs s 0 sv)]))]]
-               [:td [:code (str t)]]])))]]))
+               [:td (str e)]
+               [:td (str a)]
+               [:td (let [s (str v)]
+                      (if (> sv (count s))
+                        s
+                        [:abbr {:title s} (subs s 0 sv)]))]
+               [:td (str t)]])))]]))
 
 

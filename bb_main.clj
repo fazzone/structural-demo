@@ -231,3 +231,13 @@
 (comment
   (package-electron "/tmp/temperloy"))
 
+
+(defn helium
+  [out]
+  (release-cljs! :elec)
+  (release-cljs! :br)
+  (package-electron out)
+  (sync-prepl-exec '(shadow.cljs.devtools.api/watch :elec))
+  (sync-prepl-exec '(shadow.cljs.devtools.api/watch :br))
+  (reset! electron-process (p/process [@electron-exe (fs/path out electron-main) "--localhost"]))
+  :started)

@@ -71,7 +71,7 @@
         _           "«"
         open-delim  (e/open-delim ct)
         close-delim (e/close-delim ct)]
-    (if-not (or coll-class extra-class)
+    (if-not (or coll-class extra-class open-delim close-delim)
       (do
         (println "Dispatching " ct e)
         ^:inline ((get dispatch-coll ct (constantly nil))

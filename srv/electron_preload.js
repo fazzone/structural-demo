@@ -8,7 +8,6 @@ function check_relative(p) {
     return rp && !rp.startsWith('..') && !path.isAbsolute(rp);
 }
 
-
 contextBridge.exposeInMainWorld('my_electron_bridge', {
     spit: (function (p, c) {
         return fs.writeFile(p, c);
@@ -19,7 +18,4 @@ contextBridge.exposeInMainWorld('my_electron_bridge', {
     list_dir: function(p) {
         return fs.readdir(p);
     }
-    // exit: (function (c) {
-    //     app.quit();
-    // })
 });
