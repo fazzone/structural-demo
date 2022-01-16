@@ -540,12 +540,10 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   (let [{:keys [conn bus]} (setup-app the-singleton-db)]
-    (println "Reset keyhboard bus" bus)
     (reset! keyboard-bus bus)
     (when-let [req-title (some-> js/window.location.search
-                                 js/URLSearchParams.
+                                 (js/URLSearchParams.)
                                  (.get "title"))]
-      (println "Set the title!" req-title)
       (set! js/document.title req-title))
     (rum/mount #_(debug-component)
                (root-component @conn bus)
