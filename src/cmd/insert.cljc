@@ -12,7 +12,7 @@
 (defn try-parse-edn
   [s]
   (try
-    (println "Try to parse as code" (pr-str s))
+    #_(println "Try to parse as code" (pr-str s))
     (e/string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e
       (println "No edn" s)
@@ -21,7 +21,7 @@
 
 (defn parse-token-tx
   [s eid]
-  (println "PTT" eid (pr-str s))
+  #_(println "PTT" eid (pr-str s))
   (when-not (empty? s)
     (some-> (or (try-parse-edn s)
                 (and (string/starts-with? s "\"")

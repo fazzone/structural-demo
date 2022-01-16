@@ -11,6 +11,12 @@
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                         :clj nil))
 
+(defn list-dir*
+  [p]
+  (when-some [f (some-> electron-bridge
+                        (aget "list_dir"))]
+    (.then (f p) js->clj)))
+
 (defn sci-opts
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
@@ -31,7 +37,7 @@
                                  'then (fn [p f] (.then (js/Promise.resolve p) f))
                                  'slurp      (some-> electron-bridge (aget "slurp"))
                                  'spit       (some-> electron-bridge (aget "spit"))
-                                 'list-dir   (some-> electron-bridge (aget "list_dir"))
+                                 'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
                                  'new-window (fn [u name features]
                                                (js/window.open
                                                 (or u js/window.location)

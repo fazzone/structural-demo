@@ -14,11 +14,11 @@
    [comp.edit-box :as eb]
    [cmd.move :as move]
    [cmd.nav :as nav]
+   [cmd.mut :as mut]
    [comp.common :as cc]
    [core :as core
     :refer [get-selected-form
             move-selection-tx]]
-
    [comp.keyboard]
    [comp.inspect]))
 
@@ -50,12 +50,11 @@
         (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
 
-
 (def render-counter (atom 0))
+
 (def dispatch-coll
   {:keyboard comp.keyboard/keyboard-diagram
-   :inspect comp.inspect/inspect
-   })
+   :inspect comp.inspect/inspect})
 
 (rum/defc any-coll
   [e classes bus indent proply]
@@ -68,7 +67,6 @@
                       (:deref :quote :syntax-quote :unquote
                               :unquote-splicing :reader-macro) "pf"
                       nil)
-        _           "«"
         open-delim  (e/open-delim ct)
         close-delim (e/close-delim ct)]
     (if-not (or coll-class extra-class open-delim close-delim)
@@ -81,6 +79,8 @@
          #_[:span.inline-tag.debug
             (str (swap! render-counter inc))
             #_(str (:db/id e))]
+         (when-some [p (get proply (:db/id e))]
+           [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
          (cond
            extra-class [:span.d.pfc ^String open-delim]
            open-delim  [:span.d ^String open-delim]
@@ -148,48 +148,37 @@
     :comment v
     :regex (str "REGEX:" v)))
 
-
 (rum/defc form < dbrx/ereactive {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
-  (cond
-    (:form/editing e)
-    (eb/edit-box e bus)
-    (:token/type e)
-    (let [tt (:token/type e)
-          tv (:token/value e)
-          tc (token-class tt tv)
-          it (token-text tt tv)]
-      (rum/fragment
-       ^:inline (indenter (:form/linebreak e)
-                          indent-prop
-                          (:form/indent e))
-       [:span {:key      (:db/id e)
-               :class    (if (:form/highlight e)
-                           (str "tk selected " tc)
-                           (str "tk " tc))
-               :on-click (fn [ev]
-                           (.stopPropagation ev)
-                           (core/send! bus [:select (:db/id e)]))}
-        ^String it]))
-    (:coll/type e)
-    (case (:coll/type e)
-      nil          (comment "Probably a retracted entity, do nothing")
-      :chain       (chain e bus)
-      :bar         (bar e bus)
-      (rum/fragment
-       ^:inline (indenter (:form/linebreak e)
-                          indent-prop
-                          (:form/indent e))
-       (any-coll e
-                 (when (:form/highlight e) "selected")
-                 bus
-                 (+ 2 indent-prop)
-                 proply
-                 #_(if-not (:form/highlight e)
-                     proply
-                     (zipmap
-                      (map :db/id (next (mut/get-numeric-movement-vec e)))
-                      (range 2 9))))))))
-
-
-
+  (rum/fragment
+    (indenter (:form/linebreak e) indent-prop (:form/indent e))
+    (cond (:form/editing e)
+          (eb/edit-box e bus)
+          (:token/type e)
+          (let [tt (:token/type e)
+                tv (:token/value e)
+                tc (token-class tt tv)
+                it (token-text tt tv)]
+            [:span {:key      (:db/id e)
+                    :class    (if (:form/highlight e)
+                                (str "tk selected " tc)
+                                (str "tk " tc))
+                    :on-click (fn [ev]
+                                (.stopPropagation ev)
+                                (core/send! bus [:select (:db/id e)]))}
+             ^String it])
+          (:coll/type e)
+          (case (:coll/type e)
+            nil    (comment "Probably a retracted entity, do nothing")
+            :chain (chain e bus)
+            :bar   (bar e bus)
+            (any-coll e
+                      (when (:form/highlight e) "selected")
+                      bus
+                      (+ 2 indent-prop)
+                      proply
+                      #_(if-not (:form/highlight e)
+                        proply
+                        (zipmap (map :db/id
+                                     (next (mut/get-numeric-movement-vec e)))
+                                (range 2 9))))))))

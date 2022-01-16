@@ -295,10 +295,27 @@
 
 (declare setup-app)
 
+(rum/defc test-image
+  []
+  (let [cell-width 8
+        cell-height 4
+        rows 10
+        cols 10
+        height (* rows cell-height)
+        width (* cols cell-width)]
+    [:svg
+     {:viewBox (str "0 0 " width " " height)
+      :style {:width "800px"  :border "1px solid aliceblue"}}
+     [:g {:stroke-width (/ cell-width 32)  :stroke "#fff"}
+      (for [i (range cols)]
+        [:line {:x1 (* i cell-width)  :y1 0  :x2 (* i cell-width)  :y2 height}])
+      (for [i (range cols)]
+        [:line {:x1 0  :y1 (* i cell-height)  :x2 width  :y2 (* i cell-height)}])]]))
+
 (rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)]
-    [:div.bar-container
+    [:div.bar-container {} #_(test-image)
      (code/form (:state/bar state) bus 0 nil)
      (ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
@@ -311,10 +328,6 @@
        (when (.-shiftKey ev) "S-")
        (.-key ev)))
 
-(def initial-compose-state {:bindings special-key-map :compose nil})
-
-(def key-compose-state (atom initial-compose-state))
-
 (def keyboard-bus (atom nil))
 
 (defn global-keydown*
@@ -322,12 +335,10 @@
   (let [tkd (js/performance.now)]
     (when-not @eb/global-editing-flag
       (let [kbd (event->kbd ev)
-            {:keys [bindings compose]} @key-compose-state
-            mut (get bindings kbd)
-            next-kbd (conj (or compose []) kbd)]
+            bindings default-keymap
+            mut (get bindings kbd)]
         (core/send! @keyboard-bus [:kbd kbd tkd])
-        (when (or (some? mut)
-                  (and compose (nil? mut)))
+        (when (some? mut)
           (.preventDefault ev)
           (.stopPropagation ev))))))
 
@@ -374,6 +385,7 @@
          h    (if (< tlh chain-height) tlh elh)
          vpos (some-> chain (.-scrollTop))
          voff (some-> vst (.-offsetTop))
+         #_form-visible-within-chain? #_(<)
          new-chain-top (and tl
                             chain
                             #_(< h chain-height)
@@ -400,7 +412,8 @@
                 "hpos" hpos
                 "hoff" hoff
                 "\nCan fit?" (< h chain-height)
-                "\nAlready visible?" (not (< vpos voff (+ h voff)
+                "Vis?" [vpos voff (+ h voff) (+ vpos chain-height)]
+                "Already visible?"  (not (< vpos voff (+ h voff)
                                              (+ vpos chain-height)))
                 "\nAlways scroll?" always)
      (when (> h chain-height)

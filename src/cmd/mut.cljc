@@ -357,8 +357,7 @@
                         (:seq/first other-chain))
         target-tl   (peek (nav/parents-vec target))
         ;; new-sel (move/move :move/backward-up sel)
-        
-        ]
+]
     (into (edit/form-unlink-tx sel)
           (cond
             target-tl
@@ -388,8 +387,6 @@
     (into [new-node]
           (edit/insert-after-tx chain new-node))))
 
-
-
 (def movement-commands
   {:select          (fn [e eid] (d/entity (d/entity-db e) eid))
    :find-next       find-next
@@ -416,6 +413,15 @@
    :m6              (partial numeric-movement 5)
    :m7              (partial numeric-movement 6)
    :m8              (partial numeric-movement 7)})
+
+(defn new-comment-tx
+  [sel]
+  (into [[:db/add (:db/id sel) :form/linebreak true]]
+        (edit/insert-editing-before sel sel
+          (cond-> {:token/type :comment
+                   :form/linebreak true
+                   :form/edit-initial ";; "}
+            (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
 (def editing-commands
   {:float (comp edit/exchange-with-previous-tx get-selected-form)
@@ -449,15 +455,7 @@
    :new-quote                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
    :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
    :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
-   :new-comment                    (fn [db]
-                                     (let [sel (get-selected-form db)]
-                                       (into [[:db/add (:db/id sel) :form/linebreak true]]
-                                             (edit/insert-editing-before sel sel
-                                                                         (cond-> {:token/type :comment
-                                                                                  :form/linebreak true
-                                                                                  :form/edit-initial ";; "}
-                                                                           (:form/indent sel)
-                                                                           (assoc  :form/indent  (:form/indent sel)))))))
+   :new-comment                    (comp new-comment-tx get-selected-form)
    :open-chain (fn [db t props]
                  (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
