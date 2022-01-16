@@ -18,12 +18,9 @@
                         (sort-by (comp - count second))
                         (take 5))]
        (for [[v [[e] :as ds]] results]
-         (rum/fragment
-          (let [{:token/keys [type value]} (d/entity db e)
-                tt (code/token-text type value)]
-            [:span.tk {:key e :class (code/token-class type value)} ^String tt])
-          ;; 2n+1 and 2n-1
-          ;; -(2n+1) = -2n-1 = (- 0 1 (* 2 n))
-          ;; -(2n-1) = -2n+1 = (- 1 (* 2 n))
-          [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
-          [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds)))])))]))
+         (let [{:token/keys [type value]} (d/entity db e)
+               tt (code/token-text type value)]
+           (rum/fragment
+            [:span.tk {:key e :class (code/token-class type value)} ^String tt]
+            [:span {:key (- 0 1 (+ e e))} "x" (count ds)]
+            [:span {:key (- 1 (+ e e))} (pr-str (take 5 (map first ds)))]))))]))

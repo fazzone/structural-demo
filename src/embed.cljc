@@ -4,6 +4,7 @@
    [rewrite-clj.parser :as p]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]
+   [rewrite-clj.reader :as r]
    [rewrite-clj.node.protocols :as np]
    [clojure.string :as string]
    [datascript.core :as d]))
@@ -287,6 +288,15 @@
             (n/children (p/parse-string-all s)))))
   #_(n->tx (p/parse-string-all s)))
 
+(defn parse->lazy-seq
+  [s]
+  ((fn iter [r]
+     (when-let [form (p/parse r)]
+       (case (n/tag form)
+         (:whitespace :newline) (recur r)
+         (cons form (lazy-seq (iter r))))))
+   (r/string-reader s)))
+
 (defn ->chain
   [text]
   (let [txe (assoc (string->tx-all text)
@@ -328,3 +338,4 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+

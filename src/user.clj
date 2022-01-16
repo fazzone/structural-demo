@@ -22,7 +22,7 @@
         {:keys [port]} (nrepl-server/start-server #_#_:handler cnr/cider-nrepl-handler)]
     (spit ".nrepl-port" port)))
 
-(comment (shadow/compile :br))
+(comment (shadow/watch :br))
 
 (comment
   (shadow/release :elec)

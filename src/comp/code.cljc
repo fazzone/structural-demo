@@ -14,9 +14,13 @@
    [comp.edit-box :as eb]
    [cmd.move :as move]
    [cmd.nav :as nav]
+   [comp.common :as cc]
    [core :as core
     :refer [get-selected-form
-            move-selection-tx]]))
+            move-selection-tx]]
+
+   [comp.keyboard]
+   [comp.inspect]))
 
 (declare form)
 
@@ -26,14 +30,13 @@
      (or (:form/indent e)
          0)))
 
-(defn modeline-portal-id [eid] (str eid "mp"))
 (rum/defc top-level-form < dbrx/ereactive
   [e bus p]
   [:div.form-card
    {}
    #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
    [:div.top-level-form.code-font ^:inline (form e bus 0 p)]
-   [:div.modeline-outer {:id (modeline-portal-id (:db/id e))}]])
+   [:div.modeline-outer {:id (cc/modeline-portal-id (:db/id e))}]])
 
 (rum/defc indenter
   [nl? ip fi]
@@ -47,10 +50,17 @@
         (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
 
+
 (def render-counter (atom 0))
+(def dispatch-coll
+  {:keyboard comp.keyboard/keyboard-diagram
+   :inspect comp.inspect/inspect
+   })
+
 (rum/defc any-coll
-  [ct children classes bus indent proply]
-  (let [coll-class  (case ct
+  [e classes bus indent proply]
+  (let [ct (:coll/type e)
+        coll-class  (case ct
                       (:list :vec :map :set :fn :tear) "dl"
                       nil)
         extra-class (case ct
@@ -61,18 +71,24 @@
         _           "«"
         open-delim  (e/open-delim ct)
         close-delim (e/close-delim ct)]
-    [:span {:class ["c" coll-class extra-class classes]}
-     #_[:span.inline-tag.debug
-        (str (swap! render-counter inc))
-        #_(str (:db/id e))]
-     (cond
-       extra-class [:span.d.pfc ^String open-delim]
-       open-delim  [:span.d ^String open-delim]
-       :else       nil)
-     (for [c children]
-       ^:inline (form c bus indent proply))
-     (when close-delim
-       [:span.d ^String close-delim])]))
+    (if-not (or coll-class extra-class)
+      (do
+        (println "Dispatching " ct e)
+        ^:inline ((get dispatch-coll ct (constantly nil))
+                  e bus))
+      (let [children (e/seq->vec e)]
+        [:span {:class ["c" coll-class extra-class classes]}
+         #_[:span.inline-tag.debug
+            (str (swap! render-counter inc))
+            #_(str (:db/id e))]
+         (cond
+           extra-class [:span.d.pfc ^String open-delim]
+           open-delim  [:span.d ^String open-delim]
+           :else       nil)
+         (for [c children]
+           ^:inline (form c bus indent proply))
+         (when close-delim
+           [:span.d ^String close-delim])]))))
 
 (rum/defc chain
   [ch bus]
@@ -90,8 +106,6 @@
    (for [chain-head (e/seq->vec b)]
      (-> (form chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
-
-
 
 (defn token-class
   [t v]
@@ -166,8 +180,7 @@
        ^:inline (indenter (:form/linebreak e)
                           indent-prop
                           (:form/indent e))
-       (any-coll (:coll/type e)
-                 (e/seq->vec e)
+       (any-coll e
                  (when (:form/highlight e) "selected")
                  bus
                  (+ 2 indent-prop)

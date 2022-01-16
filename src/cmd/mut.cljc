@@ -139,59 +139,16 @@
     (when (< -1 n (count nmv))
       (nth nmv n))))
 
-(defn eval-result-on-evalchain
-  [db et-eid c]
-  (let [ee (d/entity db :page/evalchain)
-        nn {:db/id "nn"
-            :token/type :verbatim
-            :token/value (pr-str c)}
-        tx
-        (into [nn]
-              (edit/insert-before-tx (:seq/first ee) nn))]
-    (println "TXXX" tx)
-    tx))
-
 (defn eval-result-above-toplevel
-  [db et c]
+  [db et resp-str]
   (let [top-level   (peek (nav/parents-vec et))
         prev        (move/move :move/prev-sibling top-level)
         result-node {:db/id "nn"
                      :token/type :verbatim
-                     :token/value (pr-str c)
+                     :token/value resp-str
                      :eval/of (:db/id et)}]
     (into [result-node]
-          (edit/insert-before-tx top-level result-node)
-          #_(apply
-             concat
-             (edit/insert-before-tx top-level result-node)
-             (for [[e a v t a?] (d/datoms db :avet :eval/of)
-                   :when a?]
-               (edit/form-delete-tx (d/entity db e)))))
-    #_(into [new-node]
-            (if (= (:db/id et) (:db/id (:eval/of prev)))
-              (edit/form-overwrite-tx prev (:db/id new-node))
-              (edit/insert-before-tx top-level new-node)))
-    #_(into [new-node]
-            (edit/insert-before-tx (:seq/first ee) new-node))))
-
-#_(defn ingest-result
-  [db et-eid c]
-  #_(let [ee       (d/entity db :page/evalchain)
-          new-node (-> (e/->tx* c)
-                       (assoc :form/linebreak true)
-                       (update :db/id #(or % "new-node")))]
-    (prn 'ingest et c)
-    (into [new-node]
-          (edit/insert-before-tx
-           (:seq/first ee)
-           {:db/id (:db/id new-node)})))
-  (let [et (d/entity db et-eid)
-        top-level (peek (nav/parents-vec et))
-        new-node  (-> (e/->tx* c)
-                      (assoc :form/linebreak true)
-                      (update :db/id #(or % "new-node")))]
-    (into [new-node]
-          (edit/insert-before-tx top-level new-node))))
+          (edit/insert-before-tx top-level result-node))))
 
 (defn ingest-result
   [et c]
@@ -399,12 +356,14 @@
         target      (or (:chain/selection other-chain)
                         (:seq/first other-chain))
         target-tl   (peek (nav/parents-vec target))
-        new-sel (move/move :move/backward-up sel)]
+        ;; new-sel (move/move :move/backward-up sel)
+        
+        ]
     (into (edit/form-unlink-tx sel)
           (cond
             target-tl
             (concat (edit/insert-before-tx target-tl sel)
-                    (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
+                    #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
             (and chain (nil? other-chain))
             (let [new-chain {:db/id "newchain"
                              :coll/type :chain
@@ -412,7 +371,7 @@
                              :seq/first (:db/id sel)}]
               (concat [new-chain]
                       (chain-inserter chain new-chain)
-                      (when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
+                      #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
 
 (def drag-left-tx  (partial drag* :move/prev-sibling edit/insert-before-tx))
 
@@ -428,6 +387,8 @@
                      (merge props))]
     (into [new-node]
           (edit/insert-after-tx chain new-node))))
+
+
 
 (def movement-commands
   {:select          (fn [e eid] (d/entity (d/entity-db e) eid))

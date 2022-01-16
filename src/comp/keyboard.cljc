@@ -15,15 +15,14 @@
        [:div.key-legend legend]))])
 
 (rum/defc kkc
-  [lookup keycap]
-  [:div {:class ["key"
-                 (when (= 1 (count keycap))
-                   " single-width")]}
-   [:div.keycap-parent [:div.keycap keycap]]
-   (when-let [symbol (:symbol (lookup keycap))]
-     [:div.key-symbol-parent [:div.key-symbol symbol]])
-   (when-let [label (:label (lookup keycap))]
-     [:div.key-label label])])
+  [lookup keycap lkey]
+  (let [{:keys [label symbol]} (lookup (or lkey keycap))]
+    [:div {:class ["key"
+                   (when (= 1 (count keycap))
+                     " single-width")]}
+     [:div.keycap-parent [:div.keycap keycap]]
+     (when symbol [:div.key-symbol-parent [:div.key-symbol symbol]])
+     (when label [:div.key-label label])]))
 
 (defn thread-first
   [sel]
@@ -64,9 +63,15 @@
              :symbol [:div {:style {:font-size   "120%"
                                     :margin-left "0.2ex"}}
                       "◯"]}
-   :slurp-right {:label [:span {:style {:color "tomato"}} "push)→"]}
+   :select-chain {:label "chain"}
+   :m1 {:label "top"}
+   
+   :slurp-right {:label "push)→"}
    :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
-   :tear {:label ["-tear-"]
+   :gobble {:label "gobble"}
+   :offer {:label "offer"}
+   :new-comment {:label "doc"}
+   :tear {:label "-tear-"
           #_#_:symbol
           [:div {:style {:font-size   "130%"
                          :margin-left "0.0ex"
@@ -185,7 +190,7 @@
         key (partial kkc k->l)]
     [:div.keyboard-container
      [:div.keyboard-row.number
-      (key "Esc")
+      (key "Esc" "Escape")
       (for [ch (vec "1234567890-=")]
         (rum/with-key (key ch) ch))
       (key "Backspace")]

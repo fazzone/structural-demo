@@ -16,9 +16,9 @@
    [db-reactive :as dbrx]
    [comp.cons :as cc]
    [comp.edit-box :as eb]
-   [comp.keyboard :as ck]
    [comp.search]
    [comp.code :as code]
+   [comp.modeline :as ml]
    [cmd.move :as move]
    [cmd.nav :as nav]
    [sys.eval.sci :as eval-sci]
@@ -141,10 +141,7 @@
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     [{:db/ident ::state
       :state/bar "bar"}
-     {:db/ident ::evalchain
-      :db/id "evalchain"
-      :coll/type :vec
-      :seq/first {:token/type :string :token/value "No more evals" :coll/_contains "evalchain"}}
+     
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec}
@@ -169,15 +166,13 @@
           :coll/contains #{"label"
                            "defaultkeymap"
                            "inspect"
-                           "evalchain"
                            "command-chain"}
           :seq/first {:db/id "label"
                       :token/type :string
                       :token/value "Keyboard"}
           :seq/next {:seq/first "defaultkeymap"
-                     :seq/next {:seq/first "evalchain"
-                                :seq/next {:seq/first "command-chain"
-                                           :seq/next {:seq/first "inspect"}}}}}]))
+                     :seq/next {:seq/first "command-chain"
+                                :seq/next {:seq/first "inspect"}}}}]))
       :db/id "bar"
       :coll/type :bar)]))
 
@@ -234,15 +229,6 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-#_(defmethod display-coll :keyboard [k bus i]
-    "No keyboardn"
-    [:div.display-keyboard
-     (ck/keyboard-diagram
-      k
-      #_(d/entity (d/entity-db k)))
-     [:div {:style {:width "6ex"
-                    :font-size "9pt"}}
-      (ck/kkc {} "F")]])
 
 #_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
   (println "DCA" c)
@@ -256,24 +242,6 @@
    [:span.eval-result
     (str "[" (:db/id c) "] " (:db/id (:eval/of c)) "=>")
     (fcc (:eval/result c) b 0)]])
-
-(rum/defc inspector < (dbrx/areactive :form/highlight :form/edited-tx)
-  [db bus]
-  (let [sel (get-selected-form db)]
-    [:div.inspector
-     [:span.form-title (str "Inspect #" (:db/id sel))]
-     [:div
-      (debug/datoms-table-eavt*
-       (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
-       #_(concat
-        (d/datoms (d/entity-db sel) :eavt  (:db/id sel))
-        (->> (d/datoms (d/entity-db sel) :avet)
-             (filter (fn [[e a v t]]
-                       (= v (:db/id sel)))))))]]))
-
-#_(defmethod display-coll :inspect [k bus i]
-  "No inspect"
-  #_(inspector (d/entity-db k) bus))
 
 (def special-key-map
   (merge
@@ -335,43 +303,6 @@
 
 (declare command-compose-feedback)
 
-(declare save-status)
-(rum/defc modeline-inner < rum/reactive
-  [sel bus {:keys [^String text valid] :as edn-parse-state}]
-  [:span {:class (str "modeline code-font"
-                      (if text " editing modeline-search" " modeline-fixed")
-                      (when (and (not (empty? text)) (not valid)) " invalid"))}
-   [:span.modeline-echo
-    {}
-    (let [{:keys [on at status file]} (rum/react save-status)]
-      (when (= on (:db/id sel))
-        (case status
-          :saving "Saving"
-          :ok (str file "@" at)
-          :error "Error"
-          "")))]
-   (if text
-     (comp.search/results (d/entity-db sel)  :token/value text)
-     #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
-     [:span.modeline-content
-      (if-not sel
-        "(no selection)"
-        (str "#" (:db/id sel)
-             " " (:coll/type sel)))])])
-
-(rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
-  [db bus]
-  (let [sel (get-selected-form db)
-        rpa (reverse (nav/parents-vec sel))
-        nn (.getElementById js/document (code/modeline-portal-id (:db/id (first rpa))))]
-    (when nn
-      (-> (modeline-inner
-           sel
-           bus
-           (when (:form/editing sel)
-             (rum/react eb/editbox-ednparse-state)))
-          (rum/portal nn)))))
-
 (declare setup-app)
 
 (rum/defc root-component
@@ -381,8 +312,7 @@
      #_(breadcrumbs-always db bus)
      #_(favicon 200)
      (code/form (:state/bar state) bus 0 nil)
-     
-     (modeline-portal db bus)
+     (ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
@@ -475,9 +405,7 @@
          ;; fit the entire toplevel if we can, otherwise just the selection
          tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
          elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
-         vst  (if (< tlh chain-height)
-                (do (js/console.log "VST=toplevel" tl) tl)
-                (do (js/console.log "VST=el" el) el))
+         vst  (if (< tlh chain-height) tl  el)
          h    (if (< tlh chain-height) tlh elh)
          vpos (some-> chain (.-scrollTop))
          voff (some-> vst (.-offsetTop))
@@ -520,8 +448,6 @@
   (-> (fn [] (scroll-to-selected! false))
       (gfunc/debounce 10)))
 
-(def save-status (atom nil))
-
 (defn save*
   [file contents]
   (let [spit (some-> (aget js/window "my_electron_bridge")
@@ -531,8 +457,10 @@
       (let [pr (spit file contents)]
         (prn pr)
         (-> pr
-         (.then  (fn [] (swap! save-status assoc :status :ok :file file)))
-         (.catch (fn [] (swap! save-status assoc :status :error))))))))
+         (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
+         (.catch (fn [] (swap! ml/save-status assoc :status :error))))))))
+
+
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
@@ -551,7 +479,6 @@
        (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
        (core/register-mutation! :eval-sci (eval-sci/mutatef a))
-       #_(eval-sci/setup-sci!)
        (core/register-simple!
         :zp
         (fn [db _]
@@ -606,9 +533,9 @@
                           first)
                 file (or (:chain/filename chain) "noname.clj")]
             (when chain
-              (reset! save-status {:at (:max-tx db)
-                                   :on (:db/id sel)
-                                   :status :saving})
+              (reset! ml/save-status {:at (:max-tx db)
+                                      :on (:db/id sel)
+                                      :status :saving})
               (save* file (e/->string chain)))
             nil)))))))
 
@@ -655,6 +582,6 @@
     (reset! keyboard-bus bus)
     ;; document.write(process.versions['electron'])
     (rum/mount
-     #_(debug-component)
-     (root-component @conn bus)
-     (.getElementById js/document "root"))))
+       #_(debug-component)
+       (root-component @conn bus)
+       (.getElementById js/document "root"))))

@@ -67,9 +67,11 @@
                           old-eid         (:db/id old-e)
                           new-eid         (:db/id new-e)]
                       (when-not (identical? bus old-bus)
-                        (throw (ex-info "The bus cannot change" {})))
+                        (println "The bus changed.")
+                        #_(throw (ex-info "The bus cannot change" {})))
                       (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
-                        (throw (ex-info "The chan cannot change" {})))
+                        (println "The chan changed." )
+                        #_(throw (ex-info "The chan cannot change" {})))
                       (when-not (= old-eid new-eid)
                         (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
                         (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
