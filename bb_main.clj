@@ -232,12 +232,15 @@
   (package-electron "/tmp/temperloy"))
 
 
-(defn helium
-  [out]
-  (release-cljs! :elec)
-  (release-cljs! :br)
-  (package-electron out)
-  (sync-prepl-exec '(shadow.cljs.devtools.api/watch :elec))
-  (sync-prepl-exec '(shadow.cljs.devtools.api/watch :br))
-  (reset! electron-process (p/process [@electron-exe (fs/path out electron-main) "--localhost"]))
-  :started)
+(defn He
+  ([] (He (str "subtree/" (System/currentTimeMillis) )))
+  ([out]
+   (release-cljs! :elec)
+   (release-cljs! :br)
+   (package-electron out)
+   (sync-prepl-exec '(do (shadow.cljs.devtools.api/watch :br)
+                         (shadow.cljs.devtools.api/compile :br)))
+   (sync-prepl-exec '(do (shadow.cljs.devtools.api/watch :elec)
+                         (shadow.cljs.devtools.api/compile :elec)))
+   (reset! electron-process (p/process [@electron-exe (fs/path out electron-main) "--localhost"]))
+   :started))

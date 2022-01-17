@@ -16,7 +16,6 @@
     (e/string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e
       (println "No edn" s)
-      (js/console.log e)
       nil)))
 
 (defn parse-token-tx

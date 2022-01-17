@@ -76,9 +76,7 @@
                                     (< 1 isf) (assoc :form/indent isf)
                                     nl        (assoc :form/linebreak true)))))))
            (coll-tx [coll-type xs]
-             (let [id         (new-tempid)
-                   linebreak? (atom nil)
-                   isf        (atom 0)]
+             (let [id         (new-tempid)]
                (cond-> {:db/id id :coll/type coll-type}
                  (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil []))))))]
      (case (n/tag n)
@@ -193,6 +191,19 @@
         (cons f (lazy-seq (iter (:seq/next e))))))
     top)))
 
+(defn parse-keyword
+  [{:token/keys [value]}]
+  (cond
+    (string/starts-with? value "::")
+    (throw (ex-info "Don't know how to handle these yet" {}))
+    
+    (string/starts-with? value ":")
+    (keyword (subs value 1))
+    
+    :else (throw (ex-info
+                  (str "What sort of keyword is this? " value)
+                  {}))))
+
 (defn ->form
   [e]
   (or (when-let [ct (:coll/type e)]
@@ -205,7 +216,7 @@
               (case ct :list () :vec [] :map {}))))
       (case (:token/type e)
         :symbol (symbol (:token/value e))
-        :keyword (keyword (:token/value e))
+        :keyword (parse-keyword e)
         :number (:token/value e)
         :string (:token/value e))))
 
@@ -338,4 +349,6 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
 

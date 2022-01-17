@@ -79,10 +79,12 @@
 
 (comment
   (+ 18 18 9 9 9)
+  (do the-future)
+
   (def the-future
     (future
       (time
-       (dotimes [i 99]
+       (dotimes [i 25]
          (prn i)
-         (when-let [r (search-for-failure '[a ^:form/highlight b c] 9544)]
+         (when-let [r (search-for-failure '[a ^:form/highlight b c] 959)]
            (prn r)))))))

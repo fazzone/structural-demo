@@ -18,7 +18,7 @@
   ([e r?]
    (let [spine (first (:seq/_first e))
          next  (some-> spine :seq/next)
-         prev  (some-> spine :seq/_next first)]
+         prev  (some-> spine :seq/_next exactly-one)]
      (into [(if r?
               [:db/retractEntity (:db/id e)]
               (let [coll (exactly-one (:coll/_contains e))]
@@ -68,8 +68,8 @@
 
 (defn form-replace-tx
   [e r]
-  (let [old-parent (first (:coll/_contains r))
-        old-spine (first (:seq/_first r))]
+  (let [old-parent (exactly-one (:coll/_contains r))
+        old-spine (exactly-one (:seq/_first r))]
     (into (form-overwrite-tx e (:db/id r))
           [(when old-spine
              [:db/retract (:db/id old-spine) :seq/first (:db/id r)])
@@ -78,7 +78,7 @@
 
 (defn form-raise-tx
   [e]
-  (when-let [parent (some-> (:coll/_contains e) first)]
+  (when-let [parent (some-> (:coll/_contains e) exactly-one)]
     (when-not (= :chain (:coll/type parent))
       (let [{:form/keys [linebreak indent]} parent]
         (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]
@@ -91,7 +91,7 @@
 (defn insert-after-tx
   [target new-node]
   (when-let [spine (first (:seq/_first target))]
-    (when-let [coll (first (:coll/_contains target))]
+    (when-let [coll (exactly-one (:coll/_contains target))]
       [{:db/id (:db/id spine)
         :seq/next {:db/id "cons"
                    :seq/first (:db/id new-node)}}
@@ -102,9 +102,9 @@
 
 (defn insert-before-tx
   [target new-node]
-  (let [spine (first (:seq/_first target))
-        coll (first (:coll/_contains target))]
-    (println "IBTX" spine coll)
+  (let [spine (exactly-one (:seq/_first target))
+        coll (exactly-one (:coll/_contains target))]
+    #_(println "IBTX" spine coll)
     (when (and spine coll)
       [{:db/id (:db/id spine)
         :seq/first (:db/id new-node)
@@ -140,11 +140,11 @@
 
 (defn exchange-with-previous-tx
   [sel]
-  (println "XWP" (:db/id sel))
+  #_(println "XWP" (:db/id sel))
   (let [spine  (exactly-one (:seq/_first sel))
         prev   (some-> spine :seq/_next exactly-one)
         next   (some-> spine :seq/next)
-        parent (first (:coll/_contains sel))]
+        parent (exactly-one (:coll/_contains sel))]
     (when (and prev parent)
       [[:db/add (:db/id prev) :seq/first (:db/id sel)]
        [:db/add (:db/id spine) :seq/first (:db/id (:seq/first prev))]
@@ -152,9 +152,9 @@
 
 (defn exchange-with-next-tx
   [sel]
-  (let [spine  (first (:seq/_first sel))
+  (let [spine  (exactly-one (:seq/_first sel))
         next   (some-> spine :seq/next)
-        parent (first (:coll/_contains sel))]
+        parent (exactly-one (:coll/_contains sel))]
     (when (and next parent)
       [[:db/add (:db/id next) :seq/first (:db/id sel)]
        [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
@@ -199,8 +199,8 @@
 
 (defn wrap-and-edit-first-tx
   [sel ct]
-  (let [spine (first (:seq/_first sel))
-        coll (first (:coll/_contains sel))
+  (let [spine (exactly-one (:seq/_first sel))
+        coll (exactly-one (:coll/_contains sel))
         new-node {:db/id "first"
                   :coll/type ct
                   :coll/_contains (:db/id coll)

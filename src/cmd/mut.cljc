@@ -150,14 +150,36 @@
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
 
+
+
+(defn ingest-nav-assoc
+  [[[k v] & kvs]]
+  (let [e (e/new-tempid)]
+    (merge {:db/id e :coll/type :map}
+           (e/seq-tx
+            (->> kvs
+                 (mapcat (fn [[k v]]
+                           [(assoc (e/->tx* k)
+                                   :form/linebreak true
+                                   :form/indent 1)
+                            (e/->tx* v)]))
+                 (list* (e/->tx* k) (e/->tx* v))
+                 (map #(assoc % :coll/_contains e )))))))
+
 (defn ingest-result
-  [et c]
+  [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node  (-> (e/->tx* c)
-                      (assoc :form/linebreak true)
+        new-node  (-> (if (and (associative? c) (not (sequential? c)))
+                        (ingest-nav-assoc c)
+                        (e/->tx* c))
+                      (assoc :form/linebreak true
+                             :nav/pointer c
+                             :eval/action :nav)
                       (update :db/id #(or % "new-node")))]
+    #_(cljs.pprint/pprint new-node)
     (into [new-node]
-          (edit/insert-before-tx top-level new-node))))
+          #_(edit/insert-before-tx top-level new-node)
+          (edit/insert-after-tx top-level new-node))))
 
 (defn insert-data
   [et c]
@@ -424,11 +446,11 @@
             (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
 (def editing-commands
-  {:float (comp edit/exchange-with-previous-tx get-selected-form)
-   :sink  (comp edit/exchange-with-next-tx get-selected-form)
-   :select-chain (fn [db] (nav/select-chain-tx (get-selected-form db)))
-   :hop-left     nav/hop-left
-   :hop-right    nav/hop-right
+  {:float                          (comp edit/exchange-with-previous-tx get-selected-form)
+   :sink                           (comp edit/exchange-with-next-tx get-selected-form)
+   :select-chain                   (fn [db] (nav/select-chain-tx (get-selected-form db)))
+   :hop-left                       nav/hop-left
+   :hop-right                      nav/hop-right
    :uneval                         (comp uneval-and-next get-selected-form)
    :insert-right                   (comp edit/insert-editing-after get-selected-form)
    :insert-left                    (comp edit/insert-editing-before get-selected-form)
@@ -456,8 +478,7 @@
    :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
    :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
    :new-comment                    (comp new-comment-tx get-selected-form)
-   :open-chain (fn [db t props]
-                 (chain-from-text (get-selected-form db) t props))
+   :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    eval-result-above-toplevel
    :ingest-result                  ingest-result

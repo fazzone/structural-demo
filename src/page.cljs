@@ -26,7 +26,7 @@
    [cmd.edit :as edit]
    [cmd.mut :as mut]
    [cmd.invar :as invar]
-   #_[df.github :as dfg]
+   [df.github :as dfg]
    [df.async :as a]
    [zprint.core :as zp-hacks]
    [core :as core
@@ -118,7 +118,7 @@
    "S-("   :new-list
    "["     :new-vec
    "S-C"   :new-chain
-   "S-B"   :new-bar
+   "S-B"   :new-bar "'" :new-quote
    "1"     :m1
    "2"     :m2
    "3"     :m3
@@ -336,11 +336,10 @@
     (when-not @eb/global-editing-flag
       (let [kbd (event->kbd ev)
             bindings default-keymap
-            mut (get bindings kbd)]
+            mut (get bindings kbd)
+            _ (println "Kbd" kbd :mut mut)]
         (core/send! @keyboard-bus [:kbd kbd tkd])
-        (when (some? mut)
-          (.preventDefault ev)
-          (.stopPropagation ev))))))
+        (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 
 (defonce global-keydown
   (fn [ev]
