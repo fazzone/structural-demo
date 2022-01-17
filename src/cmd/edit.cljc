@@ -197,22 +197,6 @@
              [:db/retract (:db/id e) :form/indent indent])]
           (form-overwrite-tx e "newnode"))))
 
-(defn wrap-and-edit-first-tx
-  [sel ct]
-  (let [spine (exactly-one (:seq/_first sel))
-        coll (exactly-one (:coll/_contains sel))
-        new-node {:db/id "first"
-                  :coll/type ct
-                  :coll/_contains (:db/id coll)
-                  :seq/first {:db/id "funcname"
-                              :coll/_contains "first"
-                              :form/editing true}
-                  :seq/next {:seq/first (:db/id sel)}}]
-    (into [new-node]
-          (concat
-           (form-overwrite-tx sel "first")
-           (move-selection-tx (:db/id sel) "first")))))
-
 (defn begin-edit-existing-node-tx
   [e]
   [[:db/add (:db/id e) :form/editing true]])
@@ -222,9 +206,8 @@
   (let [new-node (merge opts
                         {:db/id "newnode"
                          :coll/type ct
-                         :coll/contains "inner"
+                         :coll/contains #{"inner"}
                          :seq/first {:db/id "inner"
-                                     :coll/_contains "newnode"
                                      :form/edit-initial (or init  "")
                                      :form/editing true}})]
     (into [new-node]

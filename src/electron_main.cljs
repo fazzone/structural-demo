@@ -24,16 +24,13 @@
                               #js {:action "allow"
                                    :overrideBrowserWindowOptions browser-window-opts})
         
-        ^js/electron.BrowserWindow main-window   (BrowserWindow. browser-window-opts)
-        ^js/electron.BrowserWindow second-window (when dev-version?
-                                                   (BrowserWindow. browser-window-opts))]
-
+        ^js/electron.BrowserWindow main-window   (BrowserWindow. browser-window-opts)]
     
     (.loadURL main-window file-src)
     (doto (.-webContents main-window)
       (.setWindowOpenHandler window-open-handler))
     
-    (when dev-version?
+    #_(when dev-version?
       (.loadURL second-window localhost-url)
       (doto (.-webContents second-window)
         (.setWindowOpenHandler window-open-handler)

@@ -48,10 +48,7 @@
   '[["Chain 1"
      (def thing
        [1 (+ 2 3 foo) [:a :c] "ok"])
-     (defn hn-test
-       []
-       (ingest (then (nav stories :topstories (:topstories stories))
-                     (fn [x] (nav x x (first x))))))
+     (nav hn/stories :topstories (:topstories stories))
      (defn open-file
        [path]
        (then (slurp path)
@@ -61,11 +58,17 @@
        [u]
        (then (fetch-text u)
              (fn [text] (send! [:open-chain text]))))
+     (new-window "http://localhost:8087?title=SH"
+                 "_blank"
+                 "top=500,left=3000")
      (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/page.cljs")
-     ^:form/highlight (open-file "src/macros.clj")]])
+     ^:form/highlight (open-file "src/page.cljs")
+     (open-file "src/cmd/mut.cljc")
+     (open-file "src/embed.cljc")]])
 
 (def default-keymap
   {"f"   :flow-right
+   "S-^" :new-meta
    "S-F" :flow-right-coll
    "u"   :undo
    "S-A" :alias
@@ -105,7 +108,6 @@
    "c"         :clone
    "z"         :hop-left
    "x"         :hop-right
-   "q"         :compose
    "9"         :wrap
    ;; "9"         :new-list
    "0"     :parent

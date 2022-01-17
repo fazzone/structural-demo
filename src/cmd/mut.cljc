@@ -150,8 +150,6 @@
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
 
-
-
 (defn ingest-nav-assoc
   [[[k v] & kvs]]
   (let [e (e/new-tempid)]
@@ -164,19 +162,44 @@
                                    :form/indent 1)
                             (e/->tx* v)]))
                  (list* (e/->tx* k) (e/->tx* v))
-                 (map #(assoc % :coll/_contains e )))))))
+                 (map #(assoc % :coll/_contains e)))))))
 
-(defn ingest-result
+(defn ingest*
+  [c]
+  (-> (if (and (associative? c) (not (sequential? c)))
+        (ingest-nav-assoc c)
+        (e/->tx* c))
+      (assoc :nav/pointer c
+             :eval/action :nav)
+      (update :db/id #(or % "new-node"))))
+
+(defn ingest-eval-result
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node  (-> (if (and (associative? c) (not (sequential? c)))
-                        (ingest-nav-assoc c)
-                        (e/->tx* c))
-                      (assoc :form/linebreak true
-                             :nav/pointer c
-                             :eval/action :nav)
-                      (update :db/id #(or % "new-node")))]
-    #_(cljs.pprint/pprint new-node)
+        new-node (ingest* c)
+        outer {:db/id "outer"
+               :coll/type :eval-result
+               :seq/first (:db/id new-node)
+               :eval/of (:db/id et)
+               :coll/contains (:db/id new-node)}]
+    (into [new-node outer]
+          #_(edit/insert-before-tx top-level new-node)
+          (edit/insert-after-tx top-level outer))))
+
+(defn ingest-replacing
+  [db et c]
+  (let [top-level (peek (nav/parents-vec et))
+        new-node (ingest* c)]
+    (into [new-node]
+          #_(edit/insert-before-tx top-level new-node)
+          #_(edit/insert-after-tx top-level outer)
+          (concat (edit/form-overwrite-tx et (:db/id new-node))
+                  (move-selection-tx (:db/id et) (:db/id new-node))))))
+
+(defn ingest-after
+  [db et c]
+  (let [top-level (peek (nav/parents-vec et))
+        new-node (ingest* c)]
     (into [new-node]
           #_(edit/insert-before-tx top-level new-node)
           (edit/insert-after-tx top-level new-node))))
@@ -465,7 +488,6 @@
    :raise                          (comp edit/form-raise-tx get-selected-form)
    :clone                          (comp edit/insert-duplicate-tx get-selected-form)
    :linebreak                      linebreak-selected-form-tx
-   :compose                        (fn [db] (edit/wrap-and-edit-first-tx (get-selected-form db) :list))
    :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
    :indent                         (fn [db] (indent-selected-form-tx db 1))
    :dedent                         (fn [db] (indent-selected-form-tx db -1))
@@ -477,11 +499,13 @@
    :new-quote                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
    :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
    :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
+   :new-meta                       (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :meta "" {}))
    :new-comment                    (comp new-comment-tx get-selected-form)
    :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    eval-result-above-toplevel
-   :ingest-result                  ingest-result
+   :ingest-result                  ingest-replacing
+   :ingest-after                   ingest-after
    :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
    :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
    :plus                           (comp plus* get-selected-form)

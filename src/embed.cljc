@@ -156,8 +156,9 @@
       (set? e)        (coll-tx :set e)
       (sequential? e) (coll-tx :list e)
       #?@ (:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
-                 (instance? js/URL e)  {:token/type :string :token/value (str e)}])
-      :else (throw (ex-info (str "What is this" (type e) (pr-str e)) {})))))
+                  (instance? js/URL e)  {:token/type :string :token/value (str e)}])
+      (nil? e)        {:token/type :symbol :token/value "nil"}
+      :else           (throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
 
 (defn ->tx
   [e]
@@ -349,6 +350,8 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
 
 
 

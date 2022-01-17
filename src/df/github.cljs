@@ -44,15 +44,25 @@
           item  (with-meta res {:hacker-news/api-url url})]
     (if-not (map? item)
       item
-      (cond-> item
-        (contains? item :url)
-        (update :url #(as-url %))
-        (contains? item :time)
-        (update :time #(as-date (* % 1000)))
-        (contains? item :created)
-        (update :created #(as-date (* % 1000)))
-        (contains? item :type)
-        (update :type keyword)))))
+      (case (:type item)
+        "story"   (apply array-map
+                       (mapcat (juxt identity item)
+                               [:type :title :url :score :by :id
+                                :time :descendants
+                                :kids]))
+        "comment" (apply array-map
+                         (mapcat (juxt identity item)
+                                 [:type :by :id :parent :time :text ])))
+      
+      #_(cond-> item
+          (contains? item :url)
+          (update :url #(as-url %))
+          (contains? item :time)
+          (update :time #(as-date (* % 1000)))
+          (contains? item :created)
+          (update :created #(as-date (* % 1000)))
+          (contains? item :type)
+          (update :type keyword)))))
 
 (declare nav-hn)
 

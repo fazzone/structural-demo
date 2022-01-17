@@ -24,6 +24,7 @@
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
    {:namespaces (-> {'d {'datoms d/datoms 'touch d/touch}
+                     'hn {'stories dfg/stories}
                      #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                      'all     (fn [a b c] (js/Promise.all a b c))}])}
                     (merge namespaces))
@@ -31,12 +32,17 @@
                      '->seq e/seq->seq
                      'datafy datafy/datafy
                      'nav    datafy/nav
-                     'stories dfg/stories
                      #?@ (:clj ['slurp slurp
                                 'spit spit]
-                          :cljs ['fetch-text (fn [z f]
+                          :cljs ['fetch-text (fn [z]
                                                (.then (js/fetch z)
                                                       (fn [resp] (.text resp))))
+                                 'fetch-json (fn [u]
+                                               (.then (js/fetch u)
+                                                      (fn [resp]
+                                                        (.then (.json resp)
+                                                               #(js->clj % :keywordize-keys true)))))
+                                 'ingest (fn [z] (with-meta z {`ingest true}))
                                  'then (fn [p f] (.then (js/Promise.resolve p) f))
                                  'slurp      (some-> electron-bridge (aget "slurp"))
                                  'spit       (some-> electron-bridge (aget "spit"))
@@ -56,6 +62,9 @@
     (cond
       (some-> result meta (get `p/nav))
       (core/send! bus [:ingest-result eval-target result])
+
+      (some-> result meta (get `ingest))
+      (core/send! bus [:ingest-after eval-target result])
       
       (v/var? result)
       (core/send! bus

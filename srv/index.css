@@ -460,9 +460,13 @@ span.key-compose-echo {
     padding: 1ex;
     border-radius: 2ex;
 }
-.er1 {
+.eval-result.selected { background-color: #055005; }
 
+.eval-result-ref {
+    font-weight: bolder;
+    color: #57b7e5;
 }
+
 
 .edit-box:not(:focus) {
     background-color: tomato;

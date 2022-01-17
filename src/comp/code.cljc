@@ -52,60 +52,68 @@
 
 (def render-counter (atom 0))
 
-(def dispatch-coll
-  {:keyboard comp.keyboard/keyboard-diagram
-   :inspect comp.inspect/inspect})
-
-(rum/defc any-coll
-  [e classes bus indent proply]
-  (let [ct (:coll/type e)
-        coll-class  (case ct
-                      (:list :vec :map :set :fn :tear) "dl"
-                      nil)
-        extra-class (case ct
-                      :uneval                                  "unev"
-                      (:deref :quote :syntax-quote :unquote
-                              :unquote-splicing :reader-macro) "pf"
-                      nil)
-        open-delim  (e/open-delim ct)
-        close-delim (e/close-delim ct)]
-    (if-not (or coll-class extra-class open-delim close-delim)
-      (do
-        (println "Dispatching " ct e)
-        ^:inline ((get dispatch-coll ct (constantly nil))
-                  e bus))
-      (let [children (e/seq->vec e)]
-        [:span {:class ["c" coll-class extra-class classes]}
-         #_[:span.inline-tag.debug
-            (str (swap! render-counter inc))
-            #_(str (:db/id e))]
-         (when-some [p (get proply (:db/id e))]
-           [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
-         (cond
-           extra-class [:span.d.pfc ^String open-delim]
-           open-delim  [:span.d ^String open-delim]
-           :else       nil)
-         (for [c children]
-           ^:inline (form c bus indent proply))
-         (when close-delim
-           [:span.d ^String close-delim])]))))
+(rum/defc erc
+  [{:eval/keys [of]  :as e} bus classes]
+  (let [[result] (e/seq->vec e)]
+    [:div.eval-result {:class classes} (form result bus 0 (first ()))
+     [:div "Result of "
+      [:a.eval-result-ref
+       {:on-click (fn []
+                    (println "Onclickerinog")
+                    (core/send! bus [:select (:db/id of)]))}
+       (str "#" (:db/id (:eval/of e)))]]]))
 
 (rum/defc chain
-  [ch bus]
+  [ch bus classes]
   [:div.chain.hide-scrollbar
    {:key (:db/id ch)
-    :class ["map" (when (:form/highlight ch) "selected")]
+    :class classes
     :id (str "c" (:db/id ch))}
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
          (rum/with-key (:db/id f))))])
 
-(rum/defc bar [b bus]
+(rum/defc bar [b bus classes]
   [:div.bar.hide-scrollbar
-   {:class (when (:form/highlight b) "selected")}
+   {:class classes}
    (for [chain-head (e/seq->vec b)]
      (-> (form chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
+
+(def dispatch-coll
+  {:keyboard comp.keyboard/keyboard-diagram
+   :inspect comp.inspect/inspect
+   :eval-result erc
+   :bar bar
+   :chain chain})
+
+(rum/defc any-coll
+  [e classes bus indent proply]
+  (let [ct (:coll/type e)
+        coll-class (case ct
+                     (:list :vec :map :set :fn :tear) "dl"
+                     nil)
+        extra-class (case ct
+                      :uneval "unev"
+                      (:deref :quote
+                              :syntax-quote :unquote
+                              :unquote-splicing :reader-macro)
+                        "pf"
+                      nil)
+        open-delim (e/open-delim ct)
+        close-delim (e/close-delim ct)]
+    (if-not (or coll-class extra-class open-delim close-delim)
+      ^:inline ((get dispatch-coll ct (constantly nil)) e bus classes)
+      (let [children (e/seq->vec e)]
+        [:span {:class ["c" coll-class extra-class classes]}
+         #_[:span.inline-tag.debug (str (swap! render-counter inc))
+            #_(str (:db/id e))]
+         (when-some [p (get proply (:db/id e))]
+           [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
+         (cond extra-class [:span.d.pfc ^String open-delim]
+               open-delim [:span.d ^String open-delim]
+               :else nil) (for [c children] ^:inline (form c bus indent proply))
+         (when close-delim [:span.d ^String close-delim])]))))
 
 (defn token-class
   [t v]
@@ -148,37 +156,40 @@
     :comment v
     :regex (str "REGEX:" v)))
 
-(rum/defc form < dbrx/ereactive {:key-fn (fn [e b i p] (:db/id e))}
+(rum/defc form
+  < dbrx/ereactive
+    {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
   (rum/fragment
     (indenter (:form/linebreak e) indent-prop (:form/indent e))
-    (cond (:form/editing e)
-          (eb/edit-box e bus)
+    (cond (:form/editing e) (eb/edit-box e bus)
           (:token/type e)
-          (let [tt (:token/type e)
-                tv (:token/value e)
-                tc (token-class tt tv)
-                it (token-text tt tv)]
-            [:span {:key      (:db/id e)
-                    :class    (if (:form/highlight e)
-                                (str "tk selected " tc)
-                                (str "tk " tc))
-                    :on-click (fn [ev]
-                                (.stopPropagation ev)
-                                (core/send! bus [:select (:db/id e)]))}
-             ^String it])
+            (let [tt (:token/type e)
+                  tv (:token/value e)
+                  tc (token-class tt tv)
+                  it (token-text tt tv)]
+              [:span
+               {:key (:db/id e)
+                ;; :dangerouslySetInnerHTML {:__html it}
+                :class (if (:form/highlight e)
+                         (str "tk selected " tc)
+                         (str "tk " tc))
+                :on-click (fn [ev]
+                            (.stopPropagation ev)
+                            (core/send! bus [:select (:db/id e)]))}
+               ^String it])
           (:coll/type e)
-          (case (:coll/type e)
-            nil    (comment "Probably a retracted entity, do nothing")
-            :chain (chain e bus)
-            :bar   (bar e bus)
-            (any-coll e
-                      (when (:form/highlight e) "selected")
-                      bus
-                      (+ 2 indent-prop)
-                      proply
-                      #_(if-not (:form/highlight e)
-                        proply
-                        (zipmap (map :db/id
-                                     (next (mut/get-numeric-movement-vec e)))
-                                (range 2 9))))))))
+            (let [classes (when (:form/highlight e) "selected")]
+              (case (:coll/type e)
+                nil (comment
+                      "Probably a retracted entity, do nothing")
+                (any-coll e
+                          classes
+                          bus
+                          (+ 2 indent-prop)
+                          proply
+                          #_(if-not (:form/highlight e)
+                              proply
+                              (zipmap (map :db/id
+                                        (next (mut/get-numeric-movement-vec e)))
+                                      (range 2 9)))))))))
