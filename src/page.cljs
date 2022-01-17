@@ -64,7 +64,26 @@
      (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/page.cljs")
      ^:form/highlight (open-file "src/page.cljs")
      (open-file "src/cmd/mut.cljc")
-     (open-file "src/embed.cljc")]])
+     (open-file "src/embed.cljc")
+
+     (a/let [ref (fetch-json "https://api.github.com/repos/fazzone/structural-demo/git/ref/heads/master")
+             commit (fetch-json (-> ref :object :url))
+             tree (fetch-json (-> commit :tree :url))
+             whole-tree (explore-tree "/" tree)]
+       (ingest (js->clj whole-tree)))
+
+     (defn explore-tree
+       [{:keys [tree]  :as t}]
+       (let [by-type (group-by :type tree)]
+         (a/let [rec (js/Promise.all
+                      (into-array
+                       (for [{:keys [url path] :as st} (by-type "tree")]
+                         (a/let [f (fetch-json url) sf (explore-tree f)] [path sf]))))]
+           (into (sorted-map)
+                 (concat (for [{:keys [path] :as b} (by-type "blob")] [path b])
+                         rec)))))
+     
+     ]])
 
 (def default-keymap
   {"f"   :flow-right
@@ -101,7 +120,8 @@
    "S- "       :insert-left
    "d"         :delete-right
    "S-H"       :hoist
-   "Backspace" :move-to-deleted-chain
+   "Backspace" :delete-left
+   ;; "Backspace" :move-to-deleted-chain
    "Enter"     :linebreak
    "C-Enter"   :insert-right-newline
    "Escape"    :select-chain

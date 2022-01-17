@@ -43,7 +43,7 @@
                  muts)]
     (last reports)))
 
-(def population
+#_(def population
   [[:flow-right]
    [:flow-right]
    [:flow-left]
@@ -56,8 +56,32 @@
    [:clone]
    [:barf-right]
    [:slurp-right]])
+(defn try-mutations
+  [db muts]
+  (loop [db                          db
+         [[m & args :as mut] & more] muts]
+    (if-not mut
+      db
+      (let [tx  (try (apply (mut/dispatch-table m) db args)
+                     (catch Exception e
+                       (throw (ex-info "Mutator failure"
+                                       {:type ::mutation-failure
+                                        :mutation m
+                                        :args args}
+                                       e))))
+            ndb (try (d/db-with db tx)
+                     (catch Exception e
+                       (throw (ex-info "Transaction failure"
+                                       {:type ::transaction-failure
+                                        :mutation m
+                                        :args args
+                                        :tx-data tx}
+                                       e))))]
+        (recur ndb more)))))
 
-(defn search-for-failure
+
+
+#_(defn search-for-failure
   [init-form maxn]
   (loop [i         0
          db        (setup-db init-form)
@@ -76,6 +100,61 @@
         tx-error   {:i i ::tx-error (ex-message (:e tx-error)) :muts (conj mutations mut)}
         (< i maxn) (recur (inc i) ndb (conj mutations mut))
         :else      nil))))
+
+(def population
+  [[[:flow-right]]
+   [[:flow-right]]
+   [[:flow-left]]
+   [[:flow-left]]
+   [[:float]] [[:float]] [[:float]]
+   [[:sink]] [[:sink]]
+   [[:wrap]] [[:wrap]] [[:wrap]]
+   [[:delete-left]] [[:delete-left]] [[:delete-right]] [[:delete-right]]
+   [[:clone]] [[:clone]]
+   [[:barf-right]]
+   [[:slurp-right]] [[:slurp-right]] [[:slurp-right]]
+   [[:raise]] [[:raise]]
+   [[:new-vec] [:edit/finish "x"]]
+   [[:new-vec] [:edit/finish "x"]]
+   [[:new-vec] [:edit/finish "x"]]
+   [[:new-vec] [:edit/finish "x"]]
+   [[:new-vec] [:edit/finish "x"]]
+   [[:new-vec] [:edit/reject]]
+   [[:new-vec] [:edit/reject]]
+   [[:new-vec] [:edit/reject]]
+   [[:new-vec] [:edit/reject]]])
+
+(defn search-for-failure
+  [init-form maxn]
+  (loop [i         0
+         db        (setup-db init-form)
+         mutations []]
+    (let [mut-seq (rand-nth population)
+          ndb (try-mutations db mut-seq)]
+      (if-not (< i maxn)
+        db
+        (recur (inc i) ndb (conj mutations mut-seq))))))
+
+
+
+(comment
+  (do
+    (def the-db
+      (search-for-failure
+       '[a ^:form/highlight b c]
+       999
+       ))
+    (clojure.pprint/pprint (e/->form (d/entity the-db 4)))))
+
+
+
+(comment
+  (e/->string
+   (d/entity
+    (try-mutations
+     (setup-db '[a ^:form/highlight b c])
+     [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]])
+    2)))
 
 (comment
   (+ 18 18 9 9 9)

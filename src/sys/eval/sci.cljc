@@ -8,6 +8,7 @@
    [datascript.core :as d]
    [sci.impl.vars :as v]
    [df.github :as dfg]
+   [df.async :as a]
    [clojure.datafy :as datafy]
    [core :as core :refer [get-selected-form]]))
 
@@ -20,10 +21,29 @@
                         (aget "list_dir"))]
     (.then (f p) js->clj)))
 
+
+
 (defn sci-opts
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
-   {:namespaces (-> {'d {'datoms d/datoms 'touch d/touch}
+   {:classes {'js goog/global :allow :all}
+
+    :namespaces (-> {'d {'datoms d/datoms 'touch d/touch}
+                     'js {'Promise.resolve (fn [p]
+                                             (println "Resolver" p)
+                                             (js/Promise.resolve p))}
+
+                     'df.async {'do ^:sci/macro (fn [&form &env & body]
+                                                  (println "Macro!" &form body)
+                                                  (let [ret (a/do* body)]
+                                                    (println "Ret:Do" ret)
+                                                    ret))}
+                     'a {'let ^:sci/macro (fn [&form &env bindings & body]
+                                            (println "Macro!Let" &form)
+                                            (prn 'bindings bindings 'body body)
+                                            (let [ret (a/sci-let** bindings body)]
+                                              (println "Ret:Let" ret)
+                                              ret))}
                      'hn {'stories dfg/stories}
                      #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                      'all     (fn [a b c] (js/Promise.all a b c))}])}
