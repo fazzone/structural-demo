@@ -31,7 +31,8 @@
      (or (:form/indent e)
          0)))
 
-(rum/defc top-level-form < dbrx/ereactive
+(rum/defc top-level-form
+  ;; < dbrx/ereactive
   [e bus p]
   [:div.form-card
    {}
@@ -83,7 +84,7 @@
 
 (def dispatch-coll
   {:keyboard comp.keyboard/keyboard-diagram
-   :inspect comp.inspect/inspect
+   ;; :inspect comp.inspect/inspect
    :eval-result erc
    :bar bar
    :chain chain})
@@ -162,6 +163,8 @@
   {:did-update
    (fn [state]
      (when (some-> state :rum/args first :form/highlight)
+       #_(println "Do the scroll "
+                (some-> state :rum/args first (e/->string)))
        (let [el (rum/dom-node state)
              real-el (if-not (= "S" (.-tagName el) )
                        el

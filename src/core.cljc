@@ -106,14 +106,17 @@
   [{:keys [bus conn history] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
-      (let [[_ & args :as mut] (async/<! ch)
+      (let [[mut-name & args :as mut] (async/<! ch)
             db                 @conn
             tx-data            (apply mut-fn db args)
+            tid                (str mut-name)
+            _                  (js/console.time tid)
             report             (try (and tx-data
                                          (assoc (d/transact! conn tx-data)
                                                 :mut mut))
                                     (catch #? (:cljs js/Error :clj Exception) e
-                                      {:error e}))]
+                                      {:error e})
+                                    (finally (js/console.timeEnd tid)))]
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
@@ -220,22 +223,26 @@
                                   (println "No current-tx?"))
                                 (publish-tx-report! the-bus db-after tx-data tempids)))
                     (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
-                                 (let [emax (:max-eid db-before)
-                                       es (into #{}
-                                                (keep (fn [[e a v t]]
-                                                        (when-not (> e emax)
-                                                          e)))
-                                                tx-data)
-                                       as (into #{} (map (fn [[e a v t]] a)) tx-data)]
-                                   ;; (println "Actual tx-data:")
-                                   ;; (run! prn tx-data)
-                                   #_(println "Tempids" tempids)
-                                   #_(run! prn tx-data)
-                                   #_(println "Transacted" (count tx-data))
-                                   (doseq [e es]
-                                     (when-not (empty? (d/datoms db-after :eavt e))
-                                       (send! the-bus [e (d/entity db-after e)])))
-                                   (doseq [a as]
-                                     (send! the-bus [a db-after]))))))}
+                                 (try
+                                   (js/console.time "publish")
+                                   (let [emax (:max-eid db-before)
+                                         es (into #{}
+                                                  (keep (fn [[e]]
+                                                          (when-not (> e emax)
+                                                            e)))
+                                                  tx-data)
+                                         as (into #{} (map (fn [[_ a]] a)) tx-data)]
+                                     ;; (println "Actual tx-data:")
+                                     ;; (run! prn tx-data)
+                                     #_(println "Tempids" tempids)
+                                     #_(run! prn tx-data)
+                                     (println "Transacted" (count tx-data) "datoms" "Es" es "As" as)
+                                     (doseq [e es]
+                                       (when-not (empty? (d/datoms db-after :eavt e))
+                                         (send! the-bus [e (d/entity db-after e)])))
+                                     (doseq [a as]
+                                       (send! the-bus [a db-after])))
+                                   (finally
+                                     (js/console.timeEnd "publish"))))))}
         (map->App)
         (setup-undo!))))

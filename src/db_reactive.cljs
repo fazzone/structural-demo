@@ -19,20 +19,23 @@
   (reset! hack-cbq []))
 
 (defn update-first-arg!
-  [^js/React.Component rc e]
+  [^js/React.Component rc e ident]
   #_(let [cs (swap! hack-cbq conj
-                  (fn []
-                    (.setState rc (fn setstate-arx [state props]
-                                    (let [rst (aget state :rum/state)]
-                                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                                      state)))))]
-    (js/window.setTimeout
-     flush-cbq
-     0))
-  (.setState rc (fn setstate-arx [state props]
-                  (let [rst (aget state :rum/state)]
-                    (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                    state))))
+                    (fn []
+                      (.setState rc (fn setstate-arx [state props]
+                                      (let [rst (aget state :rum/state)]
+                                        (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                                        state)))))]
+      (js/window.setTimeout
+       flush-cbq
+       0))
+  (try
+    (js/console.time ident)
+    (.setState rc (fn setstate-arx [state props]
+                    (let [rst (aget state :rum/state)]
+                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                      state)))
+    (finally (js/console.timeEnd ident))))
 
 (def ereactive
   ;; mixin for components taking [entity bus ...]
@@ -45,7 +48,7 @@
                       (go-loop []
                         (let [[_ updated-entity] (async/<! ch)]
                           (reset! nupdate true)
-                          (update-first-arg! react-component updated-entity)
+                          (update-first-arg! react-component updated-entity (str "erx " (:db/id updated-entity)))
                           (recur)))
                       ;; subscribe to updates about entity
                       (core/connect-sub! bus (:db/id ent) ch)
@@ -97,10 +100,11 @@
   {:init
    (fn [{:rum/keys [react-component] :as state} props]
      (let [[_ bus] (:rum/args state)
-           ch (async/chan)]
+           ch (async/chan)
+           ident (str "arx " as)]
        (go-loop []
          (let [[_ db] (async/<! ch)]
-           (update-first-arg! react-component db)
+           (update-first-arg! react-component db ident)
            (recur)))
        ;; subscribe to updates about each attr
        (doseq [a as]
