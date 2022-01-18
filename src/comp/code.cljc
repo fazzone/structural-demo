@@ -17,11 +17,14 @@
    [cmd.nav :as nav]
    [cmd.mut :as mut]
    [comp.common :as cc]
+   [comp.modeline :as ml]
    [core :as core
     :refer [get-selected-form
             move-selection-tx]]
    [comp.keyboard]
    [comp.inspect]))
+
+(rum.core/set-warn-on-interpretation! true)
 
 (declare form)
 
@@ -59,7 +62,7 @@
   [{:eval/keys [of out]  :as e} bus classes]
   (let [[result] (e/seq->vec e)]
     [:div.eval-result {:class classes} #_(form result bus 0 (first ()))
-     (:token/value result)
+     ^String (:token/value result)
      [:div "Result of "
       [:a.eval-result-ref
        {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
@@ -114,7 +117,8 @@
            [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
          (cond extra-class [:span.d.pfc ^String open-delim]
                open-delim [:span.d ^String open-delim]
-               :else nil) (for [c children] ^:inline (form c bus indent proply))
+               :else nil)
+         (for [c children] ^:inline (form c bus indent proply))
          (when close-delim [:span.d ^String close-delim])]))))
 
 (defn token-class
@@ -183,6 +187,8 @@
          [selected?]))
     
     (rum/fragment
+     (when selected?
+       (ml/modeline-nest-next e bus))
      (indenter (:form/linebreak e) indent-prop (:form/indent e))
      (cond (:form/editing e) (eb/edit-box e bus)
            (:token/type e)

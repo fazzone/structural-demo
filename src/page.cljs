@@ -41,8 +41,6 @@
                                    go-loop]]
    [macros :as m]))
 
-(rum.core/set-warn-on-interpretation! true)
-
 (def load-time (js/Date.now))
 
 (def test-form-data-bar
@@ -338,7 +336,7 @@
   (let [state (d/entity db ::state)]
     [:div.bar-container {} #_(test-image)
      (code/form (:state/bar state) bus 0 nil)
-     (ml/modeline-portal db bus)
+     #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
 (defn event->kbd
@@ -473,19 +471,7 @@
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
-(comment
-  (letfn [(pubsub []
-            (let [subs (js/Set.)]
-              {:sub (fn [f]
-                      (.add subs f)
-                      (fn [] (.delete subs f)))
-               :pub (fn [m]
-                      (.forEach subs (fn [f] (f m))))}))]
-    (let [{:keys [pub sub]} (pubsub)
-          unsub (sub (fn [m] (println "Messg" m)))
-          _ (pub "Message")
-          _ (unsub)
-          _ (pub "M@")])))
+
 
 (defn fetch-json
   [u]

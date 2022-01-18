@@ -3,7 +3,7 @@
    [datascript.core :as d]
    [rum.core :as rum]
    [comp.edit-box]
-   [comp.search]
+   #_[comp.search]
    [cmd.nav :as nav]
    [db-reactive :as dbrx]
    [comp.common :as cc]
@@ -29,7 +29,8 @@
           :error "Error"
           "")))]
    (if text
-     (comp.search/results (d/entity-db sel)  :token/value text)
+     "No results"
+     #_(comp.search/results (d/entity-db sel)  :token/value text)
      #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
      [:span.modeline-content
       (if-not sel
@@ -39,7 +40,7 @@
              (or (:coll/type sel)
                  (pr-str (d/touch sel)))))])])
 
-(rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
+#_(rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]
   (let [sel (get-selected-form db)
         rpa (reverse (nav/parents-vec sel))
@@ -51,6 +52,13 @@
            (when (:form/editing sel)
              (rum/react comp.edit-box/editbox-ednparse-state)))
           (rum/portal nn)))))
+
+(rum/defc modeline-nest-next 
+  [sel bus]
+  (let [rpa (reverse (nav/parents-vec sel))
+        nn (.getElementById js/document (cc/modeline-portal-id (:db/id (first rpa))))]
+    (when nn
+      (rum/portal (modeline-inner sel bus nil) nn))))
 
 
 

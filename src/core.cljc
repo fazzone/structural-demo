@@ -237,11 +237,11 @@
                                      #_(println "Tempids" tempids)
                                      #_(run! prn tx-data)
                                      (println "Transacted" (count tx-data) "datoms" "Es" es "As" as)
+                                     (doseq [a as]
+                                       (send! the-bus [a db-after]))
                                      (doseq [e es]
                                        (when-not (empty? (d/datoms db-after :eavt e))
-                                         (send! the-bus [e (d/entity db-after e)])))
-                                     (doseq [a as]
-                                       (send! the-bus [a db-after])))
+                                         (send! the-bus [e (d/entity db-after e)]))))
                                    (finally
                                      (js/console.timeEnd "publish"))))))}
         (map->App)

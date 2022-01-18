@@ -135,10 +135,11 @@ span.form-title {
 /* .edit-box       { border-width: 0 1ch 0 1ch; } */
 .edit-box + .c  { margin-left: 1ch; }
 .d + .edit-box  { border-width: 0 1ch 0 0; }
-.c.dl > span:nth-last-child(2)                   { border-right: 0; }
-.c.dl > .edit-box:nth-last-child(2)              { border-right: 0; } /* { border-width: 0 0 0 1ch; }  */
-.c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; }
-.c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-right: 0; } /* { border-width: 0 0 0 1ch; }  */
+
+/* .c.dl > span:nth-last-child(2)                   { border-right: 0; } */
+/* .c.dl > .edit-box:nth-last-child(2)              { border-right: 0; } */
+/* .c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; } */
+/* .c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-right: 0; } */
 
 /* ??? */
 span.unev > span.tk:first-child { margin-left: -1ch; }

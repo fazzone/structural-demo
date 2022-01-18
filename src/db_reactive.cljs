@@ -94,7 +94,7 @@
                                  (rum/dom-node state)) 
                  state)})
 
-(defn areactive
+#_(defn areactive
   ;; mixin for components taking [db bus ...]
   [& as]
   {:init

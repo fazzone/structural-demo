@@ -7,7 +7,7 @@
    [comp.debug :as cd]
    [core :as core :refer [get-selected-form]]))
 
-(rum/defc inspect-inner < (dbrx/areactive :form/highlight :form/edited-tx)
+(rum/defc inspect-inner #_(dbrx/areactive :form/highlight :form/edited-tx)
   [db bus]
   (let [sel (get-selected-form db)]
     [:div.inspector.code-font
