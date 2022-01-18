@@ -58,9 +58,7 @@
     [:div.eval-result {:class classes} (form result bus 0 (first ()))
      [:div "Result of "
       [:a.eval-result-ref
-       {:on-click (fn []
-                    (println "Onclickerinog")
-                    (core/send! bus [:select (:db/id of)]))}
+       {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
        (str "#" (:db/id (:eval/of e)))]]]))
 
 (rum/defc chain
@@ -118,24 +116,24 @@
 (defn token-class
   [t v]
   (case t
-    :symbol   (case v
-                ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
-                 "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
-                 "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
-                "m"
-                ("first" "map" "filter" "apply" "reset!" "swap!"
-                 "get" "assoc" "update" "cons" "conj" "seq" "next"
-                 "prn" "println" "into" "set" "vector"
-                 "take" "drop" "take-while" "drop-while" "reduce"
-                 "concat")
-                "s"
-                "v")
-    :keyword  "k"
-    :string   "l"
-    :number   "n"
-    :regex    "re"
-    :verbatim "verbatim"
-    :comment  "comment"))
+    :symbol         (case v
+                      ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
+                       "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
+                       "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
+                      "m"
+                      ("first" "map" "filter" "apply" "reset!" "swap!"
+                       "get" "assoc" "update" "cons" "conj" "seq" "next"
+                       "prn" "println" "into" "set" "vector"
+                       "take" "drop" "take-while" "drop-while" "reduce"
+                       "concat")
+                      "s"
+                      "v")
+    :keyword        "k"
+    (:string :char) "l"
+    :number         "n"
+    :regex          "re"
+    :verbatim       "verbatim"
+    :comment        "comment"))
 
 (defn token-text
   [t v]
@@ -154,6 +152,7 @@
     :verbatim v
     :number (str v)
     :comment v
+    :char v
     :regex (str "REGEX:" v)))
 
 (rum/defc form

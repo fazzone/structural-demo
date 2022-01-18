@@ -164,7 +164,7 @@
                  (list* (e/->tx* k) (e/->tx* v))
                  (map #(assoc % :coll/_contains e)))))))
 
-(defn ingest*
+(defn ingest-navigable
   [c]
   (-> (if (and (associative? c) (not (sequential? c)))
         (ingest-nav-assoc c)
@@ -173,10 +173,10 @@
              :eval/action :nav)
       (update :db/id #(or % "new-node"))))
 
-(defn ingest-eval-result
+#_(defn ingest-eval-result
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node (ingest* c)
+        new-node (ingest-navigable c)
         outer {:db/id "outer"
                :coll/type :eval-result
                :seq/first (:db/id new-node)
@@ -189,7 +189,7 @@
 (defn ingest-replacing
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node (ingest* c)]
+        new-node  (ingest-navigable c)]
     (into [new-node]
           #_(edit/insert-before-tx top-level new-node)
           #_(edit/insert-after-tx top-level outer)
@@ -199,7 +199,8 @@
 (defn ingest-after
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node (ingest* c)]
+        new-node  (-> (e/->tx* c)
+                      (update :db/id #(or % "new-node")))]
     (into [new-node]
           #_(edit/insert-before-tx top-level new-node)
           (edit/insert-after-tx top-level new-node))))

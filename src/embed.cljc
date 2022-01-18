@@ -52,6 +52,9 @@
   (d/with (deref (d/create-conn s/form-schema))
           tx-data))
 
+
+
+
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]
@@ -88,9 +91,10 @@
          (let [v (n/sexpr n)]
            (cond
              (nil? v)    {:token/type :symbol :token/value "nil"}
-             (number? v) {:token/type :number :token/value (n/sexpr n)}
+             (number? v) {:token/type :number :token/value v}
              (true? v)   {:token/type :symbol :token/value "true"}
              (false? v)  {:token/type :symbol :token/value "false"}
+             (char? v)   {:token/type :char :token/value v}
              :else       (throw (ex-info (str "What token is this? " (pr-str n)) {})))))
        :list    (coll-tx :list (n/children n))
        :vector  (coll-tx :vec (n/children n))
@@ -350,6 +354,8 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
+
 
 
 

@@ -65,13 +65,13 @@
      ^:form/highlight (open-file "src/page.cljs")
      (open-file "src/cmd/mut.cljc")
      (open-file "src/embed.cljc")
-
-     (a/let [ref (fetch-json "https://api.github.com/repos/fazzone/structural-demo/git/ref/heads/master")
+     ()
+     (defn get-repo [ident ref-name]
+       (a/let [ref (fetch-json (str "https://api.github.com/repos/" ident "/git/ref/heads/" ref-name))
              commit (fetch-json (-> ref :object :url))
-             tree (fetch-json (-> commit :tree :url))
-             whole-tree (explore-tree "/" tree)]
-       (ingest (js->clj whole-tree)))
-
+             tree (fetch-json (str (-> commit :tree :url) "?recursive=true"))]
+       (ingest tree)))
+     (get-repo "fazzone/structural-demo" master)
      (defn explore-tree
        [{:keys [tree]  :as t}]
        (let [by-type (group-by :type tree)]
@@ -81,9 +81,7 @@
                          (a/let [f (fetch-json url) sf (explore-tree f)] [path sf]))))]
            (into (sorted-map)
                  (concat (for [{:keys [path] :as b} (by-type "blob")] [path b])
-                         rec)))))
-     
-     ]])
+                         rec)))))]])
 
 (def default-keymap
   {"f"   :flow-right

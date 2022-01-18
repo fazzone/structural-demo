@@ -1,16 +1,18 @@
 (ns sys.eval.sci
-  (:require
-   [sci.core :as sci]
-   [clojure.core.protocols :as p]
-   [embed :as e]
-   [cmd.move :as move]
-   [cmd.nav :as nav]
-   [datascript.core :as d]
-   [sci.impl.vars :as v]
-   [df.github :as dfg]
-   [df.async :as a]
-   [clojure.datafy :as datafy]
-   [core :as core :refer [get-selected-form]]))
+  (:require [sci.core :as sci]
+            [clojure.core.protocols :as p]
+            [embed :as e]
+            [cmd.move :as move]
+            [cmd.nav :as nav]
+            [daiquiri.interpreter :as rdi]
+            [datascript.core :as d]
+            [datascript.serialize :as dser]
+            [sci.impl.vars :as v]
+            [df.github :as dfg]
+            [df.async :as a]
+            [clojure.datafy :as datafy]
+            [clojure.string :as string]
+            [core :as core :refer [get-selected-form]]))
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                         :clj nil))
@@ -21,23 +23,27 @@
                         (aget "list_dir"))]
     (.then (f p) js->clj)))
 
-
-
 (defn sci-opts
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
    {:classes {'js goog/global :allow :all}
-
-    :namespaces (-> {'d {'datoms d/datoms 'touch d/touch}
+    :namespaces (-> {'d {'datoms d/datoms
+                         'touch d/touch
+                         'entity-db d/entity-db
+                         'entity d/entity
+                         'q d/q
+                         'freeze dser/serializable
+                         'thaw dser/from-serializable}
                      'js {'Promise.resolve (fn [p]
                                              (println "Resolver" p)
                                              (js/Promise.resolve p))}
-
                      'df.async {'do ^:sci/macro (fn [&form &env & body]
                                                   (println "Macro!" &form body)
                                                   (let [ret (a/do* body)]
                                                     (println "Ret:Do" ret)
                                                     ret))}
+                     'di {'element rdi/element
+                          'interpret rdi/interpret}
                      'a {'let ^:sci/macro (fn [&form &env bindings & body]
                                             (println "Macro!Let" &form)
                                             (prn 'bindings bindings 'body body)
@@ -52,6 +58,8 @@
                      '->seq e/seq->seq
                      'datafy datafy/datafy
                      'nav    datafy/nav
+                     'thing (fn [z]
+                              (mapv pr-str z))
                      #?@ (:clj ['slurp slurp
                                 'spit spit]
                           :cljs ['fetch-text (fn [z]
@@ -74,32 +82,34 @@
                                                 features))])}
                     (merge bindings))}))
 
-
-
 (defn success-cont
-  [eval-target bus]
+  [eval-target bus print-output]
   (fn [result]
-    (cond
-      (some-> result meta (get `p/nav))
-      (core/send! bus [:ingest-result eval-target result])
-
-      (some-> result meta (get `ingest))
-      (core/send! bus [:ingest-after eval-target result])
-      
-      (v/var? result)
-      (core/send! bus
+    (cond (some-> result
+                  meta
+                  (get `p/nav))
+            (core/send! bus [:ingest-result eval-target result])
+          (some-> result
+                  meta
+                  (get `ingest))
+            (core/send! bus [:ingest-after eval-target result])
+          (v/var? result) (core/send!
+                            bus
+                            [:eval-result eval-target
+                             (str (pr-str result) " => " (pr-str @result))])
+          :else (core/send!
+                  bus
                   [:eval-result eval-target
-                   (str (pr-str result) " => " (pr-str @result))])
-      
-      :else (core/send! bus [:eval-result eval-target (pr-str result)]))))
+                   (str result "\n" (apply str (deref print-output)))]))))
 
 (defn failure-cont
-  [eval-target bus]
+  [eval-target bus print-output]
   (fn [ex]
     (core/send! bus
                 [:eval-result eval-target
-                 (or (ex-message ex) (str ex))])))
-
+                 (str (ex-message ex)
+                      "\n"
+                      (.-stack ex))])))
 
 (defn coll-contains?
   [parent child?]
@@ -121,31 +131,37 @@
           (recur s (:seq/next s) (not in-key?)))))))
 
 (defn mutatef
-  [{:keys [conn bus] :as app}]
+  [{:keys [conn bus]  :as app}]
   (let [sel# (sci/new-dynamic-var 'sel nil)
-        ctx  (sci/init (sci-opts app {:bindings {'sel sel#}}))]
+        ctx (sci/init (sci-opts app {:bindings {'sel sel#}}))
+        print-output (atom [])]
     (fn [_ db bus]
-      (let [eval-target  (get-selected-form db)
-            parents      (nav/parents-seq eval-target)
+      (let [eval-target (get-selected-form db)
+            parents (nav/parents-seq eval-target)
             eval-context (or (first (filter :eval/action parents))
                              (last parents))
-            action       (:eval/action eval-context)
-            eval-string  (e/->string eval-context)
-            success      (success-cont eval-target bus)
-            failure      (failure-cont eval-target bus)]
+            action (:eval/action eval-context)
+            success (success-cont eval-target bus print-output)
+            failure (failure-cont eval-target bus print-output)]
         (try
-          (-> (case action
-                :nav (when-some [ptr (:nav/pointer eval-context)]
-                       (case (:coll/type eval-context)
-                         (:vec :list) (let [k (e/->form eval-target)]
-                                        (datafy/nav ptr nil k))
-                         :map         (let [k (key-within-map eval-target eval-context)]
-                                        (datafy/nav ptr k (get ptr k)))))
-                
-                (sci/binding [sel# eval-target]
-                  (sci/eval-string* ctx (e/->string eval-context))))
-              #?@(:clj [(success)]
-                  :cljs [(js/Promise.resolve)
-                         (.then success)
-                         (.catch failure)]))
+          (->
+            (case action :nav
+                  (when-some [ptr (:nav/pointer eval-context)]
+                    (case (:coll/type eval-context)
+                      (:vec :list) (let [k (e/->form eval-target)]
+                                     (datafy/nav ptr nil k))
+                      :map (let [k (key-within-map eval-target eval-context)]
+                             (datafy/nav ptr k (get ptr k)))))
+                    (sci/binding [sel# eval-target
+                                  sci/print-newline true
+                                  sci/print-fn (fn [m]
+                                                 (swap! print-output conj m))]
+                      (sci/eval-string* ctx (e/->string eval-context))))
+            #?@ (:clj [(success)]
+                :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
           (catch :default ex (js/console.log ex) (failure ex)))))))
+
+(comment
+  (sci/binding [sci/print-newline true
+                sci/print-fn (fn [s] (swap! output str s))]
+    (sci/eval-string "(print :hello) (println :bye)")))
