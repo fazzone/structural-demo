@@ -11,6 +11,7 @@
    [clojure.datafy :as datafy]
    [clojure.string :as string]
    [rum.core :as rum]
+   [comp.scroll :as scroll]
    [cljs.core.async :as async]
    [sci.core :as sci]
    [db-reactive :as dbrx]
@@ -373,76 +374,8 @@
   (fn [ev]
     (global-keyup* ev)))
 
-(def ^:const scroll-hysteresis-px 32)
-
-(defn scroll-1d
-  [size h pos off]
-  (let [align-bottom (- off (- size h))
-        top-closer? (< (js/Math.abs (- pos off))
-                       (js/Math.abs (- pos align-bottom)))
-        [best other] (if (or top-closer? (> h size))
-                       [off align-bottom]
-                       [align-bottom off])]
-    (if-not (< (- scroll-hysteresis-px) (- pos best) scroll-hysteresis-px)
-      (int best))))
-
-(defn scroll-to-selected!
-  ([] (scroll-to-selected! true))
-  ([always]
-   (let [#_          #_el (js/document.querySelector ".selected")
-         [el & more] (js/document.querySelectorAll ".selected")
-         ;; _ (prn "More" more)
-         tl    (some-> el (.closest ".form-card"))
-         chain (some-> el (.closest ".chain"))
-         bar   (some-> chain (.closest ".bar"))
-         chain-height (some-> chain (.-clientHeight))
-         bar-width    (some-> bar (.-clientWidth))
-         ;; fit the entire toplevel if we can, otherwise just the selection
-         tlh  (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
-         elh  (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
-         vst  (if (< tlh chain-height) tl  el)
-         h    (if (< tlh chain-height) tlh elh)
-         vpos (some-> chain (.-scrollTop))
-         voff (some-> vst (.-offsetTop))
-         #_form-visible-within-chain? #_(<)
-         new-chain-top (and tl
-                            chain
-                            #_(< h chain-height)
-                            (or always
-                                (not (< vpos voff (+ h voff)
-                                        (+ vpos chain-height))))
-                            (scroll-1d chain-height h vpos voff))
-         w    (some-> chain (.getBoundingClientRect) (.-width) (js/Math.ceil))
-         hpos (some-> bar (.-scrollLeft))
-         hoff (some-> chain (.-offsetLeft))
-         new-bar-left (and bar
-                           (or always
-                               (not (< hpos hoff (+ w hoff)
-                                       (+ hpos bar-width))))
-                           (scroll-1d bar-width w hpos hoff))]
-     #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
-     #_(println "================================Scroll"
-                "\nChain-height" chain-height
-                "\nBar-width" bar-width
-                "\nTLH" h
-                "vpos" vpos
-                "voff" voff
-                "\nCHW" w
-                "hpos" hpos
-                "hoff" hoff
-                "\nCan fit?" (< h chain-height)
-                "Vis?" [vpos voff (+ h voff) (+ vpos chain-height)]
-                "Already visible?"  (not (< vpos voff (+ h voff)
-                                             (+ vpos chain-height)))
-                "\nAlways scroll?" always)
-     (when (> h chain-height)
-       (println "Too bigby " (- h chain-height) h chain-height)
-       (println "NCT" new-chain-top))
-     (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
-     (when new-bar-left  (.scrollTo bar   #js {:left new-bar-left})))))
-
-(def ensure-selected-in-view!
-  (-> (fn [] (scroll-to-selected! false))
+#_(def ensure-selected-in-view!
+  (-> (fn [] (scroll/scroll-to-selected! false))
       (gfunc/debounce 10)))
 
 (defn save*
@@ -470,9 +403,11 @@
                                 (fn [[_ kbd tkd] db bus]
                                   (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
                                     (core/send! bus [mut]))))
-       (core/register-mutation! :scroll (fn [_ db _] (scroll-to-selected!)))
-       (core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       (core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       
+       #_(core/register-mutation! :scroll (fn [_ db _] (scroll/scroll-to-selected!)))
+       #_(core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       #_(core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
+       
        (core/register-mutation! :eval-sci (eval-sci/mutatef a))
        (core/register-simple!
         :zp

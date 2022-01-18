@@ -142,7 +142,7 @@ span.form-title {
 
 /* ??? */
 span.unev > span.tk:first-child { margin-left: -1ch; }
-span.indent-chars + .tk { margin-left: -1ch; }
+.indent-chars + .tk { margin-left: -1ch; }
 .tk + .indent-chars { margin-left: -1ch; }
 .pfc + .tk { border-left: 0; }
 .pfc + .c { border-left: 0; }
@@ -458,6 +458,7 @@ span.key-compose-echo {
 .eval-result {
     background-color: #111;
     padding: 1ex;
+    white-space: pre;
     border-radius: 2ex;
 }
 .eval-result.selected { background-color: #055005; }
@@ -504,4 +505,4 @@ span.key-compose-echo {
     border: 1px solid cadetblue;
 }
 
-
+s { text-decoration: none; }

@@ -85,22 +85,21 @@
 (defn success-cont
   [eval-target bus print-output]
   (fn [result]
-    (cond (some-> result
-                  meta
-                  (get `p/nav))
-            (core/send! bus [:ingest-result eval-target result])
-          (some-> result
-                  meta
-                  (get `ingest))
-            (core/send! bus [:ingest-after eval-target result])
-          (v/var? result) (core/send!
-                            bus
-                            [:eval-result eval-target
-                             (str (pr-str result) " => " (pr-str @result))])
-          :else (core/send!
-                  bus
+    (cond
+      (some-> result meta (get `p/nav))
+      (core/send! bus [:ingest-result eval-target result])
+
+      (some-> result meta (get `ingest))
+      (core/send! bus [:ingest-after eval-target result])
+
+      #_(v/var? result)
+      #_(core/send! bus [:eval-result eval-target (str (pr-str result) " => " (pr-str @result))])
+      
+      :else
+      (core/send! bus
                   [:eval-result eval-target
-                   (str result "\n" (apply str (deref print-output)))]))))
+                   (str result)
+                   print-output]))))
 
 (defn failure-cont
   [eval-target bus print-output]
@@ -133,14 +132,14 @@
 (defn mutatef
   [{:keys [conn bus]  :as app}]
   (let [sel# (sci/new-dynamic-var 'sel nil)
-        ctx (sci/init (sci-opts app {:bindings {'sel sel#}}))
-        print-output (atom [])]
+        ctx (sci/init (sci-opts app {:bindings {'sel sel#}}))]
     (fn [_ db bus]
       (let [eval-target (get-selected-form db)
             parents (nav/parents-seq eval-target)
             eval-context (or (first (filter :eval/action parents))
                              (last parents))
             action (:eval/action eval-context)
+            print-output (atom [])
             success (success-cont eval-target bus print-output)
             failure (failure-cont eval-target bus print-output)]
         (try

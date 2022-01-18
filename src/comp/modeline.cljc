@@ -35,7 +35,9 @@
       (if-not sel
         "(no selection)"
         (str "#" (:db/id sel)
-             " " (:coll/type sel)))])])
+             " "
+             (or (:coll/type sel)
+                 (pr-str (d/touch sel)))))])])
 
 (rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]

@@ -52,16 +52,16 @@
                       (assoc state ::ereactive.chan ch ::nupdate nupdate)))
    :should-update (fn [old-state {::keys [nupdate] :as new-state}]
                     #_(when @nupdate
-                      (reset! nupdate false)
-                      true)
+                        (reset! nupdate false)
+                        true)
                     (let [[e _ & old-props] (:rum/args old-state)
-                            [_ _ & new-props] (:rum/args new-state)]
-                        #_(println " " (:db/id e) "Old props" old-props
-                                   "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
-                        (cond
-                          (not= old-props new-props) true
-                          (some? @nupdate)           (do (reset! nupdate false)
-                                                         true))))
+                          [_ _ & new-props] (:rum/args new-state)]
+                      #_(println " " (:db/id e) "Old props" old-props
+                                 "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
+                      (cond
+                        (not= old-props new-props) true
+                        (some? @nupdate)           (do (reset! nupdate false)
+                                                       true))))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)
@@ -81,9 +81,15 @@
                     (let [[e bus] args]
                       (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
                       state))
-   :did-mount (fn [state]
-                #_(js/console.log (rum/dom-node state))
-                state)})
+   #_ #_:did-mount (fn [state]
+                #_(js/console.log "I mounted"
+                                (-> state :rum/args first :db/id ))
+                state)
+   #_ #_:did-update (fn [state]
+                 #_(js/console.log "I updated"
+                                 (-> state :rum/args first :db/id )
+                                 (rum/dom-node state)) 
+                 state)})
 
 (defn areactive
   ;; mixin for components taking [db bus ...]

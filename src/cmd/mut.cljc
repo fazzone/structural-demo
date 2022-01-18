@@ -169,8 +169,7 @@
   (-> (if (and (associative? c) (not (sequential? c)))
         (ingest-nav-assoc c)
         (e/->tx* c))
-      (assoc :nav/pointer c
-             :eval/action :nav)
+      (assoc :nav/pointer c :eval/action :nav)
       (update :db/id #(or % "new-node"))))
 
 #_(defn ingest-eval-result
@@ -185,6 +184,20 @@
     (into [new-node outer]
           #_(edit/insert-before-tx top-level new-node)
           (edit/insert-after-tx top-level outer))))
+
+(defn ingest-eval-result
+  [db et c]
+  (let [top-level (peek (nav/parents-vec et))
+        new-node (-> (e/->tx* c)
+                     (update :db/id #(or % "new-node")))
+        outer {:db/id "outer"
+               :coll/type :eval-result
+               :seq/first (:db/id new-node)
+               :eval/of (:db/id et)
+               :coll/contains (:db/id new-node)}]
+    (into [new-node outer]
+          (edit/insert-before-tx top-level outer)
+          #_(edit/insert-after-tx top-level outer))))
 
 (defn ingest-replacing
   [db et c]
@@ -504,7 +517,7 @@
    :new-comment                    (comp new-comment-tx get-selected-form)
    :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
-   :eval-result                    eval-result-above-toplevel
+   :eval-result                    ingest-eval-result #_eval-result-above-toplevel
    :ingest-result                  ingest-replacing
    :ingest-after                   ingest-after
    :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))

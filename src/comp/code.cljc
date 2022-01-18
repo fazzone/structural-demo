@@ -12,6 +12,7 @@
    [sci.core :as sci]
    [db-reactive :as dbrx]
    [comp.edit-box :as eb]
+   [comp.scroll :as scroll]
    [cmd.move :as move]
    [cmd.nav :as nav]
    [cmd.mut :as mut]
@@ -42,7 +43,7 @@
   [nl? ip fi]
   (if (and (or (nil? fi) (zero? fi)) (not nl?))
     nil
-    [:span.indent-chars (if-not nl? {} {:class "nl"})
+    [:s.indent-chars (if-not nl? {} {:class "nl"})
      (when nl? "\n")
      (when fi
        #_[:span.indenter
@@ -53,9 +54,11 @@
 (def render-counter (atom 0))
 
 (rum/defc erc
-  [{:eval/keys [of]  :as e} bus classes]
+  < rum/reactive
+  [{:eval/keys [of out]  :as e} bus classes]
   (let [[result] (e/seq->vec e)]
-    [:div.eval-result {:class classes} (form result bus 0 (first ()))
+    [:div.eval-result {:class classes} #_(form result bus 0 (first ()))
+     (:token/value result)
      [:div "Result of "
       [:a.eval-result-ref
        {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
@@ -155,40 +158,56 @@
     :char v
     :regex (str "REGEX:" v)))
 
+(def scroll-selected
+  {:did-update
+   (fn [state]
+     (when (some-> state :rum/args first :form/highlight)
+       (let [el (rum/dom-node state)
+             real-el (if-not (= "S" (.-tagName el) )
+                       el
+                       (.-nextElementSibling el))]
+         (scroll/scroll-to-selected* real-el false)))
+     state)})
+
 (rum/defc form
-  < dbrx/ereactive
-    {:key-fn (fn [e b i p] (:db/id e))}
+  < dbrx/ereactive scroll-selected
+  {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
-  (rum/fragment
-    (indenter (:form/linebreak e) indent-prop (:form/indent e))
-    (cond (:form/editing e) (eb/edit-box e bus)
-          (:token/type e)
-            (let [tt (:token/type e)
-                  tv (:token/value e)
-                  tc (token-class tt tv)
-                  it (token-text tt tv)]
-              [:span
-               {:key (:db/id e)
-                ;; :dangerouslySetInnerHTML {:__html it}
-                :class (if (:form/highlight e)
-                         (str "tk selected " tc)
-                         (str "tk " tc))
-                :on-click (fn [ev]
-                            (.stopPropagation ev)
-                            (core/send! bus [:select (:db/id e)]))}
-               ^String it])
-          (:coll/type e)
-            (let [classes (when (:form/highlight e) "selected")]
-              (case (:coll/type e)
-                nil (comment
-                      "Probably a retracted entity, do nothing")
-                (any-coll e
-                          classes
-                          bus
-                          (+ 2 indent-prop)
-                          proply
-                          #_(if-not (:form/highlight e)
-                              proply
-                              (zipmap (map :db/id
+  (let [selected? (:form/highlight e)]
+    #_(when selected?
+        (rum/use-effect!
+         (fn [] (println "Effect#" (:db/id e)))
+         [selected?]))
+    
+    (rum/fragment
+     (indenter (:form/linebreak e) indent-prop (:form/indent e))
+     (cond (:form/editing e) (eb/edit-box e bus)
+           (:token/type e)
+           (let [tt (:token/type e)
+                 tv (:token/value e)
+                 tc (token-class tt tv)
+                 it (token-text tt tv)]
+             [:span
+              {:key (:db/id e)
+               ;; :dangerouslySetInnerHTML {:__html it}
+               :class (if selected?
+                        (str "tk selected " tc)
+                        (str "tk " tc))
+               :on-click (fn [ev]
+                           (.stopPropagation ev)
+                           (core/send! bus [:select (:db/id e)]))}
+              ^String it])
+           (:coll/type e)
+           (case (:coll/type e)
+             nil (comment
+                   "Probably a retracted entity, do nothing")
+             (any-coll e
+                       (when selected? "selected")
+                       bus
+                       (+ 2 indent-prop)
+                       proply
+                       #_(if-not (:form/highlight e)
+                           proply
+                           (zipmap (map :db/id
                                         (next (mut/get-numeric-movement-vec e)))
-                                      (range 2 9)))))))))
+                                   (range 2 9)))))))))

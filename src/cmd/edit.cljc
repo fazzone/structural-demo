@@ -160,20 +160,21 @@
        [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
        [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))
 
+(def duplicated-attrs [:form/indent :form/linebreak])
 (defn form-duplicate-tx
   [e]
   (letfn [(dup-spine [parent head]
             (if-let [x (:seq/first head)]
               (cond-> {:seq/first (assoc (form-duplicate-tx x) :coll/_contains parent)}
                 (:seq/next head) (assoc :seq/next (dup-spine parent (:seq/next head))))))]
-    (cond
-      (:token/type e) {:token/type (:token/type e)
-                       :token/value (:token/value e)}
-      (:coll/type e)  (let [us (e/new-tempid)]
-                           (merge (cond-> {:db/id us :coll/type (:coll/type e)}
-                                    (some? (:form/indent e))    (assoc :form/indent (:form/indent e))
-                                    (some? (:form/linebreak e)) (assoc :form/linebreak (:form/linebreak e)))
-                                  (dup-spine us e))))))
+    
+    (merge (select-keys e duplicated-attrs)
+           (cond
+             (:token/type e) {:token/type  (:token/type e)
+                              :token/value (:token/value e)}
+             (:coll/type e)  (let [us (e/new-tempid)]
+                               (merge {:db/id us :coll/type (:coll/type e)}
+                                      (dup-spine us e)))))))
 
 (defn insert-duplicate-tx
   [sel]
