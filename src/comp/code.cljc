@@ -157,7 +157,7 @@
                       (rum/fragment
                        [:span.kn (subs k 0 is)]
                        (subs k is))))
-    :string (pr-str v)
+    :string v
     :verbatim v
     :number (str v)
     :comment v

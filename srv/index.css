@@ -87,8 +87,8 @@ span.tk:hover {
     /* transition: background-color 100ms cubic-bezier(1,-0.01,.65,.97); */
 }
 
-.selected .d { color: #a6a6a0; }
-.selected > .d { color: #fff; }
+/* .selected .d { color: #a6a6a0; } */
+/* .selected > .d { color: #fff; } */
 
 .selected > .display-keyboard {
     /* this is a hack because the selection has to be display: inline */
@@ -119,11 +119,9 @@ span.form-title {
 /* do not double space between two tokens */
 .tk + .tk       { border-left: 0; }
 .tk + .edit-box { border-left: 0; }
-/* allow the highlight to paint on both sides of a selected token */
-.tk + .tk.selected { margin-left: -1ch; padding-left: 1ch; }
-.tk + .edit-box { margin-left: -0.5ch; padding-left: 0.5ch; }
-/* .tk + .edit-box { margin-left: -1ch; padding-left: 1ch; } */
-
+/* allow the highlight to paint on both sides of a selected token (VERY SLOW) */
+/* .tk + .tk.selected { margin-left: -1ch; padding-left: 1ch; } */
+/* .tk + .edit-box { margin-left: -0.5ch; padding-left: 0.5ch; } */
 
 
 .d  + .tk       { border-left: 0; }
@@ -136,10 +134,10 @@ span.form-title {
 .edit-box + .c  { margin-left: 1ch; }
 .d + .edit-box  { border-width: 0 1ch 0 0; }
 
-/* .c.dl > span:nth-last-child(2)                   { border-right: 0; } */
-/* .c.dl > .edit-box:nth-last-child(2)              { border-right: 0; } */
-/* .c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; } */
-/* .c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-right: 0; } */
+.c.dl > span:nth-last-child(2)                   { border-right: 0; }
+.c.dl > .edit-box:nth-last-child(2)              { border-right: 0; }
+.c.dl > span:nth-last-child(2):nth-child(2)      { border-width: 0; }
+.c.dl > .edit-box:nth-last-child(2):nth-child(2) { border-right: 0; }
 
 /* ??? */
 span.unev > span.tk:first-child { margin-left: -1ch; }
