@@ -164,21 +164,54 @@
     :char v
     :regex (str "REGEX:" v)))
 
+(def the-iobs
+  (do
+    (println "New IObs")
+    (js/IntersectionObserver.
+     (fn [ents me]
+       (when (< 1 (alength ents))
+         (println "Too many observations!"))
+       (let [^js/IntersectionObserverEntry ioe (aget ents 0)]
+         (when (false? (.-isIntersecting ioe))
+           (scroll/scroll-to-selected* (.-target ioe) true)))
+       #_(doseq [e ents] (js/console.log "IO CB" e)))
+     #js {:rootMargin "0px"
+          :threshold 1})))
+
+
 (def scroll-selected
   {:did-update
    (fn [state]
-     (when (some-> state :rum/args first :form/highlight)
-       #_(println "Do the scroll "
-                (some-> state :rum/args first (e/->string)))
-       (let [el (rum/dom-node state)
-             real-el (if-not (= "S" (.-tagName el) )
-                       el
-                       (.-nextElementSibling el))]
-         (scroll/scroll-to-selected* real-el false)))
-     state)})
+     (let [sel? (some-> state :rum/args first :form/highlight)
+           prev-sel? (some-> state ::prev-sel?)]
+       (if-not (or sel? prev-sel?)
+         state
+         (let [el (rum/dom-node state)
+               real-el (if-not (= "S" (.-tagName el) )
+                         el
+                         (.-nextElementSibling el))]
+           (if sel?
+             (do
+               #_(js/console.log "OBserve" real-el)
+               (.observe the-iobs real-el)
+               (assoc state ::prev-sel? true))
+             (do
+               #_(js/console.log "Unobs" real-el)
+               (.unobserve the-iobs real-el)
+               (assoc state ::prev-sel? nil))))))
+     
+     #_(do
+       #_ (when (some-> state :rum/args first :form/highlight)
+            (let [el (rum/dom-node state)
+                  real-el (if-not (= "S" (.-tagName el) )
+                            el
+                            (.-nextElementSibling el))]
+              (scroll/scroll-to-selected* real-el false)))
+       state))})
+
 
 (rum/defc form
-  < dbrx/ereactive #_scroll-selected
+  < dbrx/ereactive scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
   (let [selected? (:form/highlight e)]
@@ -187,8 +220,6 @@
          (fn [] (println "Effect#" (:db/id e)))
          [selected?]))
     (rum/fragment
-     #_(when selected?
-       (ml/modeline-nest-next e bus))
      (indenter (:form/linebreak e) indent-prop (:form/indent e))
      (cond (:form/editing e) (eb/edit-box e bus)
            (:token/type e)
@@ -219,4 +250,5 @@
                            proply
                            (zipmap (map :db/id
                                         (next (mut/get-numeric-movement-vec e)))
-                                   (range 2 9)))))))))
+                                   (range 2 9))))))
+     (when selected? (ml/modeline-nest-next e bus)))))

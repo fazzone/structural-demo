@@ -404,9 +404,6 @@
                                     (core/send! bus [mut]))))
        
        #_(core/register-mutation! :scroll (fn [_ db _] (scroll/scroll-to-selected!)))
-       #_(core/register-mutation! :form/highlight (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       #_(core/register-mutation! :form/edited-tx (fn [_ _ _] (js/window.setTimeout ensure-selected-in-view! 1)))
-       
        (core/register-mutation! :eval-sci (eval-sci/mutatef a))
        (core/register-simple!
         :zp

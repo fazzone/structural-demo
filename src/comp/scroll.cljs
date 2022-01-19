@@ -58,7 +58,7 @@
                "Already visible?"  (not (< vpos voff (+ h voff)
                                            (+ vpos chain-height)))
                "\nAlways scroll?" always)
-    (when (> h chain-height)
+    #_(when (> h chain-height)
       (println "Too bigby " (- h chain-height) h chain-height)
       (println "NCT" new-chain-top))
     (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
@@ -79,4 +79,6 @@
      (when more
        (js/console.log "More than one selected element!" els))
      (scroll-to-selected* el always))))
+
+
 

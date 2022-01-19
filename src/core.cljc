@@ -121,27 +121,18 @@
           :ok
           ch)))))
 
-;; One go-loop per mutation type is stupid because there is no way to do blocking apply
-
-
-;; Is it allowed to reorder them?
-
-
 (defn register-simple!
   [{:keys [bus conn history] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[mut-name & args :as mut] (async/<! ch)
-            db                 @conn
-            tx-data            (apply mut-fn db args)
-            tid                (str mut-name)
-            ;; _                  (js/console.time tid)
-            report             (try (and tx-data
-                                         (assoc (d/transact! conn tx-data)
-                                                :mut mut))
-                                    (catch #? (:cljs js/Error :clj Exception) e
-                                      {:error e})
-                                    #_(finally (js/console.timeEnd tid)))]
+            db @conn
+            tx-data (apply mut-fn db args)
+            report (try (and tx-data
+                             (assoc (d/transact! conn tx-data)
+                                    :mut mut))
+                        (catch #? (:cljs js/Error :clj Exception) e
+                          {:error e}))]
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
@@ -164,29 +155,10 @@
       (when nf
         (move-selection-tx (:db/id sel) (:db/id nf))))))
 
-#_(defn register-movement!
-  [{:keys [bus conn history] :as app} topic mover]
-  (let [ch (async/chan)]
-    (go-loop []
-      (let [[_ & args :as mut] (async/<! ch)
-            src                (get-selected-form @conn)
-            dst                (try (apply mover src args)
-                                    (catch #? (:cljs js/Error :clj Exception) e
-                                      {:error e}))]
-        (when-not (:error dst))
-        (recur)))
-    (connect-sub! bus topic ch)))
-
 (defn revert-txdata
   [tx-data]
   (for [[e a v t a?] (reverse tx-data)]
     [(if a? :db/retract :db/add) e a v]))
-
-(def ^:const tx0   536870912)
-
-(def ^:const emax  2147483647)
-
-(def ^:const txmax 2147483647)
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]
@@ -241,15 +213,8 @@
     (-> {:bus     the-bus
          :history (atom ())
          :conn    (doto conn
-                    #_(d/listen! (fn [{:keys [db-after db-before tx-data tempids] :as report}]
-                                   (if-let [txid (get tempids :db/current-tx)]
-                                  (do (save-history! the-bus txid report)
-                                      (reset! history (cons report @history)))
-                                  (println "No current-tx?"))
-                                (publish-tx-report! the-bus db-after tx-data tempids)))
                     (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
                                  (try
-                                   ;; (js/console.time "publish")
                                    (let [emax (:max-eid db-before)
                                          es (into #{}
                                                   (keep (fn [[e]]
@@ -257,26 +222,10 @@
                                                             e)))
                                                   tx-data)
                                          as (into #{} (map (fn [[_ a]] a)) tx-data)]
-                                     ;; (println "Actual tx-data:")
-                                     ;; (run! prn tx-data)
-                                     #_(println "Tempids" tempids)
-                                     
-                                     #_(run! prn tx-data)
-                                     #_(println "Transacted" (count tx-data) "datoms" "Es" es "As" as)
-                                     #_(doseq [a as]
-                                       (send! the-bus [a db-after]))
                                      (js/ReactDOM.unstable_batchedUpdates
                                       (fn []
                                         (doseq [e es]
                                           (when-not (empty? (d/datoms db-after :eavt e))
-                                            (fire-subs! the-bus (d/entity db-after e))))))
-                                     
-                                     
-                                     #_(doseq [e es]
-                                       (when-not (empty? (d/datoms db-after :eavt e))
-                                         #_(println "Fire subs for" e)
-                                         (fire-subs! the-bus (d/entity db-after e))
-                                         #_(send! the-bus [e (d/entity db-after e)]))))
-                                   #_(finally (js/console.timeEnd "publish"))))))}
+                                            (fire-subs! the-bus (d/entity db-after e)))))))))))}
         (map->App)
         (setup-undo!))))
