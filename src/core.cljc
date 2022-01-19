@@ -122,7 +122,7 @@
           ch)))))
 
 (defn register-simple!
-  [{:keys [bus conn history] :as app} topic mut-fn]
+  [{:keys [bus conn history dispatch] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[mut-name & args :as mut] (async/<! ch)
@@ -212,6 +212,7 @@
   (let [the-bus (context)]
     (-> {:bus     the-bus
          :history (atom ())
+         :dispatch (atom {})
          :conn    (doto conn
                     (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
                                  (try

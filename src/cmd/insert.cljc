@@ -30,14 +30,15 @@
 
 (defn accept-edit-tx
   [form-eid value]
-  [{:db/id :db/current-tx
-    :edit/of form-eid}
-   [:db/retract form-eid :token/value]
-   [:db/retract form-eid :token/type]
-   (parse-token-tx value form-eid)
-   [:db/add form-eid :form/edited-tx :db/current-tx]
-   [:db/retract form-eid :form/editing true]
-   [:db/retract form-eid :form/edit-initial]])
+  (when-some [ptx (parse-token-tx value form-eid)]
+    [{:db/id :db/current-tx
+      :edit/of form-eid}
+     [:db/retract form-eid :token/value]
+     [:db/retract form-eid :token/type]
+     ptx
+     [:db/add form-eid :form/edited-tx :db/current-tx]
+     [:db/retract form-eid :form/editing true]
+     [:db/retract form-eid :form/edit-initial]]))
 
 (defn reject-edit-tx
   [db form-eid]
@@ -70,10 +71,10 @@
   [db eid text]
   (if (empty? text)
     (reject-edit-tx db eid)
-    (into (accept-edit-tx eid text)
-          (move/movement-tx db :move/up))))
+    (some-> (accept-edit-tx eid text)
+            (into (move/movement-tx db :move/up)))))
 
 (defn finish-edit-and-edit-next-tx
   [ed text]
-  (into (accept-edit-tx (:db/id ed) text)
-        (edit/insert-editing-after ed)))
+  (some-> (accept-edit-tx (:db/id ed) text)
+          (into (edit/insert-editing-after ed))))

@@ -3,10 +3,11 @@
    [datascript.core :as d]
    [rum.core :as rum]
    [comp.edit-box]
-   #_[comp.search]
+   [comp.search]
    [cmd.nav :as nav]
    [db-reactive :as dbrx]
    [comp.common :as cc]
+   [comp.edit-box :as eb]
    [core :as core
     :refer [get-selected-form
             move-selection-tx]]))
@@ -15,50 +16,38 @@
 
 
 (rum/defc modeline-inner < rum/reactive
-  [sel bus {:keys [^String text valid] :as edn-parse-state}]
-  [:span {:class (str "modeline code-font"
-                      (if text " editing modeline-search" " modeline-fixed")
-                      (when (and (not (empty? text)) (not valid)) " invalid"))}
-   [:span.modeline-echo
-    {}
-    (let [{:keys [on at status file]} (rum/react save-status)]
-      (when (= on (:db/id sel))
-        (case status
-          :saving "Saving"
-          :ok (str file "@" at)
-          :error "Error"
-          "")))]
-   (if text
-     "No results"
-     #_(comp.search/results (d/entity-db sel)  :token/value text)
-     #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
-     [:span.modeline-content
-      (if-not sel
-        "(no selection)"
-        (str "#" (:db/id sel)
-             " "
-             (or (:coll/type sel)
-                 #_(pr-str (d/touch sel)))))])])
-
-#_(rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
-  [db bus]
-  (let [sel (get-selected-form db)
-        rpa (reverse (nav/parents-vec sel))
-        nn (.getElementById js/document (cc/modeline-portal-id (:db/id (first rpa))))]
-    (when nn
-      (-> (modeline-inner
-           sel
-           bus
-           (when (:form/editing sel)
-             (rum/react comp.edit-box/editbox-ednparse-state)))
-          (rum/portal nn)))))
+  [sel bus rec eps]
+  (let [{:keys [^String text valid]} (some-> eps rum/react)]
+   [:span {:class (str "modeline code-font"
+                       (if text " editing modeline-search" " modeline-fixed")
+                       (when (and (not (empty? text)) (not valid)) " invalid"))}
+    [:span.modeline-echo
+     {}
+     (let [{:keys [on at status file]} (rum/react save-status)]
+       (when (= on (:db/id sel))
+         (case status
+           :saving "Saving"
+           :ok (str file "@" at)
+           :error "Error"
+           "")))]
+    (if text
+      ^:inline (comp.search/results (d/entity-db sel) bus :token/value text rec)
+      #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
+      [:span.modeline-content
+       (if-not sel
+         "(no selection)"
+         (str "#" (:db/id sel)
+              " "
+              (or (:coll/type sel)
+                  #_(pr-str (d/touch sel)))))])
+    #_[:input.edit-box.code-font {:type :text}]]))
 
 (rum/defc modeline-nest-next 
-  [sel bus]
-  (let [rpa (reverse (nav/parents-vec sel))
-        nn (.getElementById js/document (cc/modeline-portal-id (:db/id (first rpa))))]
-    (when nn
-      (rum/portal (modeline-inner sel bus nil) nn))))
+  [sel bus rec]
+  (rum/with-context [my-ref cc/*modeline-ref*]
+    (some->> my-ref
+             (rum/deref)
+             (rum/portal (modeline-inner sel bus rec eb/editbox-ednparse-state)))))
 
 
 

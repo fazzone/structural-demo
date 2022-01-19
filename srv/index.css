@@ -48,7 +48,10 @@ body        { font-family: iosevka-aile-light; }
 .top-level-form.code-font {
     /* color: #a6a6a0; */
     color: #777;
-    line-height: 1.15
+    /* The idea is to make is to that there are no un-highlighted blank spaces
+    /* between the lines in a multiline selection...  */
+    /* line-height: 1.15 */
+    line-height: 1.25;
 }
 
 span.tk:hover {
@@ -120,8 +123,8 @@ span.form-title {
 .tk + .tk       { border-left: 0; }
 .tk + .edit-box { border-left: 0; }
 /* allow the highlight to paint on both sides of a selected token (VERY SLOW) */
-/* .tk + .tk.selected { margin-left: -1ch; padding-left: 1ch; } */
-/* .tk + .edit-box { margin-left: -0.5ch; padding-left: 0.5ch; } */
+.tk + .tk.selected { margin-left: -1ch; padding-left: 1ch; }
+.tk + .edit-box { margin-left: -0.5ch; padding-left: 0.5ch; }
 
 
 .d  + .tk       { border-left: 0; }
@@ -195,22 +198,27 @@ textarea.edit-box {
 }
 
 #root {
-    height: 98vh;
+    /* height: 98vh; */
     /* margin: 0; */
+    height: 100vh;
     padding: 0;
 }
 
 
 .bar-container {
     height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 .bar {
-    height: 100%;
+    /* height: 100%; */
+    max-height: calc(100% - 3ex);
     width: 100%;
     overflow-x: auto;
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
+    flex-shrink: 1;
 }
 
 /* .bar > .selected  { width: 100%; } */
@@ -288,26 +296,20 @@ span.indenter {
 }
 
 .modeline-outer {
-    /* color: #000; */
-
-    /* position: fixed; */
-    /* left: 0; */
-    /* bottom: 0; */
-
     display: block;
-    /* width: 100%; */
-    margin-top: 0.5ex;
     color: #777;
     min-height: 3ex;
     line-height: 3ex;
-    margin-bottom: 0.5ex;
+    flex-shrink: 0;
+    /* margin-top: 0.5ex; */
+    /* margin-bottom: 0.5ex; */
 }
 
 .modeline {
     /* height: 3ex; */
 }
-.modeline-fixed { height: 3ex; }
-.modeline-search { height: 15ex; }
+/* .modeline-fixed { height: 3ex; } */
+/* .modeline-search { height: 15ex; } */
 
 span.modeline.editing {
     /* background-color: #2a4a2a; */
@@ -477,14 +479,19 @@ span.key-compose-echo {
 .search {
     display: grid;
     grid-template-columns: 1fr 8ch 1fr;
+    grid-template-rows: repeat(auto-fill, 2ex);
+    height: 16ex;
+    line-height: 2ex;
 }
 
-.search li {
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-}
+/* .search li { */
+/*     width: 100%; */
+/*     white-space: nowrap; */
+/*     overflow: hidden; */
+/* } */
 
+.search .last { justify-self: end; }
+.search .indent-chars { display: none; }
 
 /* .chain:first-child { padding-top: 200px; } */
 

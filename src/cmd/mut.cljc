@@ -382,7 +382,10 @@
         tempid "alias"
         new-node {:db/id tempid
                   :coll/type :alias
-                  :alias/of (:db/id sel)}]
+                  :alias/of (:db/id sel)
+                  
+                  #_ #_:seq/first (:db/id sel)}]
+    (println "MAke alias" new-node)
     (into [new-node]
           (concat
            (edit/insert-before-tx top-level new-node)

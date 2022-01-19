@@ -19,6 +19,7 @@
    [comp.edit-box :as eb]
    [comp.search]
    [comp.code :as code]
+   [comp.common :as ccommon]
    [comp.modeline :as ml]
    [cmd.move :as move]
    [cmd.nav :as nav]
@@ -155,7 +156,7 @@
 (def init-tx-data
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
+                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
                 (map e/->tx test-form-data-bar)
                 #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
     [{:db/ident ::state
@@ -333,9 +334,14 @@
 
 (rum/defc root-component
   [db bus]
-  (let [state (d/entity db ::state)]
+  (let [state (d/entity db ::state)
+        ml-ref (rum/create-ref)]
     [:div.bar-container {} #_(test-image)
+     #_(rum/bind-context [ccommon/*modeline-ref* ml-ref]
+                       (code/form (:state/bar state) bus 0 nil))
      (code/form (:state/bar state) bus 0 nil)
+     [:div.modeline-outer {:id "modeline"
+                           :ref ml-ref}]
      #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
@@ -352,7 +358,7 @@
 (defn global-keydown*
   [ev]
   (let [tkd (js/performance.now)]
-    (when-not @eb/global-editing-flag
+    (when (identical? js/document.body js/document.activeElement)
       (let [kbd (event->kbd ev)
             bindings default-keymap
             mut (get bindings kbd)
@@ -491,7 +497,9 @@
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
   
-  (let [{:keys [conn bus]} (setup-app (d/conn-from-db @the-singleton-db))]
+  (some-> the-singleton-db meta :listeners (reset! {}))
+  
+  (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (reset! keyboard-bus bus)
     (when-let [req-title (some-> js/window.location.search
                                  (js/URLSearchParams.)

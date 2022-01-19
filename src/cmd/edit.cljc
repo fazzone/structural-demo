@@ -160,7 +160,9 @@
        [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
        [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))
 
-(def duplicated-attrs [:form/indent :form/linebreak])
+(def duplicated-attrs [:form/indent
+                       :form/linebreak])
+
 (defn form-duplicate-tx
   [e]
   (letfn [(dup-spine [parent head]
@@ -176,9 +178,18 @@
                                (merge {:db/id us :coll/type (:coll/type e)}
                                       (dup-spine us e)))))))
 
+(defn duplicate-alias
+  [e]
+  (when (= :alias (:coll/type e))
+    {:coll/type :alias
+     :alias/of (:db/id (:alias/of e))}))
+
+
+
 (defn insert-duplicate-tx
   [sel]
-  (let [new-node (-> (form-duplicate-tx sel)
+  (let [new-node (-> (or (duplicate-alias sel)
+                         (form-duplicate-tx sel))
                      (update :db/id #(or % "dup-leaf")))]
     (into [new-node]
           (insert-after-tx sel new-node))))

@@ -26,6 +26,7 @@
 
 (rum.core/set-warn-on-interpretation! true)
 
+
 (declare form)
 
 (defn computed-indent
@@ -33,15 +34,6 @@
   (+ indent-prop
      (or (:form/indent e)
          0)))
-
-(rum/defc top-level-form
-  ;; < dbrx/ereactive
-  [e bus p]
-  [:div.form-card
-   {}
-   #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
-   [:div.top-level-form.code-font ^:inline (form e bus 0 p)]
-   [:div.modeline-outer {:id (cc/modeline-portal-id (:db/id e))}]])
 
 (rum/defc indenter
   [nl? ip fi]
@@ -55,6 +47,20 @@
         (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
 
+(rum/defc top-level-form
+  ;; < dbrx/ereactive
+  [e bus p]
+  (let [ml-ref (rum/create-ref)]
+    [:div.form-card
+     {}
+    
+     #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
+     [:div.top-level-form.code-font {}
+      (rum/bind-context [cc/*indenter* indenter]
+       (rum/bind-context [cc/*modeline-ref* ml-ref]
+                         ^:inline (form e bus 0 p)))]
+     [:div.modeline-outer {:ref ml-ref }]]))
+
 (def render-counter (atom 0))
 
 (rum/defc erc
@@ -67,6 +73,8 @@
       [:a.eval-result-ref
        {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
        (str "#" (:db/id (:eval/of e)))]]]))
+
+#_(def inhibit-scroll? (volatile! false))
 
 (rum/defc chain
   [ch bus classes]
@@ -85,12 +93,21 @@
      (-> (form chain-head bus 0 nil)
          (rum/with-key (:db/id chain-head))))])
 
+
+(rum/defc aliasc [{:alias/keys [of] :as a} bus classes]
+  [:div.alias.alternate-reality
+   {:class classes}
+   [:div.form-title "Alias " (str (:db/id a)) " of " (str (:db/id of))]
+   (when of (rum/bind-context [cc/*modeline-ref* nil]
+                              ^:inline (form of bus 0 nil)))])
+
 (def dispatch-coll
   {:keyboard comp.keyboard/keyboard-diagram
    ;; :inspect comp.inspect/inspect
    :eval-result erc
    :bar bar
-   :chain chain})
+   :chain chain
+   :alias aliasc})
 
 (rum/defc any-coll
   [e classes bus indent proply]
@@ -112,8 +129,8 @@
       (let [children (e/seq->vec e)]
         [:span {:class ["c" coll-class extra-class classes]}
          #_[:span.inline-tag.debug
-            (str (swap! render-counter inc))
-            #_(str (:db/id e))]
+          (str (swap! render-counter inc))
+          #_(str (:db/id e))]
          (when-some [p (get proply (:db/id e))]
            [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
          (cond extra-class [:span.d.pfc ^String open-delim]
@@ -165,18 +182,27 @@
     :regex (str "REGEX:" v)))
 
 (def the-iobs
-  (do
-    (println "New IObs")
-    (js/IntersectionObserver.
-     (fn [ents me]
-       (when (< 1 (alength ents))
-         (println "Too many observations!"))
-       (let [^js/IntersectionObserverEntry ioe (aget ents 0)]
-         (when (false? (.-isIntersecting ioe))
-           (scroll/scroll-to-selected* (.-target ioe) true)))
-       #_(doseq [e ents] (js/console.log "IO CB" e)))
-     #js {:rootMargin "0px"
-          :threshold 1})))
+  (->> #js {:rootMargin "0px" :threshold #js [0 1]}
+       (js/IntersectionObserver.
+        (fn [ents me]
+          (loop [i 0
+                 el nil
+                 need-scroll? false]
+            
+            #_(js/console.log (aget ents i))
+            
+            (if (= i (alength ents))
+              (when need-scroll?
+                #_(.unobserve me el)
+
+                (scroll/scroll-to-selected* el))
+              (let [^js/IntersectionObserverEntry ioe (aget ents i)
+                    tgt (.-target ioe)]
+                (recur (inc i) tgt
+                       (or need-scroll?
+                           (and (.-rootBounds ioe)
+                                (> 1 (.-intersectionRatio ioe))
+                                #_(not (.-isIntersecting ioe))))))))))))
 
 
 (def scroll-selected
@@ -191,23 +217,10 @@
                          el
                          (.-nextElementSibling el))]
            (if sel?
-             (do
-               #_(js/console.log "OBserve" real-el)
-               (.observe the-iobs real-el)
-               (assoc state ::prev-sel? true))
-             (do
-               #_(js/console.log "Unobs" real-el)
-               (.unobserve the-iobs real-el)
-               (assoc state ::prev-sel? nil))))))
-     
-     #_(do
-       #_ (when (some-> state :rum/args first :form/highlight)
-            (let [el (rum/dom-node state)
-                  real-el (if-not (= "S" (.-tagName el) )
-                            el
-                            (.-nextElementSibling el))]
-              (scroll/scroll-to-selected* real-el false)))
-       state))})
+             (do (.observe the-iobs real-el)
+                 (assoc state ::prev-sel? true))
+             (do (.unobserve the-iobs real-el)
+                 (assoc state ::prev-sel? nil)))))))})
 
 
 (rum/defc form
@@ -220,7 +233,9 @@
          (fn [] (println "Effect#" (:db/id e)))
          [selected?]))
     (rum/fragment
-     (indenter (:form/linebreak e) indent-prop (:form/indent e))
+     (rum/with-context [ind cc/*indenter*]
+       (when ind
+         ^:inline (ind (:form/linebreak e) indent-prop (:form/indent e))))
      (cond (:form/editing e) (eb/edit-box e bus)
            (:token/type e)
            (let [tt (:token/type e)
@@ -251,4 +266,5 @@
                            (zipmap (map :db/id
                                         (next (mut/get-numeric-movement-vec e)))
                                    (range 2 9))))))
-     (when selected? (ml/modeline-nest-next e bus)))))
+     
+     (when selected? (ml/modeline-nest-next e bus form)))))
