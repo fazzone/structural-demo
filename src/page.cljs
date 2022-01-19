@@ -356,7 +356,8 @@
       (let [kbd (event->kbd ev)
             bindings default-keymap
             mut (get bindings kbd)
-            _ (println "Kbd" kbd :mut mut)]
+            ;; _ (println "Kbd" kbd :mut mut)
+            ]
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 
@@ -492,7 +493,8 @@
   (js/document.removeEventListener "keyup" global-keyup true)
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
-  (let [{:keys [conn bus]} (setup-app the-singleton-db)]
+  
+  (let [{:keys [conn bus]} (setup-app (d/conn-from-db @the-singleton-db))]
     (reset! keyboard-bus bus)
     (when-let [req-title (some-> js/window.location.search
                                  (js/URLSearchParams.)

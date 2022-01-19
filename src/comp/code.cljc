@@ -111,7 +111,8 @@
       ^:inline ((get dispatch-coll ct (constantly nil)) e bus classes)
       (let [children (e/seq->vec e)]
         [:span {:class ["c" coll-class extra-class classes]}
-         #_[:span.inline-tag.debug (str (swap! render-counter inc))
+         #_[:span.inline-tag.debug
+            (str (swap! render-counter inc))
             #_(str (:db/id e))]
          (when-some [p (get proply (:db/id e))]
            [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
@@ -177,7 +178,7 @@
      state)})
 
 (rum/defc form
-  < dbrx/ereactive scroll-selected
+  < dbrx/ereactive #_scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
   (let [selected? (:form/highlight e)]
@@ -185,9 +186,8 @@
         (rum/use-effect!
          (fn [] (println "Effect#" (:db/id e)))
          [selected?]))
-    
     (rum/fragment
-     (when selected?
+     #_(when selected?
        (ml/modeline-nest-next e bus))
      (indenter (:form/linebreak e) indent-prop (:form/indent e))
      (cond (:form/editing e) (eb/edit-box e bus)

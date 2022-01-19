@@ -19,8 +19,13 @@
 
 (defprotocol IBus
   (send! [this msg])
+  
   (connect-sub! [this topic ch])
   (disconnect-sub! [this toipic ch])
+  
+  (fire-subs! [this eid])
+  (sub-entity [this eid func])
+  
   ;; history?
   (get-history [this txid])
   (save-history! [this txid tx-report])
@@ -44,11 +49,27 @@
   []
   (let [ch (async/chan)
         pub (async/pub ch first)
-        hs (atom {})]
+        hs (atom {})
+        
+        sub-map (js/Map.)]
     (reify IBus
       (send! [this msg] (async/put! ch msg))
-      (connect-sub! [this topic sch] (async/sub pub topic sch))
-      (disconnect-sub! [this topic sch] (async/unsub pub topic sch))
+      (connect-sub! [this topic sch]
+        (async/sub pub topic sch))
+      (disconnect-sub! [this topic sch]
+        (async/unsub pub topic sch))
+      
+      (fire-subs! [this entity]
+        (some-> (.get sub-map (:db/id entity))
+                (.forEach (fn [f] (f entity)))))
+      (sub-entity [this eid func]
+        (let [sub-set (or (.get sub-map eid)
+                          (let [s (js/Set.)]
+                            (.set sub-map eid s)
+                            s))]
+          (.add sub-set func)
+          (fn [] (.delete sub-set func))))
+      
       (get-history [this txid] (get @hs txid))
       (save-history! [this txid r] (swap! hs assoc txid r))
       (zchan [this] ch))))
@@ -66,6 +87,9 @@
       (send! [t m] (send! b m))
       (connect-sub! [t o s] (connect-sub! b o s))
       (disconnect-sub! [t o s] (disconnect-sub! b o s))
+      (sub-entity [t o s] (sub-entity b o s))
+      (fire-subs! [t e]
+        (fire-subs! b e))
       (get-history [t x] (get-history b x))
       (save-history! [t x r] (save-history! b x r))
       (zchan [t] (zchan b)))))
@@ -76,6 +100,7 @@
     (connect-sub! [_ _ _])
     (disconnect-sub! [_ _ _])
     (get-history [this txid])
+    (sub-entity [_ _ _])
     (save-history! [this txid r])
     (zchan [this])))
 
@@ -110,13 +135,13 @@
             db                 @conn
             tx-data            (apply mut-fn db args)
             tid                (str mut-name)
-            _                  (js/console.time tid)
+            ;; _                  (js/console.time tid)
             report             (try (and tx-data
                                          (assoc (d/transact! conn tx-data)
                                                 :mut mut))
                                     (catch #? (:cljs js/Error :clj Exception) e
                                       {:error e})
-                                    (finally (js/console.timeEnd tid)))]
+                                    #_(finally (js/console.timeEnd tid)))]
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
@@ -224,7 +249,7 @@
                                 (publish-tx-report! the-bus db-after tx-data tempids)))
                     (d/listen! (fn [{:keys [db-after db-before tx-data tempids]}]
                                  (try
-                                   (js/console.time "publish")
+                                   ;; (js/console.time "publish")
                                    (let [emax (:max-eid db-before)
                                          es (into #{}
                                                   (keep (fn [[e]]
@@ -235,14 +260,23 @@
                                      ;; (println "Actual tx-data:")
                                      ;; (run! prn tx-data)
                                      #_(println "Tempids" tempids)
+                                     
                                      #_(run! prn tx-data)
-                                     (println "Transacted" (count tx-data) "datoms" "Es" es "As" as)
-                                     (doseq [a as]
+                                     #_(println "Transacted" (count tx-data) "datoms" "Es" es "As" as)
+                                     #_(doseq [a as]
                                        (send! the-bus [a db-after]))
-                                     (doseq [e es]
+                                     (js/ReactDOM.unstable_batchedUpdates
+                                      (fn []
+                                        (doseq [e es]
+                                          (when-not (empty? (d/datoms db-after :eavt e))
+                                            (fire-subs! the-bus (d/entity db-after e))))))
+                                     
+                                     
+                                     #_(doseq [e es]
                                        (when-not (empty? (d/datoms db-after :eavt e))
-                                         (send! the-bus [e (d/entity db-after e)]))))
-                                   (finally
-                                     (js/console.timeEnd "publish"))))))}
+                                         #_(println "Fire subs for" e)
+                                         (fire-subs! the-bus (d/entity db-after e))
+                                         #_(send! the-bus [e (d/entity db-after e)]))))
+                                   #_(finally (js/console.timeEnd "publish"))))))}
         (map->App)
         (setup-undo!))))

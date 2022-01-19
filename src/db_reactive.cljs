@@ -3,7 +3,8 @@
    [datascript.core :as d]
    [cljs.core.async :as async]
    [core :as core]
-   [rum.core :as rum])
+   [rum.core :as rum]
+   [embed :as e])
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]))
@@ -20,79 +21,61 @@
 
 (defn update-first-arg!
   [^js/React.Component rc e ident]
-  #_(let [cs (swap! hack-cbq conj
-                    (fn []
-                      (.setState rc (fn setstate-arx [state props]
-                                      (let [rst (aget state :rum/state)]
-                                        (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                                        state)))))]
-      (js/window.setTimeout
-       flush-cbq
-       0))
-  (try
+  #_(try
     (js/console.time ident)
     (.setState rc (fn setstate-arx [state props]
-                    (let [rst (aget state :rum/state)]
-                      (vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
-                      state)))
-    (finally (js/console.timeEnd ident))))
+                      (let [rst (deref (aget state :rum/state))]
+                        #_(vswap! rst assoc :rum/args (cons e (next (:rum/args @rst))))
+                        #_(println "Returning new state for " (:db/id e))
+                        
+                        #js {":rum/state"
+                             (volatile!
+                              (assoc rst :rum/args (cons e (next (:rum/args rst)))))}
+                        #_(js/Object.assign #js {:extra 1} state))))
+    (finally (js/console.timeEnd ident)))
+  (.setState rc (fn setstate-arx [state props]
+                  (let [rst (deref (aget state :rum/state))]
+                    #js {":rum/state"
+                         (volatile!
+                          (assoc rst :rum/args (cons e (next (:rum/args rst)))))}))))
 
 (def ereactive
   ;; mixin for components taking [entity bus ...]
   {:init          (fn [{:rum/keys [react-component] :as state} props]
                     (let [[ent bus & args] (some-> state :rum/args)
                           ch               (async/chan)
-                          nupdate          (atom nil)]
+                          nupdate          (volatile! false)
+                          subber           (fn [eid]
+                                             (core/sub-entity bus eid
+                                                              (fn [new-ent]
+                                                                (vreset! nupdate true)
+                                                                (update-first-arg! react-component new-ent
+                                                                                   (str "erx " (:db/id new-ent))))))]
                       (when-not (and bus (:db/id ent))
                         (throw (ex-info (str "Cannot use ereactive " (pr-str ent)) {})))
-                      (go-loop []
-                        (let [[_ updated-entity] (async/<! ch)]
-                          (reset! nupdate true)
-                          (update-first-arg! react-component updated-entity (str "erx " (:db/id updated-entity)))
-                          (recur)))
-                      ;; subscribe to updates about entity
-                      (core/connect-sub! bus (:db/id ent) ch)
-                      (assoc state ::ereactive.chan ch ::nupdate nupdate)))
-   :should-update (fn [old-state {::keys [nupdate] :as new-state}]
-                    #_(when @nupdate
-                        (reset! nupdate false)
-                        true)
-                    (let [[e _ & old-props] (:rum/args old-state)
-                          [_ _ & new-props] (:rum/args new-state)]
-                      #_(println " " (:db/id e) "Old props" old-props
-                                 "\n " (:db/id e) "New props" new-props "eq?" (= old-props new-props))
-                      (cond
-                        (not= old-props new-props) true
-                        (some? @nupdate)           (do (reset! nupdate false)
-                                                       true))))
+                      (assoc state
+                             ::nupdate nupdate
+                             ::subber subber
+                             ::unsubber (subber (:db/id ent)))))
+   :should-update (fn [old-state new-state]
+                    (some-> new-state ::nupdate deref))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)
                           old-eid         (:db/id old-e)
                           new-eid         (:db/id new-e)]
-                      (when-not (identical? bus old-bus)
-                        (println "The bus changed.")
-                        #_(throw (ex-info "The bus cannot change" {})))
-                      (when-not (identical? (::ereactive.chan old-state) (::ereactive.chan new-state))
-                        (println "The chan changed." )
-                        #_(throw (ex-info "The chan cannot change" {})))
-                      (when-not (= old-eid new-eid)
-                        (core/disconnect-sub! bus old-eid (::ereactive.chan old-state))
-                        (core/connect-sub! bus new-eid (::ereactive.chan new-state)))
-                      new-state))
-   :will-unmount  (fn [{:rum/keys [args] :as state}]
-                    (let [[e bus] args]
-                      (core/disconnect-sub! bus (:db/id e) (::ereactive.chan state))
-                      state))
-   #_ #_:did-mount (fn [state]
-                #_(js/console.log "I mounted"
-                                (-> state :rum/args first :db/id ))
-                state)
-   #_ #_:did-update (fn [state]
-                 #_(js/console.log "I updated"
-                                 (-> state :rum/args first :db/id )
-                                 (rum/dom-node state)) 
-                 state)})
+                      (if (= old-eid new-eid)
+                        new-state
+                        (do
+                          ((::unsubber old-state))
+                          (assoc new-state ::unsubber ((::subber new-eid)))))))
+   :will-unmount  (fn [state]
+                    (when-some [u (::unsubber state)]
+                      (u))
+                    state)
+   :after-render  (fn [state]
+                   (some-> state ::nupdate (vreset! nil))
+                   state)})
 
 #_(defn areactive
   ;; mixin for components taking [db bus ...]

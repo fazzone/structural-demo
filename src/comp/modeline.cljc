@@ -38,7 +38,7 @@
         (str "#" (:db/id sel)
              " "
              (or (:coll/type sel)
-                 (pr-str (d/touch sel)))))])])
+                 #_(pr-str (d/touch sel)))))])])
 
 #_(rum/defc modeline-portal  < rum/reactive (dbrx/areactive :form/highlight :form/editing)
   [db bus]
