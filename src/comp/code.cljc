@@ -53,13 +53,18 @@
   (let [ml-ref (rum/create-ref)]
     [:div.form-card
      {}
-    
      #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
+     #_[:div.top-level-form.code-font {}
+        (rum/bind-context
+         [cc/*indenter* indenter]
+         (rum/bind-context [cc/*modeline-ref* ml-ref]
+                           ^:inline (form e bus 0 p)))]
      [:div.top-level-form.code-font {}
-      (rum/bind-context [cc/*indenter* indenter]
-       (rum/bind-context [cc/*modeline-ref* ml-ref]
-                         ^:inline (form e bus 0 p)))]
-     [:div.modeline-outer {:ref ml-ref }]]))
+      (rum/bind-context
+       [cc/*indenter* indenter]
+       ^:inline (form e bus 0 p))]
+     
+     #_[:div.modeline-outer {:ref ml-ref }]]))
 
 (def render-counter (atom 0))
 

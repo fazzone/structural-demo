@@ -14,7 +14,6 @@
 
 (def save-status (atom nil))
 
-
 (rum/defc modeline-inner < rum/reactive
   [sel bus rec eps]
   (let [{:keys [^String text valid]} (some-> eps rum/react)]
@@ -31,7 +30,8 @@
            :error "Error"
            "")))]
     (if text
-      ^:inline (comp.search/results (d/entity-db sel) bus :token/value text rec)
+      #_(do ^:inline (comp.search/results (d/entity-db sel) bus :token/value text rec))
+      nil
       #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
       [:span.modeline-content
        (if-not sel
@@ -42,14 +42,9 @@
                   #_(pr-str (d/touch sel)))))])
     #_[:input.edit-box.code-font {:type :text}]]))
 
-(rum/defc modeline-nest-next 
+(rum/defc modeline-nest-next
   [sel bus rec]
   (rum/with-context [my-ref cc/*modeline-ref*]
     (some->> my-ref
              (rum/deref)
              (rum/portal (modeline-inner sel bus rec eb/editbox-ednparse-state)))))
-
-
-
-
-

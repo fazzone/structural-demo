@@ -1,45 +1,21 @@
 (ns test-driver
   (:require
    [df.async :as a]
+   [rum.core :as rum]
    ["puppeteer" :as pt]
    ["process" :as process]
    ["http" :as http]
-   ["path" :as path]))
-
-;; const puppeteer = require('puppeteer');
-
-
-;; (async () => {
-
-
-;;   const browser = await puppeteer.launch();
-
-
-;;   const page = await browser.newPage();
-
-
-;;   await page.goto('https://example.com');
-
-
-;;   await page.screenshot({ path: 'example.png' });
-
-
-;;   await browser.close();
-
-
-;; })();
-
+   ["path" :as path]
+   ["fs" :as fs]))
 
 (defonce refs (atom {}))
 
 (def test-params
-  {:example {:form '[a ^:form/highlight nice [This is my awesome form where I am typing stuff in the test driver] b c]
-             :mutations [[:delete-right]
-                         [:barf-right]
-                         [:barf-right]
-                         [:delete-right]
-                         [:flow-left]
-                         [:barf-right]]}})
+  {:example {:form '[a ^:form/highlight nice
+                     [This is my awesome form where I am typing stuff in the
+                      test driver] b c]
+             :mutations [[:delete-right] [:barf-right] [:barf-right]
+                         [:delete-right] [:flow-left] [:barf-right]]}})
 
 (defn setup-server
   []
@@ -59,86 +35,134 @@
                   (js/Buffer.from "utf-8")
                   (.toString "base64"))))))
 
-#_(defn main []
-  (println "Start main")
-  #_(go)
-  (.then (.launch pt #js {:headless true
-                          :defaultViewport #js {:width 1280 :height 1024}})
-         (fn [^js browser]
-           (swap! refs assoc :browser browser)
-           (.then (.newPage browser)
-                  (fn [^js page]
-                    (swap! refs assoc :page page)
-                    (.then (.evaluate page (fn [ps] (set! js/window.mytestparams ps))
-                                      (clj->js
-                                       {:Does :This
-                                        :Work [1 2 3 4]}))
-                           (fn [qqq]
-                             (.on page "console" (fn [^js e] (js/console.log "[page]" (.text e))))
-                             (-> (.start (.-tracing page)
-                                         #js {:path "artifact/screenshot/profile.json"})
-                                 (.then (fn [_]
-                                          (-> (.goto page "http://localhost:8087")
-                                              (.then (fn [e]
-                                                       (-> (.stop (.-tracing page))
-                                                           (.then (fn [_]
-                                                                    (swap! refs :thisreturn e)
-                                                                    (js/console.log "Finisherer")
-                                                                    (let [op  "artifact/screenshot/example.png"]
-                                                                      (-> (.screenshot page #js {:path op :fullPage true})
-                                                                          (.then (fn [s]
-                                                                                   (println "Wrote " op)
-                                                                                   (-> (.close browser)
-                                                                                       (.then (fn [c]
-                                                                                                (println "Closed browser ")
-                                                                                                (js/process.exit 0))))))))))))))))))))))))
+#_(def viewport-width 1000)
+
+(def viewport-width 320)
+
+#_(def viewport-height 800)
+
+(def viewport-height 50)
 
 (def ^:const ptr-opts
-  #js {:headless true
-       :defaultViewport #js {:width 1000 :height 800}})
+  #js {:headless false
+       :defaultViewport #js {:width viewport-width :height viewport-height}})
+
+(rum/defc test-report-root
+  [fs]
+  (prn "Fs:" fs)
+  [:div
+   {:style {:font-family "monospace"
+            :background-color "#000"
+            :color "#fff"
+            :display :grid
+            :grid-template-columns "minmax(3em, auto) 2fr"}}
+   (for [{:keys [index typed screenshot]} fs]
+     (rum/fragment [:span {:key (inc (* 2 index))} (pr-str typed)]
+                   [:img
+                    {:key (dec (* 2 index))
+                     :src screenshot
+                     :width viewport-width
+                     :height viewport-height
+                     :style {:border "1px dashed aliceblue"}}]))])
+
+(def report-filename "test-report.html")
+
+(defonce last-result (atom nil))
+
+(defn report-url [f]
+  (str "file:///"
+       (-> js/__dirname
+           (path/dirname)
+           (path/dirname)
+           (path/join f))))
+
+(defonce the-browser (atom nil))
+
+(defn get-browser!
+  []
+  (or (some-> the-browser
+              deref
+              (js/Promise.resolve))
+      (a/let [^js browser (.launch pt ptr-opts)]
+        (reset! the-browser browser)
+        (doto browser
+          (.on "disconnected"
+               (fn [] (js/console.log "Chromeclosed") (js/process.exit 0)))))))
 
 (defn tseq
   [^js page i ts]
-  (println "TSeq")
+  (println "TSeq" (pr-str ts))
   (a/let [outf (str "artifact/screenshot/state" i ".png")
           _ (.type (.-keyboard page) ts #js {:delay 20})
-          _ (.waitForTimeout page 50)
-          _ (.screenshot page #js {#_#_:fullPage true :path outf})
-          ;; _ (println "Wrote" outf)
-]
+          #__ #_(.waitForTimeout page 50)
+          _ (.screenshot page #js {#_#_:fullPage true :path outf})]
     outf))
 
-(defn go []
-  (a/let [^js browser (.launch pt ptr-opts)
-          _ (.on browser "disconnected"
-                 (fn []
-                   (js/console.log "Chromeclosed")
-                   (js/process.exit 0)))
+(defn run-steps
+  [^js browser url steps]
+  (a/let [^js page (.newPage browser)
+          _ (.goto page url)
+          result (reduce (fn [p [i t]]
+                           (a/let [acc p
+                                   out (tseq page i t)]
+                             (conj acc {:index i  :typed t  :screenshot out})))
+                   (js/Promise.resolve [])
+                   (map vector (range) steps))
+          _ (.close page)]
+    result))
+
+(defn go
+  []
+(a/let [^js browser (get-browser!)
+          uu (str "file:///"
+                  (-> js/__dirname
+                      (path/dirname)
+                      (path/join "index.html")))
+          result (run-steps browser uu (map str (apply str ["oa b c d e f g\n" "aa" "aaff" "9999" "hhhh" "pppp" "wwPP"])))
+          _ (prn "Result " result)
+          _ (.writeFile fs/promises
+                        report-filename
+                        (rum/render-html (test-report-root result)))
+          _ (if (aget ptr-opts "headless")
+              (do (println "closing headless") (.close browser)))]
+    (reset! last-result result)
+    (println "Nice.")
+    #_(js/process.exit 0))
+  #_(a/let [^js browser (get-browser!)
           ^js page (.newPage browser)
           ;; _ (.start (.-tracing page))
-          cdp-client (.createCDPSession (.target page))
-          _ (.send cdp-client "Overlay.setShowFPSCounter" #js {:show true})
+          #_cdp-client #_(.createCDPSession (.target page))
+          #__ #_(.send cdp-client "Overlay.setShowFPSCounter" #js {:show true})
           ;; _ (.goto page "http://localhost:8087")
           _ (println "Js dirname" js/__dirname)
-          uu (str "file:///" (-> js/__dirname
-                                 (path/dirname)
-                                 (path/join "index.html")))
+          uu (str "file:///"
+                  (-> js/__dirname
+                      (path/dirname)
+                      (path/join "index.html")))
           _ (println "File url?" uu)
           _ (.goto page uu)
           ;; _ (.stop (.-tracing page))
-          _ (tseq page 0 "z")
-          _ (reduce
-             (fn [p [i t]]
-               (.then p (fn [] (tseq page i t))))
-             (js/Promise.resolve nil)
-             (map vector (range) (map str (str "zfjjjj" "jl first-to" "ken\n1j" "jonext-token\n1jj" "dfothird-token\n1jff last-"
-                                               "token\nfafaafffffffaafff"
-                                               "1jjjjlhc_cH1kf"
-                                               "f;done\n")))
-             #_[])
-          _ (when (aget ptr-opts "headless")
-              (println "closing headless")
-              (.close browser))]
+          result
+            (reduce
+              (fn [p [i t]]
+                (.then
+                  p
+                  (fn [a]
+                    (.then (tseq page i t)
+                           (fn [out]
+                             (conj a {:index i  :typed t  :screenshot out}))))))
+              (js/Promise.resolve [])
+              (map vector (range) (map str (apply str ["of a b c d e f g " "h\n" "aaa" "9hwwwpp"])))
+              #_[])
+          _ (prn "Result " result)
+          _ (.writeFile fs/promises
+                        report-filename
+                        (rum/render-html (test-report-root result)))
+          _ (if (aget ptr-opts "headless")
+              (do (println "closing headless") (.close browser))
+              (do (println "Report url" (report-url report-filename))
+                  (.goto page (report-url report-filename))))]
+    (reset! last-result result)
     (println "Nice.")
     #_(js/process.exit 0)))
 
@@ -146,4 +170,13 @@
   (println "Start main")
   (go))
 
-(defn ^:dev/after-load loady [])
+(comment)
+
+(defn ^:dev/after-load loady
+  []
+  (println "Loady!" (deref last-result) (deref the-browser))
+  (go)
+  #_(when-some [r (deref last-result)]
+      (.writeFile fs/promises
+                  report-filename
+                  (rum/render-html (test-report-root r)))))

@@ -155,45 +155,38 @@
 
 (def init-tx-data
   (let [chains (concat
-                #_[(e/string->tx-all (m/macro-slurp  "src/core.cljc"))]
-                [(e/string->tx-all (m/macro-slurp  "src/cmd/edit.cljc"))]
-                (map e/->tx test-form-data-bar)
-                #_[(e/string->tx-all (m/macro-slurp  "subtree/input.clj"))])]
-    [{:db/ident ::state
-      :state/bar "bar"}
-     {:db/ident ::command-chain
-      :db/id "command-chain"
-      :coll/type :vec}
-     {:db/ident ::inspect
-      :db/id "inspect"
-      :coll/type :inspect}
+                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
+                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
+                 #_(map e/->tx test-form-data-bar)
+                 [(e/->tx [^:form/highlight ()])]
+                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
+    [{:db/ident ::state  :state/bar "bar"}
+     {:db/ident ::command-chain  :db/id "command-chain"  :coll/type :vec}
+     {:db/ident ::inspect  :db/id "inspect"  :coll/type :inspect}
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
       :coll/type :keyboard
       :keymap/bindings (for [[k m] default-keymap]
-                         {:key/kbd k :key/mutation m})}
-     (assoc
-      (e/seq-tx
-       (concat
-        (for [ch chains]
-          (assoc ch
-                 :coll/type :chain
-                 :coll/_contains "bar"))
-        [{:db/ident ::meta-chain
-          :coll/type :chain
-          :coll/_contains "bar"
-          :coll/contains #{"label"
-                           "defaultkeymap"
-                           "inspect"
-                           "command-chain"}
-          :seq/first {:db/id "label"
-                      :token/type :string
-                      :token/value "Keyboard"}
-          :seq/next {:seq/first "defaultkeymap"
-                     :seq/next {:seq/first "command-chain"
-                                :seq/next {:seq/first "inspect"}}}}]))
-      :db/id "bar"
-      :coll/type :bar)]))
+                         {:key/kbd k  :key/mutation m})}
+     (assoc (e/seq-tx
+              (concat
+                (for [ch chains]
+                  (assoc ch
+                    :coll/type :chain
+                    :coll/_contains "bar"))
+                #_[{:db/ident ::meta-chain
+                  :coll/type :chain
+                  :coll/_contains "bar"
+                  :coll/contains #{"label" "defaultkeymap" "inspect"
+                                   "command-chain"}
+                  :seq/first {:db/id "label"
+                              :token/type :string
+                              :token/value "Keyboard"}
+                  :seq/next {:seq/first "defaultkeymap"
+                             :seq/next {:seq/first "command-chain"
+                                        :seq/next {:seq/first "inspect"}}}}]))
+       :db/id "bar"
+       :coll/type :bar)]))
 
 (comment
   [:span.c.dl
@@ -337,11 +330,9 @@
   (let [state (d/entity db ::state)
         ml-ref (rum/create-ref)]
     [:div.bar-container {} #_(test-image)
-     #_(rum/bind-context [ccommon/*modeline-ref* ml-ref]
+     (rum/bind-context [ccommon/*modeline-ref* ml-ref]
                        (code/form (:state/bar state) bus 0 nil))
-     (code/form (:state/bar state) bus 0 nil)
-     [:div.modeline-outer {:id "modeline"
-                           :ref ml-ref}]
+     [:div.modeline-outer {:id "modeline" :ref ml-ref}]
      #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
@@ -363,7 +354,7 @@
             bindings default-keymap
             mut (get bindings kbd)
             ;; _ (println "Kbd" kbd :mut mut)
-            ]
+]
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 
@@ -408,7 +399,6 @@
                                 (fn [[_ kbd tkd] db bus]
                                   (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
                                     (core/send! bus [mut]))))
-       
        #_(core/register-mutation! :scroll (fn [_ db _] (scroll/scroll-to-selected!)))
        (core/register-mutation! :eval-sci (eval-sci/mutatef a))
        (core/register-simple!
@@ -475,8 +465,6 @@
   (doto (d/create-conn s/schema)
     (d/transact! init-tx-data)))
 
-
-
 (defn fetch-json
   [u]
   (-> (js/fetch u)
@@ -496,9 +484,7 @@
   (js/document.removeEventListener "keyup" global-keyup true)
   (js/document.addEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keyup" global-keyup true)
-  
   (some-> the-singleton-db meta :listeners (reset! {}))
-  
   (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (reset! keyboard-bus bus)
     (when-let [req-title (some-> js/window.location.search
