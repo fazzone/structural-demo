@@ -4,6 +4,7 @@
    [cmd.move :as move]
    [cmd.edit :as edit]
    [cmd.insert :as insert]
+   [sys.kbd :as sk]
    [datascript.core :as d]
    [cljs.core.async :as async]
    [embed :as e]
@@ -47,13 +48,6 @@
 
 (def editbox-ednparse-state (atom nil))
 
-(defn event->kbd
-  [^KeyboardEvent ev]
-  (str (when (.-altKey ev) "M-")
-       (when (.-ctrlKey ev) "C-")
-       (when (.-shiftKey ev) "S-")
-       (.-key ev)))
-
 (rum/defcs edit-box
   < (rum/local [] ::text) (focus-ref-on-mount "the-input")
   [{::keys [text]} e bus]
@@ -81,9 +75,7 @@
                                :type (some-> token first val)})
                       nil)
       :on-key-down (fn [ev]
-                     (when-let [mut (editbox-keydown-mutation
-                                     value
-                                     (event->kbd ev))]
+                     (when-let [mut (editbox-keydown-mutation value (sk/event->kbd ev))]
                        (.preventDefault ev)
                        (.stopPropagation ev)
                        (when (not= :edit/wrap (first mut))

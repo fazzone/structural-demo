@@ -24,6 +24,7 @@
    [cmd.move :as move]
    [cmd.nav :as nav]
    [sys.eval.sci :as eval-sci]
+   [sys.kbd :as sk]
    [cmd.insert :as insert]
    [cmd.edit :as edit]
    [cmd.mut :as mut]
@@ -83,76 +84,6 @@
                  (concat (for [{:keys [path] :as b} (by-type "blob")] [path b])
                          rec)))))]])
 
-(def default-keymap
-  {"f"   :flow-right
-   "S-^" :new-meta
-   "S-F" :flow-right-coll
-   "u"   :undo
-   "S-A" :alias
-   "g"   :gobble
-   "S-I" :zp
-   "o"   :offer
-   ";"   :new-comment
-   "S-S" :split
-   "M-s" :splice
-   "S-Z" :drag-left
-   "S-X" :drag-right
-   "n"   :find-next
-   "S-N" :find-first
-   "C-/" :undo
-   "S-R" :reify-undo
-   "S-_" :uneval
-   "S-W" :save
-   "t"   :tear
-   "S-@" :new-deref
-   "a"   :flow-left
-   "w"   :float
-   "s"   :sink
-   ;; "S-H"       :toplevel
-   "h"         :parent
-   "j"         :next
-   "k"         :prev
-   "l"         :tail
-   "r"         :raise
-   " "         :insert-right
-   "S- "       :insert-left
-   "d"         :delete-right
-   "S-H"       :hoist
-   "Backspace" :delete-left
-   ;; "Backspace" :move-to-deleted-chain
-   "Enter"     :linebreak
-   "C-Enter"   :insert-right-newline
-   "Escape"    :select-chain
-   "c"         :clone
-   "z"         :hop-left
-   "x"         :hop-right
-   "9"         :wrap
-   ;; "9"         :new-list
-   "0"     :parent
-   "]"     :parent
-   "p"     :slurp-right
-   "S-P"   :barf-right
-   "Tab"   :indent
-   "S-Tab" :dedent
-   "e"     :eval-sci
-   "S-("   :new-list
-   "["     :new-vec
-   "S-C"   :new-chain
-   "S-B"   :new-bar "'" :new-quote
-   "1"     :m1
-   "2"     :m2
-   "3"     :m3
-   "4"     :m4
-   "5"     :m5
-   "6"     :m6
-   "7"     :m7
-   "8"     :m8
-   "v"     :scroll
-   "-"     :hide
-   "i"     :insert-left
-   "S-Q"   :stringify
-   "S-+"   :plus})
-
 (def init-tx-data
   (let [chains (concat
                  #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
@@ -166,7 +97,7 @@
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
       :coll/type :keyboard
-      :keymap/bindings (for [[k m] default-keymap]
+      :keymap/bindings (for [[k m] sk/default-keymap]
                          {:key/kbd k  :key/mutation m})}
      (assoc (e/seq-tx
               (concat
@@ -248,64 +179,6 @@
    [:div.form-title "Alias " (:db/id c) " of " (:db/id of)]
    (fcc of b i s)])
 
-(def special-key-map
-  (merge
-   {" "      [::insert-editing :after]
-    "S-\""   [::insert-editing :after "\""]
-    "S-:"    [::insert-editing :after ":"]
-    "S- "    [::insert-editing :before]
-    "'"      [::insert-editing :before "'"]
-    "S-("    [::edit-new-wrapped :list]
-    "M-S-("  [::wrap-and-edit-first :list]
-    "q"      [::wrap-and-edit-first :list]
-    "9"      [::wrap-selected-form :list]
-    "["      [::edit-new-wrapped :vec]
-    "S-{"    [::edit-new-wrapped :map]
-    "r"      [::raise-selected-form]
-    "S-X"    [::extract-to-new-top-level]
-    "Escape" [::select-chain]
-    "m"      [::edit-selected]
-    "]"      [::move :move/up]
-    "w"      [::exchange-with-previous]
-    "s"      [::exchange-with-next]
-    "0"      [::move :move/up]
-    "v"      [::scroll-into-view]
-    "h"      [::move :move/up]
-    "j"      [::move :move/next-sibling]
-    "k"      [::move :move/prev-sibling]
-    "l"      [::move :move/most-nested]
-    "f"      [::move :move/flow]
-    "a"      [::move :move/back-flow]
-    "n"      [::move :move/most-nested]
-    "d"      [::delete-with-movement :move/forward-up]
-    "e"      [::eval]
-    "z"   [::hop-left]
-    "x"   [::hop-right]
-    "S-Z" [::drag-left]
-    "Backspace" [::delete-with-movement :move/backward-up]
-    "c"         [::duplicate-selected-form]
-    ;; "i"         [::indent-form 1]
-    ;; "S-I"       [::indent-form -1]
-    "Tab"       [::indent-form 1]
-    "S-Tab"     [::indent-form -1]
-    "i"         [::check-invariants] #_[::reset-indent]
-    "Enter"     [::linebreak-form]
-    "M-p"       ["placeholder"]
-    "M-n"       ["placeholder"]
-    "-"         ["placeholder"]
-    "S-Q"         ["placeholder"]
-    "S-M"       [::recursively-set-indent true]
-    "S-O"       [::recursively-set-indent false]
-    ;; "M-x"       [::execute-selected-as-mutation]
-    "S-A"       {"a" [::linebreak-form]}
-    "S-R"       {"f" [::reify-extract-selected]
-                 "m" [::reify-last-mutation]
-                 "p" [::reify-parse-selected]}
-    "C-z"       [::revert-last]}
-   (into {}
-         (for [i (range  8)]
-           [(str (inc i)) [::select-1based-nth-reverse-parent (inc i)]]))))
-
 (declare setup-app)
 
 (rum/defc test-image
@@ -336,13 +209,7 @@
      #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
-(defn event->kbd
-  [^KeyboardEvent ev]
-  (str (when (.-altKey ev) "M-")
-       (when (.-ctrlKey ev)
-         "C-")
-       (when (.-shiftKey ev) "S-")
-       (.-key ev)))
+
 
 (def keyboard-bus (atom nil))
 
@@ -350,11 +217,9 @@
   [ev]
   (let [tkd (js/performance.now)]
     (when (identical? js/document.body js/document.activeElement)
-      (let [kbd (event->kbd ev)
-            bindings default-keymap
-            mut (get bindings kbd)
-            ;; _ (println "Kbd" kbd :mut mut)
-]
+      (let [kbd (sk/event->kbd ev)
+            bindings sk/default-keymap
+            mut (get bindings kbd)]
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 

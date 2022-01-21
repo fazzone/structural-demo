@@ -57,4 +57,5 @@
   (shadow/release :ptr)
   :ok)
 
-#_(shadow/compile :br)
+(comment
+  (shadow/watch :ptr))
