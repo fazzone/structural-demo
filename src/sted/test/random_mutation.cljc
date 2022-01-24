@@ -1,15 +1,15 @@
-(ns test.random-mutation
+(ns sted.test.random-mutation
   (:require
    [clojure.edn :as edn]
-   [embed :as e]
-   [schema :as s]
+   [sted.embed :as e]
+   [sted.schema :as s]
    [datascript.core :as d]
    [clojure.core.async :as async]
-   [cmd.move :as move]
-   [cmd.edit :as edit]
-   [cmd.mut :as mut]
-   [core :refer [get-selected-form
-                 move-selection-tx]]))
+   [sted.cmd.move :as move]
+   [sted.cmd.edit :as edit]
+   [sted.cmd.mut :as mut]
+   [sted.core :refer [get-selected-form
+                      move-selection-tx]]))
 
 (defn setup-db
   [init-form]

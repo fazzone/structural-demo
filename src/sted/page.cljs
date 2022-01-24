@@ -25,21 +25,15 @@
    [sted.cmd.insert :as insert]
    [sted.cmd.edit :as edit]
    [sted.cmd.mut :as mut]
-   [sted.cmd.invar :as invar]
    [sted.df.github :as dfg]
    [sted.df.async :as a]
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]])
-  (:import
-   [goog.net XhrIo]
-   [goog.net EventType])
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
    [sted.macros :as m]))
-
-(def load-time (js/Date.now))
 
 (def test-form-data-bar
   '[["Chain 1"
@@ -82,11 +76,11 @@
 
 (def init-tx-data
   (let [chains (concat
-                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
-                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                 #_(map e/->tx test-form-data-bar)
-                 [(e/->tx [^:form/highlight ()])]
-                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
+                #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
+                #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
+                (map e/->tx test-form-data-bar)
+                #_[(e/->tx [^:form/highlight ()])]
+                #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
      {:db/ident ::command-chain  :db/id "command-chain"  :coll/type :vec}
      {:db/ident ::inspect  :db/id "inspect"  :coll/type :inspect}
@@ -205,8 +199,6 @@
      #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
-
-
 (def keyboard-bus (atom nil))
 
 (defn global-keydown*
@@ -223,29 +215,13 @@
   (fn [ev]
     (global-keydown* ev)))
 
-(defn global-keyup*
-  [ev]
-  #_(prn "Keyup" (event->kbd ev)))
-
-(defonce global-keyup
-  (fn [ev]
-    (global-keyup* ev)))
-
-#_(def ensure-selected-in-view!
-  (-> (fn [] (scroll/scroll-to-selected! false))
-      (gfunc/debounce 10)))
-
 (defn save*
   [file contents]
-  (let [spit (some-> (aget js/window "my_electron_bridge")
-                     (aget "spit"))]
-    (println "Spit=" spit)
-    (when spit
-      (let [pr (spit file contents)]
-        (prn pr)
-        (-> pr
-         (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
-         (.catch (fn [] (swap! ml/save-status assoc :status :error))))))))
+  (when-let [spit (some-> (aget js/window "my_electron_bridge")
+                          (aget "spit"))]
+    (-> (spit file contents)
+        (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
+        (.catch (fn [] (swap! ml/save-status assoc :status :error))))))
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
@@ -268,9 +244,10 @@
           (let [_ (js/console.time "formatting")
                 _ (js/console.time "preparing")
                 _ (zp-hacks/set-options! {:map {:sort? nil}})
-                q (-> (get-selected-form db)
-                      nav/parents-vec
-                      peek)
+                sel (get-selected-form db)
+                q (if (= :chain (:coll/type sel))
+                    sel
+                    (peek (nav/parents-vec  sel)))
                 _ (js/console.timeEnd "preparing")
                 _ (js/console.time "stringifying")
                 my-string (e/->string q)
@@ -290,9 +267,9 @@
                                         (= (:token/value a) (:token/value b)))
                                    (println "!!!! cannot reconcile !!! ")
                                    (println "A:")
-                                   (println my-string)
+                                   (println (e/->string a) "\n" (pr-str a))
                                    (println "B:")
-                                   (println p)
+                                   (println (e/->string b) "\n" (pr-str b))
                                    (throw (ex-info "cannot reconcile " {})))
                                (for [k [:form/indent :form/linebreak]
                                      :when (not= (k a) (k b))]
@@ -342,9 +319,8 @@
 (defn ^:dev/after-load init
   []
   (js/document.removeEventListener "keydown" global-keydown true)
-  (js/document.removeEventListener "keyup" global-keyup true)
   (js/document.addEventListener "keydown" global-keydown true)
-  (js/document.addEventListener "keyup" global-keyup true)
+
   (some-> the-singleton-db meta :listeners (reset! {}))
   (let [{:keys [conn bus]} (setup-app the-singleton-db)]
     (reset! keyboard-bus bus)

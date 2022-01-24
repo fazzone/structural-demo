@@ -27,7 +27,7 @@
        reverse
        (reduce (fn [body [n v]]
                  `(.then (js/Promise.resolve ~v) (~'fn [~n] ~body)))
-               `(df.async/do ~@body)
+               `(sted.df.async/do ~@body)
                #_(do* body))))
 
 (defn sci-let**
