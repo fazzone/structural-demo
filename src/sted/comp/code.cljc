@@ -157,8 +157,9 @@
 (rum/defc hiddenc [{:hidden/keys [coll-type] :as e} bus classes]
   [:div.hidden
    {:class classes}
-   [:div
-    (code-coll coll-type e bus classes 0 nil)]
+   [:div {}
+    
+    ^:inline (code-coll coll-type e bus classes 0 nil)]
    [:div {:style {:width "1500px"}}
     #_(ccons/testing e core/blackhole)
     (ccons/testing e bus)
@@ -308,15 +309,15 @@
            (case (:coll/type e)
              nil (comment
                    "Probably a retracted entity, do nothing")
-             (any-coll e
-                       bus
-                       (when selected? "selected")
-                       (+ 2 indent-prop)
-                       proply
-                       #_(if-not (:form/highlight e)
-                           proply
-                           (zipmap (map :db/id
-                                        (next (mut/get-numeric-movement-vec e)))
-                                   (range 2 9))))))
+             ^:inline (any-coll e
+                                bus
+                                (when selected? "selected")
+                                (+ 2 indent-prop)
+                                proply
+                                #_(if-not (:form/highlight e)
+                                    proply
+                                    (zipmap (map :db/id
+                                                 (next (mut/get-numeric-movement-vec e)))
+                                            (range 2 9))))))
      
      (when selected? (ml/modeline-nest-next e bus form)))))

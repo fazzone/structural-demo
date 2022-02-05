@@ -75,7 +75,6 @@
 
 (defn derx-f
   [{::keys [subber eid->unsub] :as new-state}]
-  (println "DRX Remounting")
   (let [[new-e bus]     (-> new-state :rum/args)
         new-children    (set (children-eids new-e))
         added           (filter (comp not eid->unsub) new-children)
@@ -89,32 +88,27 @@
 
 (def deeply-ereactive
   ;; mixin for components taking [entity bus ...]
-  {:init          (fn [{:rum/keys [react-component] :as state} props]
-                    (let [[ent bus & args] (some-> state :rum/args)
-                          my-eid           (:db/id ent)
-                          cs               (children-eids ent)
-                          subber           (fn [eid]
-                                             (println "DRX" my-eid "subs to" eid)
-                                             (core/sub-entity bus eid
-                                                              (fn [new-ent]
-                                                                (println "DRX" my-eid "Receives update from" (:db/id new-ent))
-                                                                (.setState react-component
-                                                                           (fn setstate-derx [state props]
-                                                                             (let [rst (deref (aget state :rum/state))]
-                                                                               #js {":rum/state"
-                                                                                    (volatile!
-                                                                                     (derx-f
-                                                                                      (assoc rst
-                                                                                             :rum/args (cons (d/entity (d/entity-db new-ent) my-eid)
-                                                                                                             (next (:rum/args rst)))
-                                                                                               
-                                                                                             )))}))))))]
+  {:init         (fn [{:rum/keys [react-component] :as state} props]
+                   (let [[ent bus & args] (some-> state :rum/args)
+                         my-eid           (:db/id ent)
+                         cs               (children-eids ent)
+                         subber           (fn [eid]
+                                            (core/sub-entity bus eid
+                                                             (fn [new-ent]
+                                                               (.setState react-component
+                                                                          (fn setstate-derx [state props]
+                                                                            (let [rst (deref (aget state :rum/state))]
+                                                                              #js {":rum/state"
+                                                                                   (volatile!
+                                                                                    (-> rst
+                                                                                        (assoc :rum/args (cons (d/entity (d/entity-db new-ent) my-eid)
+                                                                                                               (next (:rum/args rst))))
+                                                                                        (derx-f)))}))))))]
                       (when-not (and bus (:db/id ent))
                         (throw (ex-info (str "Cannot use ereactive " (pr-str ent)) {})))
                       (assoc state
                              ::subber subber
                              ::eid->unsub (zipmap cs (map subber cs)))))
-   #_:will-remount  
    :will-unmount (fn [state]
                    (run! apply (vals (::eid->unsub state)))
                    state)})
