@@ -59,10 +59,13 @@
      ()
      (defn get-repo [ident ref-name]
        (a/let [ref (fetch-json (str "https://api.github.com/repos/" ident "/git/ref/heads/" ref-name))
-             commit (fetch-json (-> ref :object :url))
-             tree (fetch-json (str (-> commit :tree :url) "?recursive=true"))]
-       (ingest tree)))
+               commit (fetch-json (-> ref :object :url))
+               tree (fetch-json (str (-> commit :tree :url) "?recursive=true"))]
+         (ingest tree)))
      (get-repo "fazzone/structural-demo" master)
+     
+     
+     
      (defn explore-tree
        [{:keys [tree]  :as t}]
        (let [by-type (group-by :type tree)]
@@ -109,22 +112,6 @@
        :db/id "bar"
        :coll/type :bar)]))
 
-(comment
-  [:span.c.dl
-   {}
-   [:span.d
-    #_[:span.inline-tag-outer [:span.inline-tag-inner (subs (str (:db/id e)) 0 1)]]
-    #_(when-let [p (get proply (:db/id e))]
-        [:span.inline-tag-outer
-         [:span.inline-tag-inner
-          (str p)]])
-    #_[:span.inline-tag.debug
-       (str (swap! render-counter inc))
-       #_(str (:db/id e))]
-    open]
-   "..."
-   [:span.d.cl close]])
-
 #_(declare snapshot)
 
 #_(rum/defc display-undo-preview
@@ -162,31 +149,7 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-#_(defmethod display-coll :alias [{:alias/keys [of] :as c} b i s]
-  (println "DCA" c)
-  [:div.alias
-   (when s {:class s :ref "selected"})
-   [:div.form-title "Alias " (:db/id c) " of " (:db/id of)]
-   (fcc of b i s)])
-
 (declare setup-app)
-
-(rum/defc test-image
-  []
-  (let [cell-width 8
-        cell-height 4
-        rows 10
-        cols 10
-        height (* rows cell-height)
-        width (* cols cell-width)]
-    [:svg
-     {:viewBox (str "0 0 " width " " height)
-      :style {:width "800px"  :border "1px solid aliceblue"}}
-     [:g {:stroke-width (/ cell-width 32)  :stroke "#fff"}
-      (for [i (range cols)]
-        [:line {:x1 (* i cell-width)  :y1 0  :x2 (* i cell-width)  :y2 height}])
-      (for [i (range cols)]
-        [:line {:x1 0  :y1 (* i cell-height)  :x2 width  :y2 (* i cell-height)}])]]))
 
 (rum/defc root-component
   [db bus]

@@ -9,16 +9,6 @@
    [cljs.core.async.macros :refer [go
                                    go-loop]]))
 
-(def hack-cbq (atom []))
-
-(defn flush-cbq
-  []
-  (js/ReactDOM.unstable_batchedUpdates
-   (fn []
-     (doseq [c @hack-cbq]
-       (c))))
-  (reset! hack-cbq []))
-
 (defn update-first-arg!
   [^js/React.Component rc e ident]
   #_(try
@@ -67,7 +57,8 @@
                       (if (= old-eid new-eid)
                         new-state
                         (do
-                          ((::unsubber old-state))
+                          (when-some [u (::unsubber old-state)]
+                            (u))
                           (assoc new-state ::unsubber ((::subber new-eid)))))))
    :will-unmount  (fn [state]
                     (when-some [u (::unsubber state)]

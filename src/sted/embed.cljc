@@ -106,7 +106,7 @@
        :comment {:token/type :comment :token/value (string/trimr (n/string n))}
        :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                       mta                (n/sexpr mta-n)]
-                  (println "Mta-n" (n/string mta-n)
+                  #_(println "Mta-n" (n/string mta-n)
                            "Mta" mta
                            "Val" (n/string val)
                            "More" more)
@@ -166,7 +166,8 @@
 
 (defn ->tx
   [e]
-  (merge (meta e) (->tx* e)))
+  (merge (meta e) (->tx* e))
+  #_(->tx* e))
 
 #? (:clj
    (defn seq->vec
@@ -233,7 +234,7 @@
     :map              "{"
     :set              "#{"
     :fn               "#("
-    :tear             "Â«"
+    :tear             "«"
     :uneval           "#_"
     :meta             "^"
     :deref            "@"
@@ -252,7 +253,7 @@
     :map  "}"
     :set  "}"
     :fn   ")"
-    :tear "Â»"
+    :tear "»"
     nil))
 
 (defn ->string
@@ -355,9 +356,72 @@
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
 
+(defn chain->flat-tx
+  [text]
+  (let [db  (d/entity-db (->chain text))
+        aref? (into #{}
+                    (comp (filter (comp #{:db.type/ref} :db/valueType val))
+                          (map key))
+                    s/schema)]
+    (loop [[[e a v] & more] (d/datoms db :eavt)
+           tx (transient [])]
+      (if (nil? e)
+        (persistent! tx)
+        (recur more (conj! tx #_[:db/add (- e) a (cond-> v (aref? a) -)]
+                           [:db/add e a v]))))))
+
+(comment
+  (time (->chain (slurp "subtree/clojure.core.clj")))
+  (dotimes [i 20]
+    (println "================================================================") 
+    (let [cn (d/create-conn s/form-schema)
+          ftx (time (chain->flat-tx (slurp "subtree/clojure.core.clj")))
+          _ (println "Count?" (count ftx))
+          db (:db-after (time (d/transact! cn ftx)))
+          [ch] (for [[e a v] (d/datoms db :eavt)
+                     :when (= v :chain)]
+                 (d/entity db e))]
+      ch
+      #_(->string ch))))
 
 
 
 
 
+
+(defn bcount
+  [n syms]
+  (if (= 1 n)
+    (map vector syms)
+    (for [s syms
+          r (bcount (dec n) syms)]
+      (into [s] r))))
+
+#_(run! prn (bcount 4 [:tok :leaf]))
+
+;; no child []
+;; both child [a b]
+;; left child [a]
+;; right child only - not allowed
+
+
+
+
+
+(let [ctr (atom 0)
+      fresh (fn [] (swap! ctr inc))
+      expand-one (fn [n]
+                   (let [q 'e]
+                     (list
+                      [q n]
+                      [n q]
+                      (conj n q))))
+      res (->> '[[]]
+               (mapcat expand-one)
+               (mapcat expand-one)
+               (mapcat expand-one)
+               (mapcat expand-one)
+               (mapcat expand-one))]
+  #_(run! prn res)
+  (println "Res" (count res) (count (set res))))
 

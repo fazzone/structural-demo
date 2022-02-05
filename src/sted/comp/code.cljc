@@ -1,3 +1,4 @@
+
 (ns sted.comp.code
   (:require
    [sted.embed :as e]
@@ -16,6 +17,7 @@
    [sted.cmd.move :as move]
    [sted.cmd.nav :as nav]
    [sted.cmd.mut :as mut]
+   [sted.comp.cons :as ccons]
    [sted.comp.common :as cc]
    [sted.comp.modeline :as ml]
    [sted.core :as core
@@ -92,6 +94,7 @@
          (rum/with-key (:db/id f))))])
 
 (rum/defc bar [b bus classes]
+  (prn 'bar b )
   [:div.bar.hide-scrollbar
    {:class classes}
    (for [chain-head (e/seq->vec b)]
@@ -106,43 +109,84 @@
    (when of (rum/bind-context [cc/*modeline-ref* nil]
                               ^:inline (form of bus 0 nil)))])
 
-(def dispatch-coll
+
+
+#_(def dispatch-coll
   {:keyboard ck/keyboard-diagram
    ;; :inspect comp.inspect/inspect
    :eval-result erc
    :bar bar
    :chain chain
-   :alias aliasc})
+   :alias aliasc
+   :hidden hiddenc})
 
-(rum/defc any-coll
-  [e classes bus indent proply]
-  (let [ct (:coll/type e)
-        coll-class (case ct
-                     (:list :vec :map :set :fn :tear) "dl"
-                     nil)
-        extra-class (case ct
-                      :uneval "unev"
-                      (:deref :quote
-                              :syntax-quote :unquote
-                              :unquote-splicing :reader-macro)
-                        "pf"
-                      nil)
-        open-delim (e/open-delim ct)
-        close-delim (e/close-delim ct)]
-    (if-not (or coll-class extra-class open-delim close-delim)
-      ^:inline ((get dispatch-coll ct (constantly nil)) e bus classes)
-      (let [children (e/seq->vec e)]
-        [:span {:class ["c" coll-class extra-class classes]}
-         #_[:span.inline-tag.debug
-          (str (swap! render-counter inc))
-          #_(str (:db/id e))]
-         (when-some [p (get proply (:db/id e))]
-           [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
-         (cond extra-class [:span.d.pfc ^String open-delim]
-               open-delim [:span.d ^String open-delim]
-               :else nil)
-         (for [c children] ^:inline (form c bus indent proply))
-         (when close-delim [:span.d ^String close-delim])]))))
+(rum/defc delimited-coll*
+  [e bus open close cc ec classes indent proply]
+  (let [children (e/seq->vec e)]
+    [:span {:class ["c" cc ec classes]}
+     #_[:span.inline-tag.debug
+        (str (swap! render-counter inc))
+        #_(str (:db/id e))]
+     (when-some [p (get proply (:db/id e))]
+       [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
+     (cond ec    [:span.d.pfc ^String open]
+           open  [:span.d ^String open]
+           :else nil)
+     (for [c children] ^:inline (form c bus indent proply))
+     (when close [:span.d ^String close])]))
+
+(defn code-coll
+  [ct e b c i p]
+  (case ct
+    :list             (delimited-coll* e b "("  ")" "dl" nil c i p)
+    :vec              (delimited-coll* e b "["  "]" "dl" nil c i p)
+    :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
+    :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
+    :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
+    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
+    :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
+    :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
+    :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)
+    :syntax-quote     (delimited-coll* e b "`"  nil  nil "pf" c i p)
+    :unquote          (delimited-coll* e b "~"  nil  nil "pf" c i p)
+    :unquote-splicing (delimited-coll* e b "~@" nil  nil "pf" c i p)
+    :reader-macro     (delimited-coll* e b "#"  nil  nil "pf" c i p)
+    :uneval           (delimited-coll* e b "#_" nil  nil "unev" c i p)
+    nil))
+
+(rum/defc hiddenc [{:hidden/keys [coll-type] :as e} bus classes]
+  [:div.hidden
+   {:class classes}
+   [:div
+    "Form:"
+    (code-coll coll-type e bus classes 0 nil)]
+   [:div {:style {:display "flex" :flex-direction "row"}}
+    (ccons/testing e core/blackhole)
+    #_[:div {:style {:width "800px"}}
+     (ccons/svg-viewbox e core/blackhole)]
+
+    #_(cnext/test-image)]
+   [:pre
+    (with-out-str
+      (ccons/my-traversal e)
+      #_(ccons/asdf-layout e))]
+   
+   
+   [:span {}
+    #_(e/open-delim coll-type)
+    #_(for [c children] ^:inline (form c bus indent proply))
+    #_(e/close-delim coll-type)]])
+
+(defn any-coll
+  [e b c i p]
+  (let [ct (:coll/type e)]
+    (or
+     (code-coll ct e b c i p)
+     (case ct
+       :chain  (chain e b c i p)
+       :bar    (bar e b c i p)
+       :hidden (hiddenc e b c i p)
+       "What's this"))))
 
 (defn token-class
   [t v]
@@ -262,8 +306,8 @@
              nil (comment
                    "Probably a retracted entity, do nothing")
              (any-coll e
-                       (when selected? "selected")
                        bus
+                       (when selected? "selected")
                        (+ 2 indent-prop)
                        proply
                        #_(if-not (:form/highlight e)
