@@ -4,12 +4,20 @@
    [clojure.set :as set]
    [datascript.core :as d]
    [sted.embed  :as e]
+   [sted.core :as core]
    [rum.core :as rum]))
 
 
-(rum/defc nonrec
-  < #_dbrx/ereactive
-  {:key-fn (fn [n b s l r c] (:db/id n))}
+(def font-size-ratio 0.4)
+
+(comment
+  #_[:g {:stroke :none :fill st}
+          [:text {:x x :y y} label]
+          [:foreignObject {:x x :y y :width (* font-size-ratio size (count sv)) :height size }
+           (renderer node)]])
+
+#_(rum/defc nonrec
+  < {:key-fn (fn [n b s l r c] (:db/id n))}
   {:should-update (fn [astate bstate]
                     (let [[na _ _ _ ra ca] (:rum/args astate)
                           [nb _ _ _ rb cb] (:rum/args bstate)]
@@ -17,7 +25,7 @@
                           (not= ca cb)
                           (not= (:max-tx (d/entity-db na))
                                 (:max-tx (d/entity-db nb))))))}
-  [node bus size eid->pos row col]
+  [node renderer size eid->pos row col]
   (let [half   (* 0.5 size)
         double (* 2 size)
         width  (* 6 half)
@@ -25,44 +33,95 @@
         x      (* width col)
         y      (* height row)
         label  (str "#" (:db/id node))
-        st (if (:form/highlight node)
-             "#ae81ff"
-             "#fff")
+        sel? (:form/highlight node)
+        st (if sel? "#ae81ff" "#fff")
         sv (:token/value node)]
-    [:g {:stroke st}
+    [:g {}
      (if-some [sv (:token/value node)]
-       [:g {:stroke :none :fill st}
+       [:g {:fill st}
         [:text {:x x :y y} (str sv)]
         [:text {:x x :y (+ y half)} label]]
-       [:g 
-        [:g {:stroke :none :fill st}
-         [:text {:x (+ x (* 3 half)) :y (- y 6)} label]
-         [:text {:x x :y (- y 6)}
-          (str row "," col)
-          (when-let [ct (:coll/type node)]
-            (str (e/open-delim ct) (e/close-delim ct)))]]
-        [:rect {:x x :y y :width (+ size size) :height size}]
-        [:line {:x1 (+ x size) :y1 y :x2 (+ x size) :y2 (+ y size)}]])
-     (when-some [cdr (:seq/next node)]
-       (let [[nr nc]    (eid->pos (:db/id cdr))
-             arrowleft  (+ x (* 3 half))
-             arrowright (+ (* nc width) (* 0.2 size))]
-         
-         (when (not= row nr)
-           (println "Bad layout - cdr " (:db/id cdr) "should be in row" row "but is in" nr "??"))
-         
-         #_(when (not= row nr) (throw (ex-info "Bad layout" {})))
-         [:path {:marker-end "url(#head)"
-                 :d          (str "M" arrowleft "," (+ y half)
-                                  "H" arrowright)}]))
-     (when-some [car (:seq/first node)]
-       (let [[nr nc] (eid->pos (:db/id car))]
-         #_(when (not= col nc) (throw (ex-info "Bad layout" {})))
-         (when (not= col nc)
-           (println "Bad layout - car " (:db/id car) "should be in column" col "but is in" nc "??"))
-         [:path {:marker-end "url(#head)"
-                 :d          (str "M" (str (+ x half)) "," (str (+ y half))
-                                  " V" (str (- (* nr height) half)))}]))]))
+       [:g {:fill st}
+        [:text {:x (+ x (* 3 half)) :y (- y 6)} label]
+        [:text {:x x :y (- y 6)}
+         (str row "," col)
+         (when-let [ct (:coll/type node)]
+           (str (e/open-delim ct) (e/close-delim ct)))]])
+     [:g {:stroke st}
+      (when (nil? sv)
+        [:rect {:x x :y y :width (+ size size) :height size}])
+      (when (nil? sv) 
+       [:line {:x1 (+ x size) :y1 y :x2 (+ x size) :y2 (+ y size)}])
+      (when-some [cdr (:seq/next node)]
+        (let [[nr nc]    (eid->pos (:db/id cdr))
+              arrowleft  (+ x (* 3 half))
+              arrowright (+ (* nc width) (* 0.2 size))]
+          (when (not= row nr)
+            (println "Bad layout - cdr " (:db/id cdr) "should be in row" row "but is in" nr "??"))
+          [:path {:marker-end "url(#head)"
+                  :d          (str "M" arrowleft "," (+ y half)
+                                   "H" arrowright)}]))
+      (when-some [car (:seq/first node)]
+        (let [[nr nc] (eid->pos (:db/id car))]
+          (when (not= col nc)
+            (println "Bad layout - car " (:db/id car) "should be in column" col "but is in" nc "??"))
+          [:path {:marker-end "url(#head)"
+                  :d          (str "M" (str (+ x half)) "," (str (+ y half))
+                                   "V" (str (- (* nr height) half)))}]))]]))
+
+(rum/defc nonrec
+  < {:key-fn (fn [n b s l r c] (:db/id n))}
+  {:should-update (fn [astate bstate]
+                    (let [[na _ _ _ ra ca] (:rum/args astate)
+                          [nb _ _ _ rb cb] (:rum/args bstate)]
+                      (or (not= ra rb)
+                          (not= ca cb)
+                          (not= (:max-tx (d/entity-db na))
+                                (:max-tx (d/entity-db nb))))))}
+  [node renderer size eid->pos row col sel?]
+  (let [half   (* 0.5 size)
+        double (* 2 size)
+        width  (* 6 half)
+        height double
+        x      (* width col)
+        y      (* height row)
+        label  (str "#" (:db/id node))
+        st (if sel? "#ae81ff" "#fff")
+        sv (:token/value node)
+        ch (* half font-size-ratio)]
+    (if-some [sv (:token/value node)]
+      [:g {:fill st}
+       [:text {:x x :y y} (str sv)]
+       [:text {:x x :y (+ y half)} label]]
+      [:g
+       [:text {:fill st
+               :x (+ x double (- (* ch (count label))))
+               :y (- y ch)}
+        label]
+       [:text {:fill st :x x :y (- y ch)}
+        (when-let [ct (:coll/type node)]
+          (str (e/open-delim ct) (e/close-delim ct)))]
+       [:g {:stroke st}
+        (when (nil? sv)
+          [:rect {:x x :y y :width (+ size size) :height size}])
+        (when (nil? sv) 
+          [:line {:x1 (+ x size) :y1 y :x2 (+ x size) :y2 (+ y size)}])
+        (when-some [cdr (:seq/next node)]
+          (let [[nr nc]    (eid->pos (:db/id cdr))
+                arrowleft  (+ x (* 3 half))
+                arrowright (+ (* nc width) (* 0.2 size))]
+            (when (not= row nr)
+              (println "Bad layout - cdr " (:db/id cdr) "should be in row" row "but is in" nr "??"))
+            [:path {:marker-end "url(#head)"
+                    :d          (str "M" arrowleft "," (+ y half)
+                                     "H" arrowright)}]))
+        (when-some [car (:seq/first node)]
+          (let [[nr nc] (eid->pos (:db/id car))]
+            (when (not= col nc)
+              (println "Bad layout - car " (:db/id car) "should be in column" col "but is in" nc "??"))
+            [:path {:marker-end "url(#head)"
+                    :d          (str "M" (str (+ x half)) "," (str (+ y half))
+                                     "V" (str (- (* nr height) half)))}]))]])))
 
 (defn my-traversal
   [top]
@@ -176,12 +235,13 @@
        1))))
 
 (rum/defc testing < dbrx/deeply-ereactive
-  [top bus]
+  [top bus renderer]
   (let [size     50
         half     (* 0.5 size)
         width    (* 6 half)
         height   (* 2 size)
         inset    size
+        svgref   (rum/create-ref)
         _        (js/console.time "layout")
         pos->ent (my-traversal top)
         eid->pos (reduce-kv
@@ -190,19 +250,21 @@
                   pos->ent)
         rmax     (apply max (map first (keys pos->ent)))
         cmax     (apply max (map second (keys pos->ent)))
-        vw (+ inset (* (inc cmax) width))
-        vh (+ inset (* (inc rmax) height))
+        vw       (+ inset (* (inc cmax) width))
+        vh       (+ inset (* (inc rmax) height))
         _        (js/console.timeEnd "layout")
-        svgref   (rum/create-ref)]
+        sel      (core/get-selected-form (d/entity-db top))]
     [:div
      [:button {:on-click (fn [c]
                            (let [svg (rum/deref svgref)]
                              (js/console.log svg)
                              (save-svg svg vw vh)))}
       "Save svg"]
-     [:svg  {:viewBox (str "0 0 " vw " " vh)
-             :xmlns   "http://www.w3.org/2000/svg"
-             "xmlns:xlink" "http://www.w3.org/1999/xlink"
+     [:svg  {:viewBox    (str "0 0 " vw " " vh)
+             :xmlns      "http://www.w3.org/2000/svg"
+             ;; "xmlns:xlink" "http://www.w3.org/1999/xlink"
+             :xmlnsXlink "http://www.w3.org/1999/xlink"
+             
              :version "1.1" 
              :ref     svgref
              :style   {:border     "1px solid"
@@ -216,8 +278,10 @@
            ;; :fill "#fff"
            :stroke       :none
            :fill         :none
-           :stroke-width 1}
+           :stroke-width 1
+           :font-size    (* 0.4 size)}
        (for [[[r c] e] pos->ent]
-         (nonrec e bus size eid->pos r c))]]]))
+         (nonrec e renderer size eid->pos r c
+                 (= (:db/id e) (:db/id sel))))]]]))
 
 

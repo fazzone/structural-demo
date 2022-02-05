@@ -162,7 +162,7 @@
     ^:inline (code-coll coll-type e bus classes 0 nil)]
    [:div {:style {:width "1500px"}}
     #_(ccons/testing e core/blackhole)
-    (ccons/testing e bus)
+    (ccons/testing e bus (fn [n] (form n bus 0 nil)))
     #_[:div {:style {:width "800px"}}
      (ccons/svg-viewbox e core/blackhole)]
 
