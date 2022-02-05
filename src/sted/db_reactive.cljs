@@ -33,7 +33,6 @@
   ;; mixin for components taking [entity bus ...]
   {:init          (fn [{:rum/keys [react-component] :as state} props]
                     (let [[ent bus & args] (some-> state :rum/args)
-                          ch               (async/chan)
                           nupdate          (volatile! false)
                           subber           (fn [eid]
                                              (core/sub-entity bus eid
@@ -66,6 +65,58 @@
                     state)
    :after-render  (fn [state]
                    (some-> state ::nupdate (vreset! nil))
+                    state)})
+
+(defn children-eids [ent]
+  (->> ent
+       (tree-seq :coll/type e/seq->vec)
+       (next)
+       (map :db/id)))
+
+(defn derx-f
+  [{::keys [subber eid->unsub] :as new-state}]
+  (println "DRX Remounting")
+  (let [[new-e bus]     (-> new-state :rum/args)
+        new-children    (set (children-eids new-e))
+        added           (filter (comp not eid->unsub) new-children)
+        deleted         (filter (comp not new-children) (keys eid->unsub))]
+    (if (and (empty? added) (empty? deleted))
+      new-state
+      (do (run! apply (map eid->unsub deleted))
+          (assoc new-state ::eid->unsub
+                 (merge (reduce dissoc eid->unsub deleted)
+                        (zipmap added (map subber added))))))))
+
+(def deeply-ereactive
+  ;; mixin for components taking [entity bus ...]
+  {:init          (fn [{:rum/keys [react-component] :as state} props]
+                    (let [[ent bus & args] (some-> state :rum/args)
+                          my-eid           (:db/id ent)
+                          cs               (children-eids ent)
+                          subber           (fn [eid]
+                                             (println "DRX" my-eid "subs to" eid)
+                                             (core/sub-entity bus eid
+                                                              (fn [new-ent]
+                                                                (println "DRX" my-eid "Receives update from" (:db/id new-ent))
+                                                                (.setState react-component
+                                                                           (fn setstate-derx [state props]
+                                                                             (let [rst (deref (aget state :rum/state))]
+                                                                               #js {":rum/state"
+                                                                                    (volatile!
+                                                                                     (derx-f
+                                                                                      (assoc rst
+                                                                                             :rum/args (cons (d/entity (d/entity-db new-ent) my-eid)
+                                                                                                             (next (:rum/args rst)))
+                                                                                               
+                                                                                             )))}))))))]
+                      (when-not (and bus (:db/id ent))
+                        (throw (ex-info (str "Cannot use ereactive " (pr-str ent)) {})))
+                      (assoc state
+                             ::subber subber
+                             ::eid->unsub (zipmap cs (map subber cs)))))
+   #_:will-remount  
+   :will-unmount (fn [state]
+                   (run! apply (vals (::eid->unsub state)))
                    state)})
 
 #_(defn areactive

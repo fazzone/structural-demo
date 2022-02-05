@@ -158,10 +158,10 @@
   [:div.hidden
    {:class classes}
    [:div
-    "Form:"
     (code-coll coll-type e bus classes 0 nil)]
-   [:div {:style {:display "flex" :flex-direction "row"}}
-    (ccons/testing e core/blackhole)
+   [:div {:style {:width "1500px"}}
+    #_(ccons/testing e core/blackhole)
+    (ccons/testing e bus)
     #_[:div {:style {:width "800px"}}
      (ccons/svg-viewbox e core/blackhole)]
 
@@ -183,10 +183,13 @@
     (or
      (code-coll ct e b c i p)
      (case ct
-       :chain  (chain e b c i p)
-       :bar    (bar e b c i p)
-       :hidden (hiddenc e b c i p)
-       "What's this"))))
+       :chain       (chain e b c i p)
+       :bar         (bar e b c i p)
+       :hidden      (hiddenc e b c i p)
+       :keyboard    (ck/keyboard-diagram e b c i p)
+       :eval-result (erc e b c i p)
+       :alias       (aliasc e b c i p)
+       (str "What's this")))))
 
 (defn token-class
   [t v]

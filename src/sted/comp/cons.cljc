@@ -296,9 +296,9 @@
        [:path {:marker-end "url(#head)"
                :d          (str "M" (str (+ x half)) "," (str (+ y half))
                                 " V" (str (- (* height droop) half)))}]))))
-
-
-(defn nonrec
+(rum/defc nonrec
+  < #_dbrx/ereactive
+  {:key-fn (fn [n b s l r c] (:db/id n))}
   [node bus size eid->pos row col]
   (let [half   (* 0.5 size)
         double (* 2 size)
@@ -306,293 +306,198 @@
         height double
         x      (* width col)
         y      (* height row)
-        label  (str "#" (:db/id node))]
-    (rum/fragment
+        label  (str "#" (:db/id node))
+        st (if (:form/highlight node)
+             "#ae81ff"
+             "#fff")]
+    [:g {:stroke st}
      (if-let [sv (:token/value node)]
        [:g
         [:text {:x x :y y} (str sv)]
         [:text {:x x :y (+ y half)} label]]
-       [:g
-        [:text {:x (+ x (* 3 half)) :y (- y 4)} label]
-        (when-let [ct (:coll/type node)]
-          [:text {:x x :y (- y 4)} (pr-str ct)])
-        [:rect {:x x :y y :fill :none :width size :height size}]
-        [:rect {:x (+ x size) :y y :fill :none :width size :height size}]])
+       [:g  
+        [:text {:x (+ x (* 3 half)) :y (- y 6)} label]
+        [:text {:x x :y (- y 6)}
+         (str row "," col)
+         (when-let [ct (:coll/type node)]
+           (str (e/open-delim ct) (e/close-delim ct)))]
+        [:rect {:x x :y y :width (+ size size) :height size}]
+        [:line {:x1 (+ x size) :y1 y :x2 (+ x size) :y2 (+ y size)}]])
      (when-let [cdr (:seq/next node)]
        (let [[nr nc]    (eid->pos (:db/id cdr))
              arrowleft  (+ x (* 3 half))
              arrowright (+ (* nc width) (* 0.2 size))]
-         (when (not= row nr) (throw (ex-info "Bad layout" {})))
-         [:path {:marker-end "url(#head)" :fill :none :stroke "#fff"
+         
+         (when (not= row nr)
+           (println "Bad layout - cdr " (:db/id cdr) "should be in row" row "but is in" nr "??"))
+         
+         #_(when (not= row nr) (throw (ex-info "Bad layout" {})))
+         [:path {:marker-end "url(#head)"
                  :d          (str "M" arrowleft "," (+ y half)
                                   "H" arrowright)}]))
      (when-let [car (:seq/first node)]
        (let [[nr nc] (eid->pos (:db/id car))]
-         (when (not= col nc) (throw (ex-info "Bad layout" {})))
+         #_(when (not= col nc) (throw (ex-info "Bad layout" {})))
+         (when (not= col nc)
+           (println "Bad layout - car " (:db/id car) "should be in column" col "but is in" nc "??"))
          [:path {:marker-end "url(#head)"
                  :d          (str "M" (str (+ x half)) "," (str (+ y half))
-                                  " V" (str (- (* nr height) half)))}])))))
+                                  " V" (str (- (* nr height) half)))}]))]))
 
 #_(defn my-traversal
   [top]
-  (loop [i 0
-         out []
-         nextfront [top]
-         firstfront []]
-    (println (map :db/id out) "-" (map :db/id nextfront) "-" (map :db/id firstfront))
-    (cond
-      (< 99 i)
-      out
-      (seq nextfront)
-      (let [e (peek nextfront)]
-        #_(println "Next " (:db/id e))
-        (recur  (inc i) (conj out e)
-                (cond-> (pop nextfront) (:seq/next e) (conj (:seq/next e)))
-                (cond-> firstfront (:seq/first e) (conj (:seq/first e)))))
-      (seq firstfront)
-      (let [e (first firstfront)]
-        #_(println "First " (:db/id e))
-        (recur  (inc i) (into out [{:db/id :FF} e])
-                (cond-> nextfront (:seq/next e) (conj (:seq/next e)))
-                (cond-> (subvec firstfront 1) (:seq/first e) (conj (:seq/first e)))))
-      :else out)))
-
-(defn my-traversal                    ;good one
-    [top]
-    (loop [n 0
-           nextfront  [[0 0 top]]
-           firstfront []
-           occ {}
-           save []]
+  (loop [n          0
+         nextfront  [[0 0 top]]
+         firstfront []
+         occ        []
+         save       []]
+    (letfn [(collide? [r c]
+              (let [naive (and (< c (count occ))
+                               (get (nth occ c) r))]
+                naive))
+            (claim [r c e]
+              (update occ c (fnil assoc (sorted-map)) r e))]
       (cond
-        (> n 99)
-        nil
+        (> n 999)
+        (throw (ex-info "Too many" {}))
         
         (seq nextfront)
         (let [[r c e] (peek nextfront)]
-          (if (contains? occ [r c])
-            (let [[nf ff nocc] (peek save)]
-              (recur (inc n) nf ff nocc (pop save)))
+          (if (collide? r c)
+            (let [[nf ff nocc] (peek save)
+                  [sr sc se] (peek ff)]
+              (println "NF" (:db/id e) "collides with" (:db/id (get-in occ [c r])) "at" [r c])
+              (println "\t" "Re-layout from" (:db/id se) "@" sr sc)
+              (println "\t" "Place" (:db/id se) "at"
+                       (inc (key (first (rseq (nth occ c)))))
+                       ","
+                       sc
+                       "?")
+              (recur (inc n)
+                     nf
+                     ff
+                     nocc
+                     (pop save)))
             (recur (inc n)
-                   (cond-> (pop nextfront) (:seq/next e)  (conj [r (inc c) (:seq/next e)]))
+                   (cond-> (pop nextfront) (:seq/next e) (conj [r (inc c) (:seq/next e)]))
                    (cond-> firstfront      (:seq/first e) (conj [(inc r) c (:seq/first e)]))
-                   (assoc occ [r c] e)
+                   (claim r c e)
                    save)))
-      
+        
         (seq firstfront)
         (let [[r c e] (peek firstfront)]
-          (if (contains? occ [r c])
+          (if (collide? r c)
             (let [[nf ff nocc] (peek save)]
+              (println "FF" (:db/id e) "collides with" (:db/id (get-in occ [c r])) "at" [r c])
               (recur (inc n) nf ff nocc (pop save)))
             (recur (inc n)
-                   (cond-> nextfront        (:seq/next e)  (conj [r (inc c) (:seq/next e)]))
+                   (cond-> nextfront        (:seq/next e) (conj [r (inc c) (:seq/next e)]))
                    (cond-> (pop firstfront) (:seq/first e) (conj [(inc r) c (:seq/first e)]))
-                   (assoc occ [r c] e)
+                   (claim r c e)
                    (conj save [nextfront
                                (conj (pop firstfront) [(inc r) c e])
-                               occ]))))
-      
+                               
+                               (update occ c (fnil assoc (sorted-map)) r ::fake)]))))
+        
         :else
-        occ)))
+        (do
+          (println "Layout explored" n)
+          (into {}
+                (for [[c col] (map vector (range) occ)
+                      [r e]   col
+                      :when (not= ::fake e)]
+                  [[r c] e])))))))
 
-
-
-#_(rum/defc testing
-  [rmax cmax]
-  (let [size 45
-        half   (* 0.5 size)
-        width  (* 6 half)
-        height (* 2 size)
-        inset size]
-    (println "Rmax" rmax "Cmax" cmax)
-    [:svg  {:viewBox (str "0 0 "
-                          (+ inset (* cmax width))
-                          " "
-                          (+ inset (* height rmax)))
-            :style {:border "1px solid"
-                    :background "transparent"}}
-     [:defs
-      [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 3}
-       [:path {:fill "#fff" :d "M0,0 V6 L6,3 Z"}]]]
-     [:g {:stroke "#fff"
-          :transform (str "translate(" size "," size ")")
-          :fill "#fff"
-          :stroke-width 1}
-      
-      #_(for [r (range rmax)
-              c (range cmax)]
-          (do
-            (prn r c)
-            (dongus size
-                    (+ r (* cmax c))
-                    (when (even? c) :list)
-                    (when (odd? c) (str "t" c))
-                    r
-                    c
-                  
-                    )))]
-     #_(for [i (range 9)]
-         [:rect {:key i
-                 :stroke "tomato"
-                 :fill :none
-                 :x 0
-                 :y 0
-                 :width (* i 3.5 size)
-                 :height (* i 4 size)}])]))
-
-#_(defn asdf-layout
+(defn my-traversal
   [top]
-  (letfn [(right [e r c occ]
-            (println "Right " r c e (keys occ))
-            (if-not e
-              occ
-              (let [pos [r c]]
-                (if (contains? occ pos)
-                  (do
-                    (println "Collision" pos (:db/id (get occ pos)) (:db/id e))
-                    nil)
-                  (let [car     (:seq/first e)
-                        cdr     (:seq/next e)
-                        nocc    (assoc occ pos e)
-                        rec-car (some-> car (down r (inc c) nocc))
-                        rec-cdr (some-> cdr (right (inc r) c (or rec-car nocc)))]
-                    (or rec-cdr rec-car nocc))))))
-          (down [e r c occ]
-            (println "Down " r c e (keys occ))
-            (if-not e
-              occ
-              (let [pos [r c]]
-                (if (contains? occ pos)
-                  (do (println "Collision" pos (:db/id (get occ pos)) (:db/id e))
-                      nil)
-                  (let [car     (:seq/first e)
-                        cdr     (:seq/next e)
-                        nocc    (assoc occ pos e)
-                        rec-car (some-> car (down r (inc c) nocc))
-                        rec-cdr (some-> cdr (right (inc r) c (or rec-car nocc)))]
-                    (or rec-cdr
-                        rec-car
-                        nocc))))))]
-    (right top 0 0 {})))
-
-#_(defn asdf-layout
-  [top]
-  (letfn [(go [e r c occ savept]
-              (println r  c (e/->string e) (keys occ))
-              (let [pos [r c]]
-                (if (contains? occ pos)
-                  (do (println "Collide @" pos))
-                  (let [nocc (assoc occ pos e)
-
-                        
-                        car (:seq/first e)
-                        cdr (:seq/next e)
-                        nsave (if (nil? car)
-                                savept
-                                (conj savept [car (inc r) c nocc]))
-                        rec-car (if (nil? car)
-                                  nocc
-                                  (go car (inc r) c nocc nsave))]
-                    
-                    (if-not rec-car
-                      (let [[oe or oc oocc] (peek savept)]
-                        (println "Restart from savepoint?" (:db/id oe) or oc)
-                        (recur oe (inc or) oc oocc (pop savept)))
-                      (if (some? cdr)
-                        (go cdr r (inc c) rec-car (if (some? car) nsave savept))
-                        rec-car))))))]
-    (go top 0 0 {} [])))
+  (loop [n          0
+         nextfront  [[0 0 top]]
+         firstfront []
+         occ        []
+         save       []]
+    (letfn [(collide? [r c]
+              (some-> (get occ c) (subseq >= r) seq))
+            (claim [r c e]
+              (update occ c (fnil assoc (sorted-map)) r e))]
+      (cond
+        (> n 999)
+        (throw (ex-info "Too many" {}))
+        
+        (seq nextfront)
+        (let [[r c e] (peek nextfront)]
+          (if (collide? r c)
+            (let [[sc se nf ff nocc] (peek save)
+                  nr                 (inc (key (first (rseq (nth occ c)))))]
+              (do
+                #_ (println (:db/id e) "collides with" (:db/id se) "at" r c)
+                #_ (println "\t"  "sc=" sc "nr=" nr ))
+              
+              (recur (inc n)
+                     nf
+                     (conj ff [nr sc se])
+                     nocc
+                     (pop save)))
+            (recur (inc n)
+                   (cond-> (pop nextfront) (:seq/next e) (conj [r (inc c) (:seq/next e)]))
+                   (cond-> firstfront      (:seq/first e) (conj [(inc r) c (:seq/first e)]))
+                   (claim r c e)
+                   save)))
+        
+        (seq firstfront)
+        (let [[r c e] (peek firstfront)]
+          (if (collide? r c)
+            (let [[nf ff nocc] (peek save)]
+              (println "FF" (:db/id e) "collides with" (:db/id (get-in occ [c r])) "at" [r c])
+              (recur (inc n) nf ff nocc (pop save)))
+            (recur (inc n)
+                   (cond-> nextfront        (:seq/next e) (conj [r (inc c) (:seq/next e)]))
+                   (cond-> (pop firstfront) (:seq/first e) (conj [(inc r) c (:seq/first e)]))
+                   (claim r c e)
+                   (conj save [c e nextfront (pop firstfront) occ]))))
+        
+        :else
+        (do
+          #_(println "Layout explored" n)
+          (into {}
+                (for [[c col] (map vector (range) occ)
+                      [r e]   col]
+                  [[r c] e])))))))
 
 
 
-#_(defn asdf-layout
-  [top]
-  (loop [front [[top 0 0]]
-         occ   {}
-         save []]
-    (if (empty? front)
-      occ
-      (let [[e r c] (peek front)
-            car (:seq/first e)
-            cdr (:seq/next e)]
-        (println (some? car) (some? cdr) (e/->string e))
-        (if (contains? occ [r c])
-          (println "Collide" [r c] "Saves?" (count save)))
-        (cond
-          (and (some? car) (some? cdr))
-          (recur (-> (pop front)
-                     (conj [car (inc r) c])
-                     (conj [cdr r (inc c)]))
-                 (assoc occ [r c] e)
-                 (conj save [front occ]))
-          
-          (some? car)
-          (recur (conj (pop front) [car (inc r) c])
-                 (assoc occ [r c] e)
-                 (conj save [front occ]))
-          
-          (some? cdr)
-          (recur (conj (pop front) [cdr r (inc c)])
-                 (assoc occ [r c] e)
-                 save)
-
-          :else (recur (pop front)
-                       (assoc occ [r c] e)
-                       save)
-          )))))
-
-
-(rum/defc testing
+(rum/defc testing < dbrx/deeply-ereactive
   [top bus]
-  (let [size 45
-        half   (* 0.5 size)
-        width  (* 6 half)
-        height (* 2 size)
-        inset size
+  (let [size     50
+        half     (* 0.5 size)
+        width    (* 6 half)
+        height   (* 2 size)
+        inset    size
+        _        (js/console.time "layout")
         pos->ent (my-traversal top)
         eid->pos (reduce-kv
                   (fn [a p e] (assoc a (:db/id e) p))
                   {}
                   pos->ent)
-        rmax (apply max (map first (keys pos->ent)))
-        cmax (apply max (map second (keys pos->ent)))]
+        rmax     (apply max (map first (keys pos->ent)))
+        cmax     (apply max (map second (keys pos->ent)))
+        _        (js/console.timeEnd "layout")]
     [:svg  {:viewBox (str "0 0 "
                           (+ inset (* (inc cmax) width))
                           " "
                           (+ inset (* (inc rmax) height)))
-            :style {:border "1px solid"
-                    :background "transparent"}}
+            :style   {:border     "1px solid"
+                      :background "transparent"}}
      [:defs
       [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 3}
-       [:path {:fill "#fff" :d "M0,0 V6 L6,3 Z"}]]]
-     [:g {:stroke "#fff"
-          :transform (str "translate(" size "," size ")")
-          :fill "#fff"
+       [:path {:fill "#fff"
+               :d    "M0,0 V6 L6,3 Z"}]]]
+     [:g { ;; :stroke "#fff"
+          :transform    (str "translate(" size "," size ")")
+          ;; :fill "#fff"
+          :stroke       :none
+          :fill         :none
           :stroke-width 1}
-      #_(for [[_ [r c e]] layout]
-        (nonrec e bus size r c))
       (for [[[r c] e] pos->ent]
-        (nonrec e bus size eid->pos r c))
+        (nonrec e bus size eid->pos r c))]]))
 
 
-      
-      #_(for [r (range rmax)
-              c (range cmax)]
-          (do
-            (prn r c)
-            (dongus size
-                    (+ r (* cmax c))
-                    (when (even? c) :list)
-                    (when (odd? c) (str "t" c))
-                    r
-                    c
-                  
-                    )))]
-     #_(for [i (range 9)]
-         [:rect {:key i
-                 :stroke "tomato"
-                 :fill :none
-                 :x 0
-                 :y 0
-                 :width (* i 3.5 size)
-                 :height (* i 4 size)}])]))
