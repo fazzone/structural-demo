@@ -56,6 +56,7 @@
      ^:form/highlight (open-file "src/page.cljs")
      (open-file "src/cmd/mut.cljc")
      (open-file "src/embed.cljc")
+     (list (list 1 2 3) (list 1 2 3) (list 1 2 3) (list 1 2 3) (list 1 2 3))
      ()
      (defn get-repo [ident ref-name]
        (a/let [ref (fetch-json (str "https://api.github.com/repos/" ident "/git/ref/heads/" ref-name))
@@ -98,7 +99,7 @@
                   (assoc ch
                     :coll/type :chain
                     :coll/_contains "bar"))
-                #_[{:db/ident ::meta-chain
+                [{:db/ident ::meta-chain
                   :coll/type :chain
                   :coll/_contains "bar"
                   :coll/contains #{"label" "defaultkeymap" "inspect"

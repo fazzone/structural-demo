@@ -359,8 +359,9 @@ span.key-compose-echo {
 
 .keyboard-container {
     /* width: 50em; */
-    /* max-width: 65em; */
+
     font-size: 10pt;
+    min-width: 55em;
     max-width: 120ex;
     /* transition: width 0.08s; */
 }

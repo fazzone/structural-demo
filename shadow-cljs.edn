@@ -2,6 +2,7 @@
  :dependencies []
  :dev-http {8087 "srv"}
  :nrepl false
+ :http {:port 9991}
  ;; :js-options {:js-package-dirs ["node_modules"]}
  :builds {:br {:target :browser
                :output-dir "srv/js"

@@ -66,7 +66,7 @@
       :value       (or value "")
       :style       {:width (str (max 1 (count value)) "ch")}
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
-                          token (insert/parse-token-tx new-text form-eid)]
+                          token (e/parse-token-tx new-text)]
                       (reset! text new-text)
                       (reset! editbox-ednparse-state
                               {:form-eid form-eid

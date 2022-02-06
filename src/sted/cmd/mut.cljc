@@ -307,10 +307,10 @@
 (defn stitch*
   [sel e]
   (when-let [head (:seq/first e)]
-    (let [xs (keep :token/value (tree-seq :coll/type e/seq->vec e)
-                   #_(e/seq->vec e))]
-      (into [[:db/add (:db/id head) :token/value (string/join "-" xs)]
-             [:db/add (:db/id head) :token/type :symbol]]
+    (let [text (->> (tree-seq :coll/type e/seq->vec e)
+                    (keep :token/value)
+                    (apply str))]
+      (into (vector (assoc (e/parse-token-tx text) :db/id (:db/id head)))
             (concat (edit/form-raise-tx head)
                     (move-selection-tx (:db/id sel) (:db/id head)))))))
 
@@ -321,11 +321,20 @@
            (first)
            (stitch* sel)))
 
+(defn tear-re
+  [delim-re]
+  (let [lookahead+ #(str "(?=" % ")" )
+        lookback+  #(str "(?<=" % ")")
+        ]
+    (re-pattern
+     (str (lookahead+ delim-re)
+          "|" (lookback+ delim-re)))))
+
 (defn tear*
   [sel]
   (when-let [vs (:token/value sel)]
     (let [tt (:token/type sel)
-          [head & more] (string/split vs #"[./\-]")]
+          [head & more] (string/split vs (tear-re "[:\\.\\-_\\$]"))]
       (into [[:db/add (:db/id sel) :token/value head]
              (when more
                [:db/add "newnode" :seq/next "newtail"])

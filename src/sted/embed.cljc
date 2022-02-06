@@ -370,6 +370,14 @@
         (recur more (conj! tx #_[:db/add (- e) a (cond-> v (aref? a) -)]
                            [:db/add e a v]))))))
 
+(defn parse-token-tx
+  [s]
+  
+  (try
+    (string->tx s)
+    (catch #? (:cljs js/Error :clj Exception) e
+      {:token/type :string :token/value s})))
+
 (comment
   (time (->chain (slurp "subtree/clojure.core.clj")))
   (dotimes [i 20]
@@ -383,45 +391,4 @@
                  (d/entity db e))]
       ch
       #_(->string ch))))
-
-
-
-
-
-
-(defn bcount
-  [n syms]
-  (if (= 1 n)
-    (map vector syms)
-    (for [s syms
-          r (bcount (dec n) syms)]
-      (into [s] r))))
-
-#_(run! prn (bcount 4 [:tok :leaf]))
-
-;; no child []
-;; both child [a b]
-;; left child [a]
-;; right child only - not allowed
-
-
-
-
-
-(let [ctr (atom 0)
-      fresh (fn [] (swap! ctr inc))
-      expand-one (fn [n]
-                   (let [q 'e]
-                     (list
-                      [q n]
-                      [n q]
-                      (conj n q))))
-      res (->> '[[]]
-               (mapcat expand-one)
-               (mapcat expand-one)
-               (mapcat expand-one)
-               (mapcat expand-one)
-               (mapcat expand-one))]
-  #_(run! prn res)
-  (println "Res" (count res) (count (set res))))
 

@@ -9,28 +9,19 @@
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
-(defn try-parse-edn
-  [s]
-  (try
-    #_(println "Try to parse as code" (pr-str s))
-    (e/string->tx s)
-    (catch #? (:cljs js/Error :clj Exception) e
-      (println "No edn" s)
-      nil)))
-
-(defn parse-token-tx
+(defn parse-editbox-tx
   [s eid]
-  #_(println "PTT" eid (pr-str s))
   (when-not (empty? s)
-    (some-> (or (try-parse-edn s)
+    (some-> (or (e/parse-token-tx s)
                 (and (string/starts-with? s "\"")
-                     (try-parse-edn (str s "\"")))
+                     (e/parse-token-tx (str s "\"")))
                 nil)
+            ;; todo - handle complex paste (don't clobber tempid)
             (assoc :db/id eid))))
 
 (defn accept-edit-tx
   [form-eid value]
-  (when-some [ptx (parse-token-tx value form-eid)]
+  (when-some [ptx (parse-editbox-tx value form-eid)]
     [{:db/id :db/current-tx
       :edit/of form-eid}
      [:db/retract form-eid :token/value]
