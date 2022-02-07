@@ -297,12 +297,11 @@
 
 (defn move-to-deleted-chain
   [sel]
-  (when-let [dch (d/entity (d/entity-db sel) :page/command-chain)]
+  (when-let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)]
     (when-let [nsel (move/move :move/backward-up sel)]
-      (concat
-       (edit/form-unlink-tx sel)
-       (edit/form-cons-tx sel dch)
-       (move-selection-tx (:db/id sel) (:db/id nsel))))))
+      (concat (edit/form-unlink-tx sel)
+              (edit/form-cons-tx sel dch)
+              (move-selection-tx (:db/id sel) (:db/id nsel))))))
 
 (defn uneval-and-next
   [sel]
@@ -520,6 +519,7 @@
    :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
    :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
+
    :clone                          (comp edit/insert-duplicate-tx get-selected-form)
    :linebreak                      linebreak-selected-form-tx
    :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
@@ -568,7 +568,7 @@
                              (edit/form-overwrite-tx et -1)
                              (move-selection-tx (:db/id et) -1)))))
    
-   
+   :unraise (comp edit/unraise-tx get-selected-form)
    })
 
 (def dispatch-table

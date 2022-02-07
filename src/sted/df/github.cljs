@@ -139,20 +139,29 @@
                                     :coll/data-type :vec}))
       (nil? des) (assoc :mode (.-mode st) :size (.-size st))
       true (vary-meta assoc `nav #'nav-fs))))
+(defn datafy-stat
+  [p n st]
+  {:name n
+   :abs ()
+   :mode (.-mode st)
+   :size (.-size st)}  
+  )
+
 (defn uhh
   [p n]
   (let [j (.join path p n)]
     (m/let [st (.stat fsp j)]
-     (if-not (.isDirectory st)
-       j
-       (m/let [des (.readdir fsp j #js {:withFileTypes true})]
-         (with-meta {n (->> des
-                            (mapv (fn [de]
-                                    (cond-> (.-name de)
-                                      (.isDirectory de) (str "/")))))}
-           {`nav (fn [_ k _]
-                   (println "Sub-nav" k)
-                   (uhh j k ))})))))
+      (if-not (.isDirectory st)
+        j
+        (m/let [des (.readdir fsp j #js {:withFileTypes true})]
+          (with-meta {n (->> des
+                             (mapv (fn [de]
+                                     (cond-> (.-name de)
+                                       (.isDirectory de) (str "/")))))}
+            {`nav (fn [_ k _]
+                    (println "Sub-nav" k)
+                    (cond (= 'pwd k) j
+                          :else (uhh j k )))})))))
   
   #_(cond-> {:path abs :name (.basename path abs)}
       des        (assoc :files (with-meta (->> des

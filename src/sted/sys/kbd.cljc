@@ -17,7 +17,8 @@
    "n"   :find-next
    "S-N" :find-first
    "C-/" :undo
-   "S-R" :reify-undo
+   ;; "S-R" :reify-undo
+   "S-R" :unraise
    "S-_" :uneval
    "S-W" :save
    "t"   :tear
@@ -35,8 +36,8 @@
    "S- "       :insert-left
    "d"         :delete-right
    "S-H"       :hoist
-   "Backspace" :delete-left
-   ;; "Backspace" :move-to-deleted-chain
+   ;; "Backspace" :delete-left
+   "Backspace" :move-to-deleted-chain
    "Enter"     :linebreak
    "C-Enter"   :insert-right-newline
    "Escape"    :select-chain

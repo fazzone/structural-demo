@@ -3,7 +3,7 @@
    [datascript.core :as d]
    [rum.core :as rum]
    [sted.comp.edit-box]
-   [sted.comp.search]
+   [sted.comp.search :as cs]
    [sted.cmd.nav :as nav]
    [sted.db-reactive :as dbrx]
    [sted.comp.common :as cc]
@@ -30,8 +30,8 @@
            :error "Error"
            "")))]
     (if text
-      #_(do ^:inline (comp.search/results (d/entity-db sel) bus :token/value text rec))
-      nil
+      (do ^:inline (cs/results (d/entity-db sel) bus :token/value text rec))
+      #_nil
       #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
       [:span.modeline-content
        (if-not sel

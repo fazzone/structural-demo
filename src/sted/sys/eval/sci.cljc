@@ -72,7 +72,8 @@
                                                     (fn [resp]
                                                       (.then (.json resp)
                                                              #(js->clj % :keywordize-keys true)))))
-                               'ingest (fn [z] (with-meta z {`ingest true}))
+                               'ingest (fn [z]
+                                         (with-meta (list z) {`ingest true}))
                                'then (fn [p f] (.then (js/Promise.resolve p) f))
                                'slurp      (some-> electron-bridge (aget "slurp"))
                                'spit       (some-> electron-bridge (aget "spit"))
@@ -83,25 +84,6 @@
                                               name
                                               features))])}
                     (merge bindings))}))
-
-(defn success-cont
-  [eval-target bus print-output]
-  (fn [result]
-    (cond
-      (some-> result meta (get `p/nav))
-      (core/send! bus [:ingest-result eval-target result])
-
-      (some-> result meta (get `ingest))
-      (core/send! bus [:ingest-after eval-target result])
-
-      #_(v/var? result)
-      #_(core/send! bus [:eval-result eval-target (str (pr-str result) " => " (pr-str @result))])
-      
-      :else
-      (core/send! bus
-                  [:eval-result eval-target
-                   (str result)
-                   print-output]))))
 
 (defn failure-cont
   [eval-target bus print-output]
@@ -153,44 +135,36 @@
     (fn [_ db bus]
       (let [eval-target                  (get-selected-form db)
             parents                      (nav/parents-seq eval-target)
-            ;; eval-context (or (first (filter :eval/action parents))
-            ;;                  (last parents))
-            ;; action       (:eval/action eval-context)
             [eval-context action :as jj] (or (some eval-action? parents)
-                                              [(last parents) :eval])
-            print-output                 (atom [])
-            success                      (success-cont eval-target bus print-output)
-            failure                      (failure-cont eval-target bus print-output)]
-        (println "Parent meta" (some eval-action? parents))
-        (println "Action" action)
-        (println "Lp" (last parents) "jj" jj)
-        (try
-          (->
-           (case action
-             :nav
-             (when-some [ptr (:nav/pointer eval-context)]
-               (println "Got meta ptr" ptr)
-               (let [k (e/->form eval-target)]
-                 (case (:coll/type eval-context)
-                   (:vec :list) (datafy/nav ptr nil k)
-                   (:map :set)  (datafy/nav ptr k (get ptr k)))
-                 #_(datafy/nav ptr k (get ptr k))))
-             #_ (when-some [ptr (:nav/pointer eval-context)]
-                 (case (:coll/type eval-context)
-                   (:vec :list) (let [k (e/->form eval-target)]
-                                  (datafy/nav ptr nil k))
-                   (:map :set)  (let [k (key-within-map eval-target eval-context)]
-                                  (datafy/nav ptr k (get ptr k)))))
-             
-             :eval
-             (sci/binding [sel# eval-target
-                           sci/print-newline true
-                           sci/print-fn (fn [m]
-                                          (swap! print-output conj m))]
-               (sci/eval-string* ctx (e/->string eval-context))))
-           #?@ (:clj [(success)]
-                :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
-          (catch :default ex (js/console.log ex) (failure ex)))))))
+                                             [(last parents) :eval])
+            print-output                 (atom [])]
+        (letfn [(failure [ex]
+                  (core/send! bus [:eval-result eval-target
+                                   (str (ex-message ex) "\n" (.-stack ex))]))
+                (success [r]
+                  (core/send! bus
+                              (cond
+                                (or (= :nav action) (some-> r meta (get `p/nav)))
+                                [:ingest-result eval-target r]
+
+                                (some-> r meta (get `ingest))
+                                [:ingest-after eval-target (first r)]
+                                
+                                :else
+                                [:eval-result eval-target (str r) print-output ])))]
+          (try (-> (case action
+                     :nav (when-some [ptr (:nav/pointer eval-context)]
+                            (let [k (e/->form eval-target)]
+                              (case (:coll/type eval-context)
+                                (:vec :list) (datafy/nav ptr nil k)
+                                (:map :set)  (datafy/nav ptr k (get ptr k)))))
+                     :eval (sci/binding [sel# eval-target
+                                         sci/print-newline true
+                                         sci/print-fn (fn [m] (swap! print-output conj m))]
+                             (sci/eval-string* ctx (e/->string eval-context))))
+                   #?@ (:clj [(success)]
+                        :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
+               (catch :default ex (js/console.log ex) (failure ex))))))))
 
 (comment
   (sci/binding [sci/print-newline true

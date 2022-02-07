@@ -76,17 +76,8 @@
            (when old-parent
              [:db/retract (:db/id old-parent) :coll/contains (:db/id r)])])))
 
-(defn form-raise-tx
-  [e]
-  (when-let [parent (some-> (:coll/_contains e) exactly-one)]
-    (when-not (= :chain (:coll/type parent))
-      (let [{:form/keys [linebreak indent]} parent]
-        (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]
-               (when linebreak
-                 [:db/add (:db/id e) :form/linebreak linebreak])
-               (when indent
-                 [:db/retract (:db/id parent) :form/indent indent])]
-              (form-replace-tx parent e))))))
+
+
 
 (defn insert-after-tx
   [target new-node]
@@ -121,12 +112,7 @@
   [[:db/add (:db/id target) :coll/contains (:db/id new-node)]
    [:db/add (:db/id target) :seq/first (:db/id new-node)]])
 
-(defn form-cons-tx
-  [elem coll]
-  (if-let [f (:seq/first coll)]
-    (insert-before-tx f elem)
-    [[:db/add (:db/id coll) :coll/contains (:db/id elem)]
-     [:db/add (:db/id coll) :seq/first (:db/id elem)]]))
+
 
 (defn insert-editing*
   [inserter target from props]
@@ -388,3 +374,49 @@
                         (recur n)
                         s))]
       (insert-editing-after (:seq/first last-cons) sel))))
+
+(defn form-cons-tx
+  [elem coll]
+  (if-let [f (:seq/first coll)]
+    (insert-before-tx f elem)
+    [[:db/add (:db/id coll) :coll/contains (:db/id elem)]
+     [:db/add (:db/id coll) :seq/first (:db/id elem)]]))
+
+(defn m-to-dc
+  [sel]
+  (when-let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)]
+    (form-cons-tx sel dch)))
+
+(defn form-raise-tx
+  [e]
+  (when-let [parent (some-> (:coll/_contains e) exactly-one)]
+    (when-not (= :chain (:coll/type parent))
+      (let [{:form/keys [linebreak indent]} parent
+            tombstone {:db/id "ts" :coll/type :tear}]
+        (into [tombstone
+               [:db/add (:db/id parent) :form/edited-tx :db/current-tx]
+               (when linebreak [:db/add (:db/id e) :form/linebreak linebreak])
+               (when indent [:db/retract (:db/id parent) :form/indent indent])
+               (when indent [:db/add (:db/id e) :form/indent indent])]
+              (concat
+               (form-overwrite-tx e (:db/id tombstone))
+               (form-replace-tx parent e)
+               (m-to-dc parent)))))))
+
+
+(defn unraise-tx
+  [sel]
+  (let [find-tombstone #(->> (e/seq->vec %)
+                             (filter (comp #{:tear} :coll/type))
+                             (first))
+        ts (some->> :sted.page/command-chain
+                    (d/entity (d/entity-db sel))
+                    (e/seq->vec)
+                    (some find-tombstone))
+        p (some-> ts :coll/_contains exactly-one)]
+    
+    (when (and p ts)
+      (concat (form-unlink-tx p)
+              (form-replace-tx ts sel)
+              (form-replace-tx sel p)))))
+

@@ -40,15 +40,32 @@
      (def thing
        [1 (+ 2 3 foo) [:a :c] "ok"])
      (nav hn/stories :topstories (:topstories stories))
+     
+     (a/let [resp (js/fetch "https://www.wikidata.org/w/api.php?action=wbgetentities&languages=en&ids=Q42&format=json&origin=*")
+             data (.json resp)]
+       (ingest (js->clj data)))
+     
+     (defn open-file [path]
+       (then
+        (.readFile (js/require "fs/promises") path)
+        (fn [buf]
+          (send! [:open-chain (.toString buf) {:chain/filename path}]))))
+     
      (defn open-file
-       [path]
-       (then (slurp path)
-             (fn [text]
-               (send! [:open-chain text {:chain/filename path}]))))
-     (defn open-url
-       [u]
-       (then (fetch-text u)
-             (fn [text] (send! [:open-chain text]))))
+         [path]
+         (then (slurp path)
+               (fn [text]
+                 (send! [:open-chain text {:chain/filename path}]))))
+     (if (or (= :nav action)
+             (some-> r meta (get `p/nav)))
+       (core/send! bus [:ingest-result eval-target r])
+       (core/send! bus [:eval-result eval-target (str r) print-output ]))
+
+     
+     ( open-url
+      [u]
+      (then (fetch-text u)
+            (fn [text] (send! [:open-chain text]))))
      (new-window "http://localhost:8087?title=SH"
                  "_blank"
                  "top=500,left=3000")
@@ -82,7 +99,7 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                #_(map e/->tx test-form-data-bar)
+                (map e/->tx test-form-data-bar)
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
@@ -210,7 +227,8 @@
         (fn [db _]
           (let [_ (js/console.time "formatting")
                 _ (js/console.time "preparing")
-                _ (zp-hacks/set-options! {:map {:sort? nil}
+                _ (zp-hacks/set-options! {:style :fast-hang
+                                          :map {:sort? nil}
                                           :set {:sort? nil}})
                 sel (get-selected-form db)
                 q (if (= :chain (:coll/type sel))

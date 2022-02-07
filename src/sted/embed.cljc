@@ -533,3 +533,14 @@
 
 
 
+
+
+
+(comment
+  (let [n 5
+        recpart (fn [e]
+                  (if-not (and (sequential? e) (< n (count e)))
+                    e
+                    (recur (partition-all n e))))]
+    (recpart (range 99))))
+
