@@ -166,17 +166,23 @@
 
 (defn ->tx
   [e]
-  (merge (meta e) (->tx* e))
-  #_(->tx* e))
+  (when-let [mta (meta e)]
+    (prn 'Mta mta))
+  #_(merge (meta e) (->tx* e))
+  #_(merge (->tx* e) (meta e))
+  (->tx* e))
+
+
+
 
 #? (:clj
-   (defn seq->vec
-     ([e]
-      (seq->vec e []))
-     ([e a]
-      (if-let [f (:seq/first e)]
-        (recur (:seq/next e) (conj a f))
-        a))))
+    (defn seq->vec
+      ([e]
+       (seq->vec e []))
+      ([e a]
+       (if-let [f (:seq/first e)]
+         (recur (:seq/next e) (conj a f))
+         a))))
 
 #? (:cljs
    (defn seq->vec
@@ -210,16 +216,20 @@
                   (str "What sort of keyword is this? " value)
                   {}))))
 
+(defn coll->
+  [e ct xs]
+  (case ct
+    :list xs
+    :vec  (vec xs)
+    :map  (apply array-map xs)
+    :set  (set xs)
+    nil   nil
+    (recur nil (:coll/data-type e) xs)))
+
 (defn ->form
   [e]
   (or (when-let [ct (:coll/type e)]
-        (let [elems (some->> (seq->vec e) (map ->form))]
-          (or (case ct
-                :list elems
-                :vec  (vec elems)
-                :map  (apply array-map elems)
-                :set  (set elems))
-              (case ct :list () :vec [] :map {}))))
+        (coll-> e ct (some->> (seq->vec e) (map ->form))))
       (case (:token/type e)
         :symbol (symbol (:token/value e))
         :keyword (parse-keyword e)
@@ -325,7 +335,7 @@
 (defn ->entity
   [data]
   (let [txe (update (->tx data) :db/id #(or % "top"))
-        r (d/with (deref (d/create-conn s/form-schema))
+        r (d/with (deref (d/create-conn s/schema))
                   [txe])]
     (d/entity (:db-after r) (get (:tempids r) (:db/id txe)))))
 
@@ -356,7 +366,7 @@
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
 
-(defn chain->flat-tx
+#_(defn chain->flat-tx
   [text]
   (let [db  (d/entity-db (->chain text))
         aref? (into #{}
@@ -369,6 +379,20 @@
         (persistent! tx)
         (recur more (conj! tx #_[:db/add (- e) a (cond-> v (aref? a) -)]
                            [:db/add e a v]))))))
+(defn ->flat-tx
+  [db]
+  (let [aref? (into #{}
+                    (comp (filter (comp #{:db.type/ref} :db/valueType val))
+                          (map key))
+                    s/schema)]
+    (loop [[[e a v] & more] (d/datoms db :eavt)
+           tx (transient [])]
+      (if (nil? e)
+        (persistent! tx)
+        (recur more (conj! tx
+                           [:db/add (- e) a (cond-> v (aref? a) -)]
+                           #_[:db/add e a v]))))))
+
 
 (defn parse-token-tx
   [s]
@@ -391,4 +415,121 @@
                  (d/entity db e))]
       ch
       #_(->string ch))))
+
+
+
+
+
+
+(defn bcount
+  [n syms]
+  (if (= 1 n)
+    (map vector syms)
+    (for [s syms
+          r (bcount (dec n) syms)]
+      (into [s] r))))
+
+#_(run! prn (bcount 4 [:tok :leaf]))
+
+;; no child []
+;; both child [a b]
+;; left child [a]
+;; right child only - not allowed
+
+
+
+
+
+(comment
+  (let [ctr (atom 0)
+        fresh (fn [] (swap! ctr inc))
+        expand-one (fn [n]
+                     (let [q 'e]
+                       (list
+                        [q n]
+                        [n q]
+                        (conj n q))))
+        res (->> '[[]]
+                 (mapcat expand-one)
+                 (mapcat expand-one)
+                 (mapcat expand-one)
+                 (mapcat expand-one)
+                 (mapcat expand-one))]
+    #_(run! prn res)
+    (println "Res" (count res) (count (set res)))))
+
+
+
+
+
+
+
+
+
+(defn tx-and-meta
+  [form]
+  (let [ent (->entity form)]
+    [(->flat-tx (d/entity-db ent))
+     (into {}
+           (map (fn [fake real]
+                  (when-some [mta (meta real)]
+                    [(- (:db/id fake)) real])) 
+                (tree-seq :coll/type seq->seq ent)
+                (->> form
+                     (tree-seq (some-fn sequential? map? set?) seq)
+                     (filter (comp not map-entry?)))))]))
+
+(comment
+  (defn tx-with-meta
+    [form]
+    (let [[ftx mtam] (tx-and-meta form)]
+      (concat ftx
+              (for [[tempid m] mtam]
+                [:db/add tempid :meta/pointer m])))))
+
+
+#_(let [m {:jafonglsy 4}
+        form [{:a :b :c {:nested :map 4  ^:form/highlight [(with-meta [:ok] m)]}} :ok [:a [[:x]] :Y]]
+        {:keys [max-eid] :as old-db} (d/entity-db (->entity (range (rand-int 99)) ))
+        [ftx mtam] (tx-and-meta form)
+
+        
+        {:keys [db-after tx-data] :as new-db} (d/with old-db
+                                                      (into ftx
+                                                            (for [[eid v] mtam]
+                                                              [:db/add eid :meta/pointer v])))]
+  #_(run! prn tx-data)
+  #_(run! prn ftx)
+  (identical?
+   m
+   (:meta/pointer (:seq/first (d/entity db-after [:form/highlight true]))))
+  
+  
+
+  #_(d/entity db-after [:form/highlight true]))
+
+
+(comment
+  (let [thinger [{:a :b :c {:nested :map 4 ^:nice [1]}} :ok [:a [[:x]] :Y]]
+        ent (->entity thinger)
+        mta-map (into {}
+                      (map (fn [fake real]
+                             (when-some [mta (meta real)]
+                               [(:db/id fake) mta])) 
+                           (tree-seq :coll/type seq->seq ent)
+                           (->> thinger
+                                (tree-seq (some-fn sequential? map? set?) seq)
+                                (filter (comp not map-entry?)))))]
+  
+  
+    (for [e (tree-seq :coll/type seq->seq ent)
+          :let [m (get mta-map (:db/id e))]
+          :when m]
+      [(:db/id e)
+       (->form e)
+       m])
+    #_(map = tseq
+           (map ->form (tree-seq :coll/type seq->seq ent)))))
+
+
 

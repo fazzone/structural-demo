@@ -156,18 +156,27 @@
            (e/seq-tx
             (->> kvs
                  (mapcat (fn [[k v]]
-                           [(assoc (e/->tx* k)
+                           [(assoc (e/->tx k)
                                    :form/linebreak true
                                    :form/indent 1)
-                            (e/->tx* v)]))
-                 (list* (e/->tx* k) (e/->tx* v))
+                            (e/->tx v)]))
+                 (list* (e/->tx k) (e/->tx v))
                  (map #(assoc % :coll/_contains e)))))))
+
+(defn ingest-nav-seq
+  [vs]
+  (let [e (e/new-tempid)]
+    (merge {:db/id e :coll/type :vec}
+           (e/seq-tx
+            (for [v vs]
+              (assoc (e/->tx v) :coll/_contains e))))))
 
 (defn ingest-navigable
   [c]
   (-> (if (and (associative? c) (not (sequential? c)))
         (ingest-nav-assoc c)
-        (e/->tx* c))
+        (ingest-nav-seq c)
+        #_(e/->tx* c))
       (assoc :nav/pointer c :eval/action :nav)
       (update :db/id #(or % "new-node"))))
 
@@ -198,7 +207,7 @@
           (edit/insert-before-tx top-level outer)
           #_(edit/insert-after-tx top-level outer))))
 
-(defn ingest-replacing
+#_(defn ingest-replacing
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
         new-node  (ingest-navigable c)]
@@ -334,7 +343,7 @@
   [sel]
   (when-let [vs (:token/value sel)]
     (let [tt (:token/type sel)
-          [head & more] (string/split vs (tear-re "[:\\.\\-_\\$]"))]
+          [head & more] (string/split vs (tear-re "[:\\.\\-_\\$/]"))]
       (into [[:db/add (:db/id sel) :token/value head]
              (when more
                [:db/add "newnode" :seq/next "newtail"])
@@ -529,24 +538,38 @@
    :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    ingest-eval-result #_eval-result-above-toplevel
-   :ingest-result                  ingest-replacing
-   :ingest-after                   ingest-after
-   :hide                           (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
-   :stringify                      (fn [db] (replace-with-pr-str (get-selected-form db)))
-   :plus                           (comp plus* get-selected-form)
-   :minus                          (comp minus* get-selected-form)
-   :insert-data                    (fn [db c] (insert-data (get-selected-form db) c))
-   :insert-txdata                  (fn [db c] (insert-txdata (get-selected-form db) c))
-   :hoist                          (comp hoist-tx get-selected-form)
-   :gobble                         (comp gobble-tx get-selected-form)
-   :move-to-deleted-chain          (comp move-to-deleted-chain get-selected-form)
-   :tear                           (comp tear-tx get-selected-form)
-   :alias                          (comp make-alias-tx get-selected-form)
-   :drag-left                      (comp drag-left-tx get-selected-form)
-   :drag-right                     (comp drag-right-tx get-selected-form)
-   :split                          (comp edit/form-split-tx get-selected-form)
-   :splice                         (comp edit/form-splice-tx get-selected-form)
-   :offer                          (comp edit/offer-tx get-selected-form)})
+
+   :ingest-after          ingest-after
+   :hide                  (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
+   :stringify             (fn [db] (replace-with-pr-str (get-selected-form db)))
+   :plus                  (comp plus* get-selected-form)
+   :minus                 (comp minus* get-selected-form)
+   :insert-data           (fn [db c] (insert-data (get-selected-form db) c))
+   :insert-txdata         (fn [db c] (insert-txdata (get-selected-form db) c))
+   :hoist                 (comp hoist-tx get-selected-form)
+   :gobble                (comp gobble-tx get-selected-form)
+   :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
+   :tear                  (comp tear-tx get-selected-form)
+   :alias                 (comp make-alias-tx get-selected-form)
+   :drag-left             (comp drag-left-tx get-selected-form)
+   :drag-right            (comp drag-right-tx get-selected-form)
+   :split                 (comp edit/form-split-tx get-selected-form)
+   :splice                (comp edit/form-splice-tx get-selected-form)
+   :offer                 (comp edit/offer-tx get-selected-form)
+
+   :ingest-result (fn [db et data]
+                    (let [top-level (peek (nav/parents-vec et))
+                          [ftx mtam] (e/tx-and-meta data)]
+                      (println "Ingest result" mtam)
+                      (into ftx
+                            (concat
+                             (for [[tempid v] mtam]
+                               [:db/add tempid :nav/pointer v])
+                             (edit/form-overwrite-tx et -1)
+                             (move-selection-tx (:db/id et) -1)))))
+   
+   
+   })
 
 (def dispatch-table
   (merge movement-commands

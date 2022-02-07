@@ -8,6 +8,7 @@
    [sted.db-reactive :as dbrx]
    [sted.comp.common :as cc]
    [sted.comp.edit-box :as eb]
+   [sted.comp.inspect :as ci]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
@@ -39,6 +40,10 @@
               " "
               (or (:coll/type sel)
                   #_(pr-str (d/touch sel)))))])
+    
+    (when-some [insp (js/document.getElementById "inspector")]
+      (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
+    
     #_[:input.edit-box.code-font {:type :text}]]))
 
 (rum/defc modeline-nest-next

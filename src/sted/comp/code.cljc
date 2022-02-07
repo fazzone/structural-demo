@@ -93,6 +93,14 @@
      (-> (top-level-form f bus nil)
          (rum/with-key (:db/id f))))])
 
+(rum/defc grid
+  [ch bus classes]
+  [:div.ct-grid
+   {:key (:db/id ch)
+    :class classes}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
 (rum/defc bar [b bus classes]
   (prn 'bar b )
   [:div.bar.hide-scrollbar
@@ -127,7 +135,8 @@
      #_[:span.inline-tag.debug
         (str (swap! render-counter inc))
         #_(str (:db/id e))]
-     (when-some [p (get proply (:db/id e))]
+     ;; requires checking propcs in dbrx shouldcompunentupdate
+     #_(when-some [p (get proply (:db/id e))]
        [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
      (cond ec    [:span.d.pfc ^String open]
            open  [:span.d ^String open]
@@ -185,12 +194,16 @@
      (code-coll ct e b c i p)
      (case ct
        :chain       (chain e b c i p)
+       :inspect     (ci/inspect-portal)
+       :grid        (grid e b c i p)
        :bar         (bar e b c i p)
        :hidden      (hiddenc e b c i p)
        :keyboard    (ck/keyboard-diagram e b c i p)
        :eval-result (erc e b c i p)
        :alias       (aliasc e b c i p)
-       (str "What's this")))))
+       (do
+         (prn "???????????" ct)
+         (str "What are you? " ct))))))
 
 (defn token-class
   [t v]

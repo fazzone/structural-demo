@@ -19,4 +19,8 @@
                                    d (d/datoms db :avet a (:db/id sel))]
                                d)))]]))
 
+(rum/defc inspect-portal
+  []
+  [:div#inspector])
+
 (defn inspect [me bus] (inspect-inner (d/entity-db me) bus))

@@ -140,7 +140,7 @@
                 (reset! history (cons report @history)))
             (println "No current-tx?")))
         (when-let [e (:error report)]
-          (println (str "Error transacting " (pr-str mut)) e)
+          (println (str "Error transacting " e (pr-str mut)) e)
           (println "Tx-data")
           (run! prn tx-data))
         (recur (or (get (:tempids report) :db/current-tx)

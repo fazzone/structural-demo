@@ -82,11 +82,14 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                (map e/->tx test-form-data-bar)
+                #_(map e/->tx test-form-data-bar)
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
-     {:db/ident ::command-chain  :db/id "command-chain"  :coll/type :vec}
+     {:db/ident ::command-chain
+      :db/id "command-chain"
+      :coll/type :vec
+      :form/highlight true}
      {:db/ident ::inspect  :db/id "inspect"  :coll/type :inspect}
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
@@ -207,7 +210,8 @@
         (fn [db _]
           (let [_ (js/console.time "formatting")
                 _ (js/console.time "preparing")
-                _ (zp-hacks/set-options! {:map {:sort? nil}})
+                _ (zp-hacks/set-options! {:map {:sort? nil}
+                                          :set {:sort? nil}})
                 sel (get-selected-form db)
                 q (if (= :chain (:coll/type sel))
                     sel

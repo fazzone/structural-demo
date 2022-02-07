@@ -4,6 +4,7 @@
   {:token/type {}
    :token/value {:db/index true}
    :coll/type {}
+   :coll/data-type {}
    :coll/contains {:db/valueType :db.type/ref
                    :db/cardinality :db.cardinality/many}
    :seq/first {:db/valueType :db.type/ref}

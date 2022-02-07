@@ -53,11 +53,18 @@
                 :symbol [:div {:style {:margin-top  "0.5ex"
                                        :margin-left "-0.5ex"
                                        :transform   "rotate(90deg)"}} "=>>"]}
-   :eval-sci   {:label  [:span {:style {:color "tomato"}} "eval"]
-                :symbol [:div {:style {:font-size   "220%"
-                                       :margin-top  "-1.175ex"
-                                       :margin-left "0ex"}}
-                         "…"]}
+   :eval-sci   {:label  [:span #_{:style {:color "tomato"}} "eval"]
+                
+                :symbol
+                #_[:div {:style {:font-size   "220%"
+                                 :margin-top  "-1.175ex"
+                                 :margin-left "0ex"}}
+                         
+                 "…"]
+                [:div {:style {:font-size   "120%"
+                               :margin-left "0ex"}}
+                         
+                    "λ>"]}
    :hide {:label [:span {:style {:color "tomato"}} "hide"]}
    :compose {:label  [:span {:style {:color "tomato"}} "comp"]
              :symbol [:div {:style {:font-size   "120%"
@@ -72,25 +79,24 @@
    :offer {:label "offer"}
    :new-comment {:label "doc"}
    :tear {:label "-tear-"
-          #_#_:symbol
-          [:div {:style {:font-size   "130%"
-                         :margin-left "0.0ex"
-                         :margin-top  "-0.2ex"}}
-           "✂"]}
+          ;; :symbol 
+          :symbol
+          [:div {:style {:font-size   "130%"}}
+           "«⋯»"]}
    :hop-left  {:label "<-hop"}
    :hop-right {:label "hop->"}
    :find-next {:label "next"}
    :undo {:label "undo"}
-   :insert-left  {:label "ins<-"}
-   :insert-right {:label "->ins"}
-   :wrap         {:label "(wrap)"}
-   :new-vec      {:label "new []"}
+   :insert-left  {:label "insert"}
+   :insert-right {:label "->insert"}
+   :wrap         {:label "(wrap)" :symbol [:div {:style {:margin-top "0.3ex"}} "(+)"]}
+   :new-vec      {:label "new []" :symbol [:div {:style {:margin-top "0.3ex"}} "+[]"]}
    :delete-right {:label  "del->"
                   :symbol [:div {:style {:font-size   "120%"
                                          :margin-left "0.0ex"
                                          :margin-top  "-0.2ex"}}
                            "⌦"]}
-   :delete-left  {:label "<-del"}
+   :delete-left  {:label "<-delete"}
    :scroll {:label "view"}
    :parent {:label  "parent"
             :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}

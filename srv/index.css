@@ -133,6 +133,7 @@ span.form-title {
 .d  + .tk       { border-left: 0; }
 .c  + .edit-box { margin-left: 1ch; }
 .c  + .c        { margin-left: 1ch; }
+.ct-grid .c + .c { margin-left: 0; }
 /* .c.pf + .c      { margin-left: 0; } */
 .c.pf + .c.pf   { margin-left: 1ch; }
 .d  + .edit-box { border-width: 0; }
@@ -518,3 +519,14 @@ span.key-compose-echo {
 }
 
 s { text-decoration: none; }
+
+.ct-grid {
+    display: inline-grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+.ct-grid > .tk {
+    justify-self: center;
+}
+
+
+.selected .ct-grid { background-color: #055005; }

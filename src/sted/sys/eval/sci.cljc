@@ -26,60 +26,62 @@
 (defn sci-opts
   ([app] (sci-opts app nil))
   ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
-   {:classes {'js goog/global :allow :all}
-    :namespaces (-> {'d {'datoms d/datoms
-                         'touch d/touch
-                         'entity-db d/entity-db
-                         'entity d/entity
-                         'q d/q
-                         'freeze dser/serializable
-                         'thaw dser/from-serializable}
-                     'js {'Promise.resolve (fn [p]
-                                             (println "Resolver" p)
-                                             (js/Promise.resolve p))}
+   {:classes    {'js goog/global :allow :all}
+    :namespaces (-> {'d        {'datoms    d/datoms
+                                'touch     d/touch
+                                'entity-db d/entity-db
+                                'entity    d/entity
+                                'q         d/q
+                                'freeze    dser/serializable
+                                'thaw      dser/from-serializable}
+                     'js       {'Promise.resolve (fn [p]
+                                                   (println "Resolver" p)
+                                                   (js/Promise.resolve p))}
                      'df.async {'do ^:sci/macro (fn [&form &env & body]
                                                   (println "Macro!" &form body)
                                                   (let [ret (a/do* body)]
                                                     (println "Ret:Do" ret)
                                                     ret))}
-                     'di {'element rdi/element
-                          'interpret rdi/interpret}
-                     'a {'let ^:sci/macro (fn [&form &env bindings & body]
-                                            (println "Macro!Let" &form)
-                                            (prn 'bindings bindings 'body body)
-                                            (let [ret (a/sci-let** bindings body)]
-                                              (println "Ret:Let" ret)
-                                              ret))}
+                     'di       {'element   rdi/element
+                                'interpret rdi/interpret}
+                     'a        {'let ^:sci/macro (fn [&form &env bindings & body]
+                                                   (println "Macro!Let" &form)
+                                                   (prn 'bindings bindings 'body body)
+                                                   (let [ret (a/sci-let** bindings body)]
+                                                     (println "Ret:Let" ret)
+                                                     ret))}
+                     
                      'hn {'stories dfg/stories}
                      #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                      'all     (fn [a b c] (js/Promise.all a b c))}])}
                     (merge namespaces))
-    :bindings   (-> {'send! (fn [m] (core/send! bus m))
-                     '->seq e/seq->seq
-                     'datafy datafy/datafy
-                     'nav    datafy/nav
-                     'thing (fn [z]
-                              (mapv pr-str z))
-                     #?@ (:clj ['slurp slurp
-                                'spit spit]
-                          :cljs ['fetch-text (fn [z]
-                                               (.then (js/fetch z)
-                                                      (fn [resp] (.text resp))))
-                                 'fetch-json (fn [u]
-                                               (.then (js/fetch u)
-                                                      (fn [resp]
-                                                        (.then (.json resp)
-                                                               #(js->clj % :keywordize-keys true)))))
-                                 'ingest (fn [z] (with-meta z {`ingest true}))
-                                 'then (fn [p f] (.then (js/Promise.resolve p) f))
-                                 'slurp      (some-> electron-bridge (aget "slurp"))
-                                 'spit       (some-> electron-bridge (aget "spit"))
-                                 'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
-                                 'new-window (fn [u name features]
-                                               (js/window.open
-                                                (or u js/window.location)
-                                                name
-                                                features))])}
+    :bindings (-> {'send!  (fn [m] (core/send! bus m))
+                   '->seq  e/seq->seq
+                   'datafy datafy/datafy
+                   'nav    datafy/nav
+                   'ls     dfg/ls
+                   'thing  (fn [z]
+                            (mapv pr-str z))
+                   #?@ (:clj ['slurp slurp
+                              'spit spit]
+                        :cljs ['fetch-text (fn [z]
+                                             (.then (js/fetch z)
+                                                    (fn [resp] (.text resp))))
+                               'fetch-json (fn [u]
+                                             (.then (js/fetch u)
+                                                    (fn [resp]
+                                                      (.then (.json resp)
+                                                             #(js->clj % :keywordize-keys true)))))
+                               'ingest (fn [z] (with-meta z {`ingest true}))
+                               'then (fn [p f] (.then (js/Promise.resolve p) f))
+                               'slurp      (some-> electron-bridge (aget "slurp"))
+                               'spit       (some-> electron-bridge (aget "spit"))
+                               'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
+                               'new-window (fn [u name features]
+                                             (js/window.open
+                                              (or u js/window.location)
+                                              name
+                                              features))])}
                     (merge bindings))}))
 
 (defn success-cont
@@ -112,12 +114,14 @@
 
 (defn coll-contains?
   [parent child?]
-  (seq (d/datoms (d/entity-db child?) :avet
-                 :coll/contains
-                 (:db/id child?)
-                 (:db/id parent))))
+  (-> (d/entity-db child?)
+      (d/datoms :avet
+                :coll/contains
+                (:db/id child?)
+                (:db/id parent))
+      (seq)))
 
-(defn key-within-map
+#_(defn key-within-map
   [target context]
   (when (coll-contains? context target)
     (loop [k nil
@@ -129,34 +133,62 @@
           (throw (ex-info "It was supposed to be in here" {}))
           (recur s (:seq/next s) (not in-key?)))))))
 
+(defn key-within-map
+  [target context]
+  (when (coll-contains? context target)
+    (e/->form target)))
+
+(defn eval-action?
+  [e]
+  (let [ea (or (some-> e :eval/action vector)
+               (when-some [m (:nav/pointer e)]
+                 [:nav]))]
+    (when ea
+      (into [e] ea))))
+
 (defn mutatef
-  [{:keys [conn bus]  :as app}]
+  [{:keys [conn bus] :as app}]
   (let [sel# (sci/new-dynamic-var 'sel nil)
-        ctx (sci/init (sci-opts app {:bindings {'sel sel#}}))]
+        ctx  (sci/init (sci-opts app {:bindings {'sel sel#}}))]
     (fn [_ db bus]
-      (let [eval-target (get-selected-form db)
-            parents (nav/parents-seq eval-target)
-            eval-context (or (first (filter :eval/action parents))
-                             (last parents))
-            action (:eval/action eval-context)
-            print-output (atom [])
-            success (success-cont eval-target bus print-output)
-            failure (failure-cont eval-target bus print-output)]
+      (let [eval-target                  (get-selected-form db)
+            parents                      (nav/parents-seq eval-target)
+            ;; eval-context (or (first (filter :eval/action parents))
+            ;;                  (last parents))
+            ;; action       (:eval/action eval-context)
+            [eval-context action :as jj] (or (some eval-action? parents)
+                                              [(last parents) :eval])
+            print-output                 (atom [])
+            success                      (success-cont eval-target bus print-output)
+            failure                      (failure-cont eval-target bus print-output)]
+        (println "Parent meta" (some eval-action? parents))
+        (println "Action" action)
+        (println "Lp" (last parents) "jj" jj)
         (try
           (->
-            (case action :nav
-                  (when-some [ptr (:nav/pointer eval-context)]
-                    (case (:coll/type eval-context)
-                      (:vec :list) (let [k (e/->form eval-target)]
-                                     (datafy/nav ptr nil k))
-                      :map (let [k (key-within-map eval-target eval-context)]
-                             (datafy/nav ptr k (get ptr k)))))
-                    (sci/binding [sel# eval-target
-                                  sci/print-newline true
-                                  sci/print-fn (fn [m]
-                                                 (swap! print-output conj m))]
-                      (sci/eval-string* ctx (e/->string eval-context))))
-            #?@ (:clj [(success)]
+           (case action
+             :nav
+             (when-some [ptr (:nav/pointer eval-context)]
+               (println "Got meta ptr" ptr)
+               (let [k (e/->form eval-target)]
+                 (case (:coll/type eval-context)
+                   (:vec :list) (datafy/nav ptr nil k)
+                   (:map :set)  (datafy/nav ptr k (get ptr k)))
+                 #_(datafy/nav ptr k (get ptr k))))
+             #_ (when-some [ptr (:nav/pointer eval-context)]
+                 (case (:coll/type eval-context)
+                   (:vec :list) (let [k (e/->form eval-target)]
+                                  (datafy/nav ptr nil k))
+                   (:map :set)  (let [k (key-within-map eval-target eval-context)]
+                                  (datafy/nav ptr k (get ptr k)))))
+             
+             :eval
+             (sci/binding [sel# eval-target
+                           sci/print-newline true
+                           sci/print-fn (fn [m]
+                                          (swap! print-output conj m))]
+               (sci/eval-string* ctx (e/->string eval-context))))
+           #?@ (:clj [(success)]
                 :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
           (catch :default ex (js/console.log ex) (failure ex)))))))
 
