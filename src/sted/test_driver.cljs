@@ -46,7 +46,7 @@
 #_(def viewport-height 50)
 
 (def ^:const ptr-opts
-  #js {:headless false
+  #js {:headless true
        :defaultViewport #js {:width viewport-width :height viewport-height}})
 
 (rum/defc test-report-root
