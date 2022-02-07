@@ -89,35 +89,9 @@
    {:key (:db/id ch)
     :class classes
     :id (str "c" (:db/id ch))}
-   
-   
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
-         (rum/with-key (:db/id f))))
-   [:div.code-font
-    {:style {:font-size "30px" :margin-top "3rem" :margin-left "1rem"}}
-    [:span
-     [:span "These"]
-     " "
-     [:span "Are"]
-     " "
-     [:span
-      [:span "A B C" [:br] "D E F"]
-      [:span {:style {:position :relative}}
-       [:span {:style {:position :absolute
-                       :background-color "#e3462a5e"
-                       :border-radius "1ex"
-                       :width "8ch"
-                       :height "100%"
-                       :left "-8ch"
-                       }}
-        "____"]]]
-     " "
-     [:span "Tokens"]
-     
-     ]
-    ]
-   ])
+         (rum/with-key (:db/id f))))])
 
 (rum/defc grid
   [ch bus classes]

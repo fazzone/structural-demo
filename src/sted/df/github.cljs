@@ -99,93 +99,33 @@
     (#{:kids :submitted} k) (vary-meta v assoc `nav #'nav-item)
     :else v))
 
-;; Do not understand why these cannot be required or imported normally
-(def fsp (js/require "fs/promises"))
-(def path (js/require "path"))
-
-(defrecord File [f])
-
-#_(defn datafy-path
-  [{:keys [f]}]
-  {:name (.basename path f)
-   :path f})
-
-(defn nav-fs
-  [c k v]
-  (println "NAv-fs" k v "in" c)
-  )
-
-(declare ls)
-
-#_(defn datafy-stat
-  [abs st]
-  (m/let [des (when (.isDirectory st)
-                (.readdir fsp abs  #js {:withFileTypes true}))]
-    (cond-> {:path abs :name (.basename path abs)}
-      des        (assoc :files (with-meta (->> des
-                                               (mapv (fn [de]
-                                                       (with-meta
-                                                         ((if (.isDirectory de)
-                                                            list
-                                                            vector)
-                                                          (.-name de))
-                                                         {:name (.-name de)
-                                                          `nav (fn []
-                                                                 (println "AAAA" (.-name de))
-                                                                 (ls (.join path abs (.-name de)))
-                                                                 #_(.stat fsp (.join path abs (.-name de))))}))))
-                                 {`nav #'nav-fs}
-                                 #_{:coll/type :grid
-                                    :coll/data-type :vec}))
-      (nil? des) (assoc :mode (.-mode st) :size (.-size st))
-      true (vary-meta assoc `nav #'nav-fs))))
-(defn datafy-stat
-  [p n st]
-  {:name n
-   :abs ()
-   :mode (.-mode st)
-   :size (.-size st)}  
-  )
-
-(defn uhh
-  [p n]
-  (let [j (.join path p n)]
-    (m/let [st (.stat fsp j)]
-      (if-not (.isDirectory st)
-        j
-        (m/let [des (.readdir fsp j #js {:withFileTypes true})]
-          (with-meta {n (->> des
-                             (mapv (fn [de]
-                                     (cond-> (.-name de)
-                                       (.isDirectory de) (str "/")))))}
-            {`nav (fn [_ k _]
-                    (println "Sub-nav" k)
-                    (cond (= 'pwd k) j
-                          :else (uhh j k )))})))))
-  
-  #_(cond-> {:path abs :name (.basename path abs)}
-      des        (assoc :files (with-meta (->> des
-                                               (mapv (fn [de]
-                                                       (with-meta
-                                                         ((if (.isDirectory de)
-                                                            list
-                                                            vector)
-                                                          (.-name de))
-                                                         {:name (.-name de)
-                                                          `nav (fn []
-                                                                 (println "AAAA" (.-name de))
-                                                                 (ls (.join path abs (.-name de)))
-                                                                 #_(.stat fsp (.join path abs (.-name de))))}))))
-                                 {`nav #'nav-fs}
-                                 #_{:coll/type :grid
-                                    :coll/data-type :vec}))
-      (nil? des) (assoc :mode (.-mode st) :size (.-size st))
-      true (vary-meta assoc `nav #'nav-fs)))
-
-
-
 (defn ls
-  ([] (ls "."))
-  ([p]
-   (let [abs (.resolve path p)]
-     (uhh (.dirname path abs) (.basename path abs)))))
+  ([] (ls nil))
+  ([p] "Not working in browser yet"))
+
+(comment
+
+  (def fsp (when js/require (js/require "fs/promises")))
+  (def path (when js/require (js/require "path")))
+  
+  (defn uhh
+    [p n]
+    (let [j (.join path p n)]
+      (m/let [st (.stat fsp j)]
+        (if-not (.isDirectory st)
+          j
+          (m/let [des (.readdir fsp j #js {:withFileTypes true})]
+            (with-meta {n (->> des
+                               (mapv (fn [de]
+                                       (cond-> (.-name de)
+                                         (.isDirectory de) (str "/")))))}
+              {`nav (fn [_ k _]
+                      (println "Sub-nav" k)
+                      (cond (= 'pwd k) j
+                            :else (uhh j k )))}))))))
+
+  (defn ls
+    ([] (ls "."))
+    ([p]
+     (let [abs (.resolve path p)]
+       (uhh (.dirname path abs) (.basename path abs))))))
