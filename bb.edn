@@ -12,4 +12,4 @@
                (maybe-install-puppeteer)
                (release-cljs! :ptr)
                (release-cljs! :br)
-               (screenshots))}}
+               (System/exit (screenshots)))}}

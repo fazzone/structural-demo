@@ -160,7 +160,8 @@
       (println "In slurpy done?"))
 
     (let [exit (:exit @puppeteer)]
-      (println "OK"))))
+      (println "Exit:" exit)
+      exit)))
 
 (comment
   (sync-prepl-exec
