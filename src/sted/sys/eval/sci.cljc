@@ -8,6 +8,7 @@
             [datascript.core :as d]
             [datascript.serialize :as dser]
             [sci.impl.vars :as v]
+            [sted.sys.nrepl.bencode :as benc]
             [sted.df.github :as dfg]
             [sted.df.async :as a]
             [clojure.datafy :as datafy]
@@ -51,6 +52,8 @@
                                                      (println "Ret:Let" ret)
                                                      ret))}
                      
+                     'b {'encode benc/serialize
+                         'decode benc/deserialize}
                      'hn {'stories dfg/stories}
                      #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                      'all     (fn [a b c] (js/Promise.all a b c))}])}
@@ -61,7 +64,7 @@
                    'nav    datafy/nav
                    'ls     dfg/ls
                    'thing  (fn [z]
-                            (mapv pr-str z))
+                             (mapv pr-str z))
                    #?@ (:clj ['slurp slurp
                               'spit spit]
                         :cljs ['fetch-text (fn [z]
@@ -83,7 +86,7 @@
                                               (or u js/window.location)
                                               name
                                               features))])}
-                    (merge bindings))}))
+                  (merge bindings))}))
 
 (defn failure-cont
   [eval-target bus print-output]

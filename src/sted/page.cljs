@@ -51,11 +51,15 @@
         (fn [buf]
           (send! [:open-chain (.toString buf) {:chain/filename path}]))))
      
+     (let [ws (js/WebSocket. "ws://localhost:9102")]
+       (doto ws
+         (.addEventListener "open" (b/encode {:op :eval :code "(+ 1 2 3)"}))))
+     
      (defn open-file
-         [path]
-         (then (slurp path)
-               (fn [text]
-                 (send! [:open-chain text {:chain/filename path}]))))
+       [path]
+       (then (slurp path)
+             (fn [text]
+               (send! [:open-chain text {:chain/filename path}]))))
      (if (or (= :nav action)
              (some-> r meta (get `p/nav)))
        (core/send! bus [:ingest-result eval-target r])
