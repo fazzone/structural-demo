@@ -18,8 +18,9 @@
   [sel bus rec eps]
   (let [{:keys [^String text valid]} (some-> eps rum/react)]
    [:span {:class (str "modeline code-font"
-                       (if text " editing modeline-search" " modeline-fixed")
-                       (when (and (not (empty? text)) (not valid)) " invalid"))}
+                       #_(if text " editing modeline-search" " modeline-fixed")
+                       "modeline-fixed"
+                       #_(when (and (not (empty? text)) (not valid)) " invalid"))}
     [:span.modeline-echo
      {}
      (let [{:keys [on at status file]} (rum/react save-status)]
@@ -41,7 +42,7 @@
               (or (:coll/type sel)
                   #_(pr-str (d/touch sel)))))])
     
-    (when-some [insp (js/document.getElementById "inspector")]
+    #_(when-some [insp (js/document.getElementById "inspector")]
       (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
     
     #_[:input.edit-box.code-font {:type :text}]]))

@@ -10,7 +10,7 @@
                :release {:compiler-options {:optimizations :advanced
                                             :pretty-print true
                                             :pseudo-names true
-                                            }}}
+                                            :output-feature-set :es2018}}}
           :elec {:target :node-script
                  :output-to "srv/electron-main.js"
                  :main sted.electron-main/main}

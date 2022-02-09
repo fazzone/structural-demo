@@ -240,7 +240,7 @@
                       (rum/fragment
                        [:span.kn (subs k 0 is)]
                        (subs k is))))
-    :string v
+    :string #_v #_(pr-str v) (js/JSON.stringify v)
     :verbatim v
     :number (str v)
     :comment v

@@ -43,6 +43,10 @@
                                                   (let [ret (a/do* body)]
                                                     (println "Ret:Do" ret)
                                                     ret))}
+                     'dom {'qsa (fn [s] (vec (js/document.querySelectorAll s)))
+                           'ecl (fn [s] (vec (js/document.getElementsByClassName s)))
+                           'qs  (fn [s] (js/document.querySelector s))
+                           'eid (fn [s] (js/document.getElementById s))}
                      'di       {'element   rdi/element
                                 'interpret rdi/interpret}
                      'a        {'let ^:sci/macro (fn [&form &env bindings & body]

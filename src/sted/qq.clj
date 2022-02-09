@@ -27,9 +27,14 @@
         (.write args)
         (.write "\n")))))
 
-(time
- (bb-selfextractor
-  (io/file "bb.exe")
-  "nrepl-server"))
+(comment
+  (time
+   (bb-selfextractor
+    (io/file "bb.exe")
+    "nrepl-server")))
+
+
+
+
 
 

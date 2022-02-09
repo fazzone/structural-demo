@@ -23,4 +23,5 @@
   []
   [:div#inspector])
 
-(defn inspect [me bus] (inspect-inner (d/entity-db me) bus))
+(defn inspect [me bus]
+  (inspect-inner (d/entity-db me) bus))

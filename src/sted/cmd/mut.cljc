@@ -92,19 +92,8 @@
        (cond->> (lazy-seq (iter (cond-> (subvec front 1)
                                   (:seq/next e)  (conj (:seq/next e))
                                   (:seq/first e) (conj (:seq/first e)))))
-         (:coll/type e) (cons e))))
+         (or (:coll/type e) (:token/type e)) (cons e))))
    [top]))
-
-#_(defn no-double-colls
-  [nmv]
-  (loop [[x y :as xs] nmv
-         stacked? false
-         out []]
-    (if (nil? x)
-      out
-      (recur (next xs)
-             (= (:db/id y) (:db/id (:seq/first x)))
-             (cond-> out (not stacked?) (conj x))))))
 
 (defn no-double-colls
   [nmv]
@@ -326,41 +315,46 @@
   [sel c]
   (some->> (nav/parents-seq c)
            (filter (comp #{:tear} :coll/type))
-           (first)
+           #_(first)
+           (last)
            (stitch* sel)))
 
 (defn tear-re
   [delim-re]
   (let [lookahead+ #(str "(?=" % ")" )
-        lookback+  #(str "(?<=" % ")")
-        ]
+        lookback+  #(str "(?<=" % ")")]
     (re-pattern
      (str (lookahead+ delim-re)
           "|" (lookback+ delim-re)))))
 
+(defn tear-preference-order
+  [s]
+  (letfn [(try-split [[head & more :as groups]]
+            (when more groups))]
+    (or (try-split (string/split s #"\s+"))
+        (try-split (string/split s (tear-re "[:\\.\\-_\\$/]")))
+        (try-split (string/split s #"(?<=[^A-Z])(?=[A-Z])")))))
+
 (defn tear*
-  [sel]
-  (when-let [vs (:token/value sel)]
-    (let [tt (:token/type sel)
-          [head & more] (string/split vs (tear-re "[:\\.\\-_\\$/]"))]
-      (into [[:db/add (:db/id sel) :token/value head]
-             (when more
-               [:db/add "newnode" :seq/next "newtail"])
-             (when more
-               (-> (for [e more]
-                     {:token/value e
-                      :token/type tt
-                      :coll/_contains "newnode"})
-                   (e/seq-tx)
-                   (assoc :db/id "newtail")))]
-            (concat
-             (edit/form-wrap-tx sel :tear)
-             (move-selection-tx (:db/id sel) "newnode"))))))
+  [sel [head & more]]
+  (let [tt (:token/type sel)]
+    (into [[:db/add (:db/id sel) :token/value head]
+           (when more [:db/add "newnode" :seq/next "newtail"])
+           (when more
+             (-> (for [e more]
+                   {:token/value e
+                    :token/type tt
+                    :coll/_contains "newnode"})
+                 (e/seq-tx)
+                 (assoc :db/id "newtail")))]
+          (concat (edit/form-wrap-tx sel :tear)
+                  (move-selection-tx (:db/id sel) "newnode")))))
 
 (defn tear-tx
   [sel]
-  (or (restitch sel sel)
-      (tear* sel)))
+  (if-some [parts (some-> sel :token/value tear-preference-order)]
+    (tear* sel parts)
+    (restitch sel sel )))
 
 (defn find-next*
   [me ir]

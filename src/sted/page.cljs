@@ -35,75 +35,14 @@
                                    go-loop]]
    [sted.macros :as m]))
 
-(def test-form-data-bar
-  '[["Chain 1"
-     (def thing
-       [1 (+ 2 3 foo) [:a :c] "ok"])
-     (nav hn/stories :topstories (:topstories stories))
-     
-     (a/let [resp (js/fetch "https://www.wikidata.org/w/api.php?action=wbgetentities&languages=en&ids=Q42&format=json&origin=*")
-             data (.json resp)]
-       (ingest (js->clj data)))
-     
-     (defn open-file [path]
-       (then
-        (.readFile (js/require "fs/promises") path)
-        (fn [buf]
-          (send! [:open-chain (.toString buf) {:chain/filename path}]))))
-     
-     (let [ws (js/WebSocket. "ws://localhost:9102")]
-       (doto ws
-         (.addEventListener "open" (b/encode {:op :eval :code "(+ 1 2 3)"}))))
-     
-     (defn open-file
-       [path]
-       (then (slurp path)
-             (fn [text]
-               (send! [:open-chain text {:chain/filename path}]))))
-     (if (or (= :nav action)
-             (some-> r meta (get `p/nav)))
-       (core/send! bus [:ingest-result eval-target r])
-       (core/send! bus [:eval-result eval-target (str r) print-output ]))
-
-     
-     ( open-url
-      [u]
-      (then (fetch-text u)
-            (fn [text] (send! [:open-chain text]))))
-     (new-window "http://localhost:8087?title=SH"
-                 "_blank"
-                 "top=500,left=3000")
-     (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/page.cljs")
-     ^:form/highlight (open-file "src/page.cljs")
-     (open-file "src/cmd/mut.cljc")
-     (open-file "src/embed.cljc")
-     (list (list 1 2 3) (list 1 2 3) (list 1 2 3) (list 1 2 3) (list 1 2 3))
-     ()
-     (defn get-repo [ident ref-name]
-       (a/let [ref (fetch-json (str "https://api.github.com/repos/" ident "/git/ref/heads/" ref-name))
-               commit (fetch-json (-> ref :object :url))
-               tree (fetch-json (str (-> commit :tree :url) "?recursive=true"))]
-         (ingest tree)))
-     (get-repo "fazzone/structural-demo" master)
-     
-     
-     
-     (defn explore-tree
-       [{:keys [tree]  :as t}]
-       (let [by-type (group-by :type tree)]
-         (a/let [rec (js/Promise.all
-                      (into-array
-                       (for [{:keys [url path] :as st} (by-type "tree")]
-                         (a/let [f (fetch-json url) sf (explore-tree f)] [path sf]))))]
-           (into (sorted-map)
-                 (concat (for [{:keys [path] :as b} (by-type "blob")] [path b])
-                         rec)))))]])
+(def test-form-data-bar (e/string->tx-all (m/macro-slurp "srv/index.cljc")))
 
 (def init-tx-data
+  
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                (map e/->tx test-form-data-bar)
+                [test-form-data-bar]
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
@@ -118,24 +57,24 @@
       :keymap/bindings (for [[k m] sk/default-keymap]
                          {:key/kbd k  :key/mutation m})}
      (assoc (e/seq-tx
-              (concat
-                (for [ch chains]
-                  (assoc ch
-                    :coll/type :chain
-                    :coll/_contains "bar"))
-                [{:db/ident ::meta-chain
-                  :coll/type :chain
-                  :coll/_contains "bar"
-                  :coll/contains #{"label" "defaultkeymap" "inspect"
-                                   "command-chain"}
-                  :seq/first {:db/id "label"
-                              :token/type :string
-                              :token/value "Keyboard"}
-                  :seq/next {:seq/first "defaultkeymap"
-                             :seq/next {:seq/first "command-chain"
-                                        :seq/next {:seq/first "inspect"}}}}]))
-       :db/id "bar"
-       :coll/type :bar)]))
+             (concat
+              (for [ch chains]
+                (assoc ch
+                       :coll/type :chain
+                       :coll/_contains "bar"))
+              [{:db/ident ::meta-chain
+                :coll/type :chain
+                :coll/_contains "bar"
+                :coll/contains #{"label" "defaultkeymap" "inspect"
+                                 "command-chain"}
+                :seq/first {:db/id "label"
+                            :token/type :string
+                            :token/value "Keyboard"}
+                :seq/next {:seq/first "defaultkeymap"
+                           :seq/next {:seq/first "command-chain"
+                                      :seq/next {:seq/first "inspect"}}}}]))
+            :db/id "bar"
+            :coll/type :bar)]))
 
 #_(declare snapshot)
 
@@ -203,18 +142,32 @@
   (fn [ev]
     (global-keydown* ev)))
 
+
+
 (defn save*
   [file contents]
-  (when-let [spit (some-> (aget js/window "my_electron_bridge")
-                          (aget "spit"))]
+  (if-let [spit (some-> (aget js/window "my_electron_bridge")
+                        (aget "spit"))]
     (-> (spit file contents)
         (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
-        (.catch (fn [] (swap! ml/save-status assoc :status :error))))))
+        (.catch (fn [] (swap! ml/save-status assoc :status :error))))
+    #_(do
+      (js/console.time "Thing")
+      (prn  (thinger "c"))
+      (js/console.timeEnd "Thing"))
+    (let [w (js/window.open "")]
+      (js/setTimeout
+       (fn []
+         (let [el (js/document.createElement "pre")]
+           (set! (.-innerText el) contents)
+           (.appendChild (.-body (.-document w)) el)))
+       0))))
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
    (let [a (core/app conn)]
+     
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
      (doseq [[m f] mut/editing-commands]
