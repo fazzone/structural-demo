@@ -4,7 +4,7 @@
    [sted.embed :as e]))
 
 (defmacro macro-slurp [a]
-  (println "Slurp " a)
+  (println "Slurp " (meta &form) a)
   (clojure.core/slurp a))
 
 (defmacro macro-resource [a]

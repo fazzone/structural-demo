@@ -4,7 +4,7 @@
    [sted.cmd.move :as move]
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
-   [sted.sys.kbd :as sk]
+   [sted.sys.kbd.evt :as ske]
    [datascript.core :as d]
    [cljs.core.async :as async]
    [sted.embed :as e]
@@ -35,6 +35,8 @@
                         (println "Quotedstring")
                         :else
                         [:edit/finish-and-edit-next-node text])
+    
+    
     nil))
 
 (defn focus-ref-on-mount
@@ -49,7 +51,8 @@
 (def editbox-ednparse-state (atom nil))
 
 (rum/defcs edit-box
-  < (rum/local [] ::text) (focus-ref-on-mount "the-input")
+  < (rum/local [] ::text) 
+  (focus-ref-on-mount "the-input")
   [{::keys [text]} e bus]
   #_(println "Edit box" 'text text 'e e)
   (let [value (if (= [] @text)
@@ -59,8 +62,7 @@
         form-eid (:db/id e)]
     [:input.edit-box.code-font
      #_:textarea.edit-box.code-font
-     {
-      :type        :text
+     {:type        :text
       ;; :wrap :off
       :ref         "the-input"
       :value       (or value "")
@@ -75,10 +77,12 @@
                                :type (some-> token first val)})
                       nil)
       :on-key-down (fn [ev]
-                     (when-let [mut (editbox-keydown-mutation value (sk/event->kbd ev))]
-                       (.preventDefault ev)
-                       (.stopPropagation ev)
-                       (when (not= :edit/wrap (first mut))
-                         (reset! editbox-ednparse-state nil))
-                       (core/send! bus mut)
-                       #_(async/put! bus mut)))}]))
+                     (let [kbd (ske/event->kbd ev)
+                           mut (editbox-keydown-mutation value kbd)]
+                       (when mut
+                         (.preventDefault ev)
+                         (.stopPropagation ev)
+                         (when (not= :edit/wrap (first mut))
+                           (reset! editbox-ednparse-state nil))
+                         (some->> mut (core/send! bus))
+                         #_(async/put! bus mut))))}]))

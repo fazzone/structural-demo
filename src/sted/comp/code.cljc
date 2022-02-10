@@ -1,4 +1,3 @@
-
 (ns sted.comp.code
   (:require
    [sted.embed :as e]
@@ -27,7 +26,6 @@
    [sted.comp.inspect :as ci]))
 
 (rum.core/set-warn-on-interpretation! true)
-
 
 (declare form)
 
@@ -111,13 +109,11 @@
 
 
 (rum/defc aliasc [{:alias/keys [of] :as a} bus classes]
-  [:div.alias.alternate-reality
-   {:class classes}
+  [:div.alias {:class classes}
    [:div.form-title "Alias " (str (:db/id a)) " of " (str (:db/id of))]
-   (when of (rum/bind-context [cc/*modeline-ref* nil]
-                              ^:inline (form of bus 0 nil)))])
-
-
+   [:div.alternate-reality {}
+    (when of (rum/bind-context [cc/*modeline-ref* nil]
+                               ^:inline (form of bus 0 nil)))]])
 
 #_(def dispatch-coll
   {:keyboard ck/keyboard-diagram
@@ -251,12 +247,10 @@
   (->> #js {:rootMargin "0px" :threshold #js [0 1]}
        (js/IntersectionObserver.
         (fn [ents me]
+          (println "Observed" (count ents ) "entries")
           (loop [i 0
                  el nil
                  need-scroll? false]
-            
-            #_(js/console.log (aget ents i))
-            
             (if (= i (alength ents))
               (when need-scroll?
                 #_(.unobserve me el)
@@ -278,7 +272,7 @@
            prev-sel? (some-> state ::prev-sel?)]
        (if-not (or sel? prev-sel?)
          state
-         (let [el (rum/dom-node state)
+         (let [el (rum/domf-node state)
                real-el (if-not (= "S" (.-tagName el) )
                          el
                          (.-nextElementSibling el))]
@@ -314,9 +308,10 @@
                :class (if selected?
                         (str "tk selected " tc)
                         (str "tk " tc))
-               :on-click (fn [ev]
-                           (.stopPropagation ev)
-                           (core/send! bus [:select (:db/id e)]))}
+               :onClick (fn [ev]
+                          (.stopPropagation ev)
+                          (core/send! bus [:click (:db/id e)])
+                          false)}
               ^String it])
            (:coll/type e)
            (case (:coll/type e)

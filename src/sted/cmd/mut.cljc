@@ -44,14 +44,104 @@
      (when parent-indent
        [:db/add (:db/id sel) :form/indent parent-indent])]))
 
-(defn recursively-set-indent-tx
-  [db indent]
-  (->> (get-selected-form db)
-       (tree-seq :coll/type e/seq->vec)
-       (next)
-       (keep (fn [e]
-               (when (:coll/type e)
-                 [:db/add (:db/id e) :form/linebreak indent])))))
+#_(defn recursive-multiline
+  [db]
+  (println "Mtlin")
+  (letfn [(go [[e & es] ind idx acc]
+              (println "Go" e ind idx acc)
+              (cond
+                (nil? e) acc
+                
+                (and (zero? idx) (nil? (:coll/type e)))
+                (do (println "Leafy")
+                    (recur es ind (inc idx) acc))
+                
+                (not (zero? idx))
+                (do
+                  (println "First" (when-not es "And last"))
+                  (if-not es
+                    acc
+                    (recur es ind (inc idx)
+                           (conj acc [:db/add (:db/id e) :form/indent ind]))))
+                
+                (nil? (:coll/type e))
+                (do (println "Not CT")
+                    (recur es ind (inc idx)
+                           (conj acc
+                                 [:db/add (:db/id e) :form/indent ind]
+                                 [:db/add (:db/id e) :form/linebreak true])))
+                
+                :else
+                (let [ch (e/seq->vec e)]
+                  (println (count ch) "children")
+                  (go ch (+ 2 ind) 0 acc))
+                
+                #_(do
+                    (println "Reducey")
+                    (reduce (fn [a [i ch]]
+                              (go ch (+ 2 ind) i a))
+                            acc
+                            (map vector (range) (e/seq->vec e))))))]
+    (doto
+        (go (list (get-selected-form db)) 0 0 [])
+      (prn )
+      )))
+
+(defn recursive-multiline
+  [db]
+  (println "Mtlin")
+  (letfn [(fnlike [tt]
+            (case tt (:symbol :keyword) true false))
+          (+txe [acc e lb ind]
+            (let [pre-ind (:form/indent e)
+                  pre-lb  (:form/linebreak e)
+                  d-lb    (if-not lb nil lb)
+                  d-ind   (if (zero? ind) nil ind)
+                  nop-ind (= d-ind pre-ind)
+                  nop-lb  (= (some? lb) (some? pre-lb))]
+              (println "Go" pre-ind "=>" d-ind (e/->string e) )
+              (if (and nop-ind nop-lb)
+                acc
+                (cond-> acc
+                  (not nop-lb)  (conj (if-not d-lb
+                                        [:db/retract (:db/id e) :form/linebreak]
+                                        [:db/add (:db/id e) :form/linebreak d-lb]))
+                  (and d-lb (not nop-ind))
+                  (conj (if (and pre-ind (nil? d-lb) (nil? d-ind))
+                          [:db/retract (:db/id e) :form/indent]
+                          [:db/add (:db/id e) :form/indent d-ind]))))))
+          (go [[e & es] ind idx acc]
+              
+              (println "Go" idx (e/->string e))
+              (cond
+                (nil? e) acc
+                
+                (nil? (:coll/type e))
+                (recur es ind (inc idx) (+txe acc e
+                                              (not (zero? idx))
+                                              #_(not (and (zero? idx)
+                                                          (fnlike (:token/type e))))
+                                              ind))
+                
+                :else
+                (let [ch  (e/seq->vec e)
+                      rec (go ch
+                              (+ ind (count (e/open-delim (:coll/type e))))
+                              0
+                              (+txe [] e (not (zero? idx)) ind))]
+                  (println "Collection First?" (zero? idx)
+                           (e/->string e))
+                  (if-not es
+                    (recur ch (+ 2 ind) 0 (into acc rec))
+                    (recur es ind (inc idx) (into acc rec)))
+                  #_(reduce into
+                            (map (fn [c]
+                                   (go ch (+ 2 ind) 0 []))
+                                 ch)))))]
+    (let [t (go (e/seq->vec (get-selected-form db)) 2 0 [])]
+      (println "T=")
+      (run! prn t)
+      t)))
 
 #_(defn select-1based-nth-reverse-parent
   [sel n]
@@ -459,8 +549,26 @@
     (into [new-node]
           (edit/insert-after-tx chain new-node))))
 
+
+
 (def movement-commands
-  {:select          (fn [e eid] (d/entity (d/entity-db e) eid))
+  {:select (fn [e eid] (d/entity (d/entity-db e) eid))
+   :click  (fn [sel eid]
+             (let [e (d/entity (d/entity-db sel) eid)]
+               (cond
+                 (= eid (:db/id sel))
+                 (move/move :move/up e)
+                 
+                 (nil? (:coll/type sel))
+                 e
+                 
+                 :else
+                 (let [[_ parent]
+                       (->> (nav/parents-vec e)
+                            (drop-while
+                             (fn [p]
+                               (not= (:db/id p) (:db/id sel)))))]
+                   (or parent e))))) 
    :find-next       find-next
    :find-first      find-first
    :flow-right      (partial move/move :move/flow)
@@ -513,7 +621,7 @@
    :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
    :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
-
+   :raise-parent                   (comp edit/form-raise-tx (partial move/move :move/up) get-selected-form )
    :clone                          (comp edit/insert-duplicate-tx get-selected-form)
    :linebreak                      linebreak-selected-form-tx
    :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
@@ -550,9 +658,10 @@
    :split                 (comp edit/form-split-tx get-selected-form)
    :splice                (comp edit/form-splice-tx get-selected-form)
    :offer                 (comp edit/offer-tx get-selected-form)
-
+   :multiline             recursive-multiline
+   
    :ingest-result (fn [db et data]
-                    (let [top-level (peek (nav/parents-vec et))
+                    (let [top-level  (peek (nav/parents-vec et))
                           [ftx mtam] (e/tx-and-meta data)]
                       (println "Ingest result" mtam)
                       (into ftx

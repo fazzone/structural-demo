@@ -9,7 +9,6 @@
    [clojure.datafy :as datafy]
    [clojure.string :as string]
    [rum.core :as rum]
-   [sted.comp.scroll :as scroll]
    [cljs.core.async :as async]
    [sci.core :as sci]
    [sted.db-reactive :as dbrx]
@@ -20,13 +19,16 @@
    [sted.comp.modeline :as ml]
    [sted.cmd.move :as move]
    [sted.cmd.nav :as nav]
-   [sted.sys.eval.sci :as eval-sci]
-   [sted.sys.kbd :as sk]
    [sted.cmd.insert :as insert]
    [sted.cmd.edit :as edit]
    [sted.cmd.mut :as mut]
    [sted.df.github :as dfg]
    [sted.df.async :as a]
+   [sted.sys.eval.sci :as eval-sci]
+   [sted.sys.fmt :as sf]
+   [sted.sys.kbd.map :as skm]
+   [sted.sys.kbd.evt :as ske]
+   [sted.sys.mouse :as sm]
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]])
@@ -54,7 +56,7 @@
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
       :coll/type :keyboard
-      :keymap/bindings (for [[k m] sk/default-keymap]
+      :keymap/bindings (for [[k m] skm/default]
                          {:key/kbd k  :key/mutation m})}
      (assoc (e/seq-tx
              (concat
@@ -113,8 +115,6 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-(declare setup-app)
-
 (rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)
@@ -132,9 +132,10 @@
   [ev]
   (let [tkd (js/performance.now)]
     (when (identical? js/document.body js/document.activeElement)
-      (let [kbd (sk/event->kbd ev)
-            bindings sk/default-keymap
+      (let [kbd (ske/event->kbd ev)
+            bindings skm/default
             mut (get bindings kbd)]
+        (println kbd mut)
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 
@@ -167,80 +168,34 @@
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
    (let [a (core/app conn)]
-     
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
      (doseq [[m f] mut/editing-commands]
        (core/register-simple! a m f))
-     (doto a
-       (core/register-mutation! :kbd
-                                (fn [[_ kbd tkd] db bus]
-                                  (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
-                                    (core/send! bus [mut]))))
-       #_(core/register-mutation! :scroll (fn [_ db _] (scroll/scroll-to-selected!)))
-       (core/register-mutation! :eval-sci (eval-sci/mutatef a))
-       (core/register-simple!
-        :zp
-        (fn [db _]
-          (let [_ (js/console.time "formatting")
-                _ (js/console.time "preparing")
-                _ (zp-hacks/set-options! {:style :fast-hang
-                                          :map {:sort? nil}
-                                          :set {:sort? nil}})
-                sel (get-selected-form db)
-                q (if (= :chain (:coll/type sel))
-                    sel
-                    (peek (nav/parents-vec  sel)))
-                _ (js/console.timeEnd "preparing")
-                _ (js/console.time "stringifying")
-                my-string (e/->string q)
-                _ (js/console.timeEnd "stringifying")
-                _ (js/console.time "zprint")
-                p (zp-hacks/zprint-file-str my-string (:db/id q))
-                _ (js/console.timeEnd "zprint")
-                _ (js/console.time "parsing")
-                pt (e/string->tx p)
-                _ (js/console.timeEnd "parsing")
-                _ (js/console.time "reconciling")
-                ans (vec
-                     (mapcat (fn [a b]
-                               (when-not
-                                   (and (= (:coll/type a) (:coll/type b))
-                                        (= (:token/type a) (:token/type b))
-                                        (= (:token/value a) (:token/value b)))
-                                   (println "!!!! cannot reconcile !!! ")
-                                   (println "A:")
-                                   (println (e/->string a) "\n" (pr-str a))
-                                   (println "B:")
-                                   (println (e/->string b) "\n" (pr-str b))
-                                   (throw (ex-info "cannot reconcile " {})))
-                               (for [k [:form/indent :form/linebreak]
-                                     :when (not= (k a) (k b))]
-                                 (if (k b)
-                                   [:db/add (:db/id a) k (k b)]
-                                   [:db/retract (:db/id a) k (k a)])))
-                             (tree-seq :coll/type e/seq->vec q)
-                             (tree-seq :coll/type e/seq->vec pt)))]
-            (js/console.timeEnd "reconciling")
-            (js/console.timeEnd "formatting")
-            ans)
-          #_(scroll-to-selected!)))
-       (core/register-mutation!
-        :save
-        (fn [_ db bus]
-          (let [sel (get-selected-form db)
-                chain (-> sel
-                          (nav/parents-vec)
-                          (peek)
-                          :coll/_contains
-                          first)
-                file (or (:chain/filename chain) "noname.clj")]
-            (when chain
-              (reset! ml/save-status {:at (:max-tx db)
-                                      :on (:db/id sel)
-                                      :status :saving})
-              (save* file (e/->string chain)))
-            nil)))))))
+     (-> a
+         (core/register-mutation! :kbd
+                                  (fn [[_ kbd tkd] db bus]
+                                    (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
+                                      (core/send! bus [mut]))))
+         (core/register-mutation! :eval-sci (eval-sci/mutatef a))
+         (core/register-simple! :zp (sf/mutatef a))
+         (sm/setup!)
+         (core/register-mutation!
+          :save
+          (fn [_ db bus]
+            (let [sel (get-selected-form db)
+                  chain (-> sel
+                            (nav/parents-vec)
+                            (peek)
+                            :coll/_contains
+                            (first))
+                  file (or (:chain/filename chain) "noname.clj")]
+              (when chain
+                (reset! ml/save-status {:at (:max-tx db)
+                                        :on (:db/id sel)
+                                        :status :saving})
+                (save* file (e/->string chain)))
+              nil)))))))
 
 (defonce the-singleton-db
   (doto (d/create-conn s/schema)
@@ -259,14 +214,31 @@
           tree   (fetch-json (-> commit :tree :url))]
     #_(cljs.pprint/pprint tree)))
 
+(defonce the-app (atom nil))
+
+
 (defn ^:dev/after-load init
   []
+  (some-> @the-app (sm/cleanup!))
+  
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keydown" global-keydown true)
+  
+  (comment
+   (js/document.removeEventListener "mousedown" global-mousedown)
+   (js/document.addEventListener "mousedown" global-mousedown)
+    
+   (js/document.removeEventListener "mouseup" global-mouseup true)
+   (js/document.addEventListener "mouseup" global-mouseup true)
 
+   (js/document.removeEventListener "contextmenu" global-ctxmenu true)
+   (js/document.addEventListener "contextmenu" global-ctxmenu true))
+  
   (some-> the-singleton-db meta :listeners (reset! {}))
-  (let [{:keys [conn bus]} (setup-app the-singleton-db)]
+  (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)]
+    (reset! the-app app)
     (reset! keyboard-bus bus)
+    
     (when-let [req-title (some-> js/window.location.search
                                  (js/URLSearchParams.)
                                  (.get "title"))]

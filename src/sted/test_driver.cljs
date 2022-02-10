@@ -2,7 +2,7 @@
   (:require
    [sted.df.async :as a]
    [rum.core :as rum]
-   [sted.sys.kbd :as sk]
+   [sted.sys.kbd.map :as skm]
    [clojure.set :as set]
    ["puppeteer" :as pt]
    ["process" :as process]
@@ -10,7 +10,7 @@
    ["path" :as path]
    ["fs" :as fs]))
 
-(def inverse-keymap (set/map-invert sk/default-keymap))
+(def inverse-keymap (set/map-invert skm/default-keymap))
 
 (defonce refs (atom {}))
 

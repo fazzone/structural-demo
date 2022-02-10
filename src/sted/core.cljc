@@ -111,7 +111,7 @@
 (defrecord App [conn bus! history])
 
 (defn register-mutation!
-  [{:keys [conn bus]} topic mut-fn]
+  [{:keys [conn bus] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (connect-sub! bus topic ch)
     (go (async/<!
@@ -119,7 +119,8 @@
           (fn [a m]
             (or (mut-fn m @conn bus) a))
           :ok
-          ch)))))
+          ch)))
+    app))
 
 (defn register-simple!
   [{:keys [bus conn history dispatch] :as app} topic mut-fn]
@@ -145,7 +146,8 @@
           (run! prn tx-data))
         (recur (or (get (:tempids report) :db/current-tx)
                    last-tx))))
-    (connect-sub! bus topic ch)))
+    (connect-sub! bus topic ch)
+    app))
 
 (defn movement->mutation
   [mover]

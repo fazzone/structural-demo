@@ -104,10 +104,9 @@
   ([p] "Not working in browser yet"))
 
 (comment
-
   (def fsp (when js/require (js/require "fs/promises")))
   (def path (when js/require (js/require "path")))
-  
+
   (defn uhh
     [p n]
     (let [j (.join path p n)]
