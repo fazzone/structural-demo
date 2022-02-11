@@ -37,18 +37,18 @@
       #_nil
       #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
       [:span.modeline-content {}
-       (if-not sel
-         "(no selection)"
-         (str
-          (:db/id sel)
-          "/0x"
-          (.toString (:max-tx db) 16)
-          " " (some-> sel :nav/pointer meta))
-         #_(str "#" (:db/id sel)
-                " / "
-                (:max-tx db)
-                #_(or (:coll/type sel)
-                      #_(pr-str (d/touch sel)))))])
+       ^String (if-not sel
+                 "(no selection)"
+                 (str
+                  (:db/id sel)
+                  "/0x"
+                  (.toString (:max-tx db) 16)
+                  " " (some-> sel :nav/pointer meta))
+                 #_(str "#" (:db/id sel)
+                        " / "
+                        (:max-tx db)
+                        #_(or (:coll/type sel)
+                              #_(pr-str (d/touch sel)))))])
     
     
     #_(when-some [insp (js/document.getElementById "inspector")]

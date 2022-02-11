@@ -135,7 +135,6 @@
       (let [[mut-name & args :as mut] (async/<! ch)
             db @conn
             tx-data (apply mut-fn db args)
-            _ (run! prn tx-data)
             report (try (and tx-data
                              (assoc (d/transact! conn tx-data)
                                     :mut mut))

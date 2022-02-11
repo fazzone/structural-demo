@@ -201,7 +201,6 @@
 (defn delete-by-eid
   [db eid]
   (let [e (d/entity db eid)]
-    (println "Dbeid" eid)
     (if-not (:form/highlight e)
       (edit/form-delete-tx e)
       (move-and-delete-tx db :move/backward-up :move/next-sibling))))
