@@ -51,10 +51,7 @@
                            'entity    d/entity
                            'q         d/q
                            'freeze    dser/serializable
-                           'thaw      dser/from-serializable
-
-                           
-                           }
+                           'thaw      dser/from-serializable}
                 'js       {'Promise.resolve (fn [p]
                                               (println "Resolver" p)
                                               (js/Promise.resolve p))}
@@ -74,11 +71,7 @@
                        'extend (fn [a b]
                                  (gobj/extend a b))}
                 'a        {'let ^:sci/macro (fn [&form &env bindings & body]
-                                              (println "Macro!Let" &form)
-                                              (prn 'bindings bindings 'body body)
-                                              (let [ret (a/sci-let** bindings body)]
-                                                (println "Ret:Let" ret)
-                                                ret))}
+                                              (a/sci-let** bindings body))}
                 'b  {'encode benc/serialize
                      'decode benc/deserialize}
                 'hn {'stories dfg/stories}
@@ -155,9 +148,7 @@
     (when ea
       (into [e] ea))))
 
-
-
-(defn xd
+(defn nav-root
   [conn po]
   (fn []
     (let [db @conn
@@ -165,7 +156,7 @@
                 (if-let [[_ _ _ t] (d/datoms db :eavt (:db/id ch) :chain/selection)]
                   t
                   (:db/id ch)))
-          ni (fn nav-impl [c k v]
+          nav-entity (fn nav-impl [c k v]
                (js/console.log "At" (:max-tx @conn) "Nav you " c k v )
                (if (number? k)
                  (d/entity db k)))]
@@ -173,8 +164,8 @@
         {:max-tx (:max-tx db)
          :prints (deref po) 
          :ctl '[transact!]
-         :state (d/entity db :sted.page/state)}
-        {`p/nav ni}))))
+         :db (d/entity db :sted.page/state)}
+        {`p/nav nav-entity}))))
 
 (defn mutatef
   [{:keys [conn bus] :as app}]
@@ -183,13 +174,11 @@
         ctx  (-> (sci-opts app #_{:bindings {'sel sel#}})
                  (sci/init)
                  (sci/merge-opts {:bindings {'sel sel#
-                                             'xd (xd conn unbound-prints)
-                                             'transact! (transactor conn)}}))
-        ]
+                                             'sted (nav-root conn unbound-prints)
+                                             'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
     (sci/alter-var-root sci/print-fn (fn [_]
                                        (fn [msg]
-                                         (js/console.log "Var root babyyyyyyyy" msg)
                                          (swap! unbound-prints conj msg))))
     (fn [_ db bus]
       (let [eval-target                  (get-selected-form db)
@@ -217,11 +206,9 @@
                               (case (:coll/type eval-context)
                                 (:vec :list) (datafy/nav ptr nil k)
                                 (:map :set)  (datafy/nav ptr k (get ptr k)))))
-                     :eval #_(sci/binding [sel# eval-target
-                                         sci/print-newline true
+                     :eval (sci/binding [sel# eval-target
                                          sci/print-fn (fn [m] (swap! print-output conj m))]
-                             (sci/eval-string* ctx (e/->string eval-context)))
-                     (sci/eval-string* ctx (e/->string eval-context)))
+                             (sci/eval-string* ctx (e/->string eval-context))))
                    #?@ (:clj [(success)]
                         :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
                (catch :default ex (js/console.error "sci exception" ex) (failure ex))))))))
