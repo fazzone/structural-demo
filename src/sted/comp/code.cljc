@@ -29,11 +29,51 @@
 
 (declare form)
 
+(defn make-iobs
+  []
+  ;; hack - must specify these in px, ex/em not allowed
+  (let [memory (atom nil)]
+   (->> #js {:rootMargin "0px 0px -20px 0px" :threshold #js [0]}
+        (js/IntersectionObserver.
+         (fn [ents me]
+           (when-not (core/scroll-locked?)
+             (loop [[ioe & more] ents
+                    did-scroll nil]
+               (cond (nil? ioe) nil
+                     (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
+                     :else (do (if did-scroll
+                           (js/console.log "What does this mean?")
+                           (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+                         (recur more true))))))))))
+
+(def the-iobs (make-iobs))
+
+(def scroll-selected
+  {:did-update
+   (fn [state]
+     (let [sel? (some-> state :rum/args first :form/highlight)
+           prev-sel? (some-> state ::prev-sel?)]
+       (when the-iobs
+         (if-not (or sel? prev-sel?)
+           state
+           (let [el (rum/dom-node state)
+                 real-el (if-not (= "S" (.-tagName el) )
+                           el
+                           (.-nextElementSibling el))]
+             (if sel?
+               (do (.observe the-iobs real-el)
+                   (assoc state ::prev-sel? true))
+               (do (.unobserve the-iobs real-el)
+                   (assoc state ::prev-sel? nil))))))))})
+
 (defn computed-indent
   [e indent-prop]
   (+ indent-prop
      (or (:form/indent e)
+         
+         
          0)))
+
 
 (rum/defc indenter
   [nl? ip fi]
@@ -43,8 +83,8 @@
      (when nl? "\n")
      (when fi
        #_[:span.indenter
-        {:style {:color "cadetblue"}}
-        (apply str (repeat fi "-"))]
+          {:style {:color "cadetblue"}}
+          (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
 
 (rum/defc top-level-form
@@ -100,12 +140,25 @@
      ^:inline (form f bus 0 nil))])
 
 (rum/defc bar [b bus classes]
-  (prn 'bar b )
-  [:div.bar.hide-scrollbar
-   {:class classes}
-   (for [chain-head (e/seq->vec b)]
-     (-> (form chain-head bus 0 nil)
-         (rum/with-key (:db/id chain-head))))])
+  (prn 'bar b)
+  (let [iobs (make-iobs)
+        ref-me (rum/create-ref)]
+    ;; rum/bind-context [cc/*bar-iobs* [iobs ref-me]]
+    [:div.bar.hide-scrollbar
+     {:class classes}
+     #_[:div {:style {:min-width "60em"
+                    :height "1000ex"
+                    :background-color "tomato"}}
+      "What's this"
+      [:object
+       {:type "application/pdf"
+        :data "Genera_User_s_Guide.pdf"
+        :width "100%"
+        :height "100%"}]]
+     
+     (for [chain-head (e/seq->vec b)]
+       (-> (form chain-head bus 0 nil)
+           (rum/with-key (:db/id chain-head))))]))
 
 
 (rum/defc aliasc [{:alias/keys [of] :as a} bus classes]
@@ -243,44 +296,7 @@
     :char v
     :regex (str "REGEX:" v)))
 
-(def the-iobs
-  (->> #js {:rootMargin "0px" :threshold #js [0 1]}
-       (js/IntersectionObserver.
-        (fn [ents me]
-          (println "Observed" (count ents ) "entries")
-          (loop [i 0
-                 el nil
-                 need-scroll? false]
-            (if (= i (alength ents))
-              (when need-scroll?
-                #_(.unobserve me el)
 
-                (scroll/scroll-to-selected* el))
-              (let [^js/IntersectionObserverEntry ioe (aget ents i)
-                    tgt (.-target ioe)]
-                (recur (inc i) tgt
-                       (or need-scroll?
-                           (and (.-rootBounds ioe)
-                                (> 1 (.-intersectionRatio ioe))
-                                #_(not (.-isIntersecting ioe))))))))))))
-
-
-(def scroll-selected
-  {:did-update
-   (fn [state]
-     (let [sel? (some-> state :rum/args first :form/highlight)
-           prev-sel? (some-> state ::prev-sel?)]
-       (if-not (or sel? prev-sel?)
-         state
-         (let [el (rum/domf-node state)
-               real-el (if-not (= "S" (.-tagName el) )
-                         el
-                         (.-nextElementSibling el))]
-           (if sel?
-             (do (.observe the-iobs real-el)
-                 (assoc state ::prev-sel? true))
-             (do (.unobserve the-iobs real-el)
-                 (assoc state ::prev-sel? nil)))))))})
 
 
 (rum/defc form

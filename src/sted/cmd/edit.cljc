@@ -251,9 +251,6 @@
          [:db/add (:db/id spine) :seq/next (:db/id nnext)]
          [:db/retract (:db/id spine) :seq/next (:db/id next)])])))
 
-;; [a [b c] d] -> [a [b] c d]
-
-
 (defn barf-right-tx
   [e]
   (let [spine     (some-> e :seq/_first exactly-one)
@@ -264,7 +261,6 @@
                       (recur n)
                       s))
         penult    (some-> last-cons :seq/_next exactly-one)]
-    #_(println "E" (:db/id e) "Spine" (:db/id spine) "Coll" (:db/id coll) "Next" (:db/id next) "PU" (:db/id penult) "LC" (:db/id last-cons))
     (cond
       (nil? (:coll/type e)) (recur coll)
       (= :bar (:coll/type coll)) nil
@@ -305,28 +301,38 @@
    (let [parent (exactly-one (:coll/_contains target))]
      (if (= :chain (:coll/type parent))
        (edit-new-wrapped* insert-after-tx target from :list "" props)
-       (insert-editing* insert-after-tx target from props)))))
+       (let [indent-props (select-keys target [:form/linebreak :form/indent])]
+         (insert-editing* insert-after-tx target from
+                          (cond->> props
+                            (:coll/type target) (merge indent-props))))))))
+
 
 (defn form-split-tx
   [e]
   ;; split the parent, making sel the first of a new coll of the same type
-  (let [spine (some-> e :seq/_first exactly-one)
-        coll  (some-> e :coll/_contains exactly-one)
-        prev  (some-> spine :seq/_next exactly-one)
-        tail  (e/seq->vec spine)
-        newc  {:db/id          "newc"
-               :seq/first      (:db/id e)
-               :coll/type      (:coll/type coll)
-               :coll/_contains (:db/id coll)}]
-    (when coll
-      (into [newc
-             [:db/add (:db/id spine) :seq/first "newc"]]
-            (concat
-             (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
-             (for [t tail] [:db/add     "newc"        :coll/contains (:db/id t)])
-             (when-let [sn (:seq/next spine)]
-               [[:db/retract (:db/id spine) :seq/next (:db/id sn)]
-                [:db/add     "newc"         :seq/next (:db/id sn)]]))))))
+  (let [spine       (some-> e :seq/_first exactly-one)
+        next        (some-> spine :seq/next)
+        coll        (some-> e :coll/_contains exactly-one)
+        outer-coll  (some-> coll :coll/_contains exactly-one)
+        outer-spine (some-> coll :seq/_first exactly-one)
+        prev        (some-> spine :seq/_next exactly-one)
+        tail        (e/seq->vec spine)]
+    (when outer-coll
+      (if (nil? prev)
+        (if-let [n (:seq/first next)]
+          (recur n))
+        (into [{:db/id          "cons"
+                :seq/first (:db/id spine)}
+               [:db/add (:db/id spine) :coll/type (:coll/type coll)]
+               [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)]
+               [:db/add (:db/id outer-spine) :seq/next "cons"]
+               (when prev
+                 [:db/retract (:db/id prev) :seq/next (:db/id spine)])
+               (when-let [sn (:seq/next spine)]
+                 [:db/add "cons" :seq/next (:db/id sn)])]
+              (concat
+               (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
+               (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))
 
 (defn form-splice-tx
   ([e] (form-splice-tx (move/move :move/up e) e))
@@ -392,16 +398,15 @@
   (when-let [parent (some-> (:coll/_contains e) exactly-one)]
     (when-not (= :chain (:coll/type parent))
       (let [{:form/keys [linebreak indent]} parent
-            tombstone {:db/id "ts" :coll/type :tear}]
-        (into [tombstone
+            ts {:db/id "tombstone" :coll/type :tear}]
+        (into [ts
                [:db/add (:db/id parent) :form/edited-tx :db/current-tx]
                (when linebreak [:db/add (:db/id e) :form/linebreak linebreak])
                (when indent [:db/retract (:db/id parent) :form/indent indent])
                (when indent [:db/add (:db/id e) :form/indent indent])]
-              (concat
-               (form-overwrite-tx e (:db/id tombstone))
-               (form-replace-tx parent e)
-               (m-to-dc parent)))))))
+              (concat (form-overwrite-tx e (:db/id ts))
+                      (form-replace-tx parent e)
+                      (m-to-dc parent)))))))
 
 
 (defn unraise-tx

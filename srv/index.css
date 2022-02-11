@@ -215,7 +215,8 @@ textarea.edit-box {
 }
 .bar {
     /* height: 100%; */
-    max-height: calc(100% - 3ex);
+    /* max-height: calc(100% - 3ex); */
+    height: calc(100% - 3ex);
     width: 100%;
     overflow-x: auto;
     display: flex;
@@ -234,18 +235,17 @@ textarea.edit-box {
     padding-left: 1ch;
     overflow-y: scroll;
     white-space: pre;
-    /* min-width: min-content; */
+    min-width: min-content;
     padding-top: 2px;
     padding-bottom: 2px;
     /* width: 100%; */
 }
 
-/* .hide-scrollbar { */
-/*     -ms-overflow-style: none; */
-/*     scrollbar-width: none; */
-/* } */
-/* .hide-scrollbar::-webkit-scrollbar { display: none; } */
-
+.hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
 
 /* .hide-scrollbar { overflow: overlay !important; } */
 
@@ -555,4 +555,16 @@ s { text-decoration: none; }
 .hlp.unique-text {
     background-color: #e1ff1c6e;
     border-color: #e1ff1c6e;
+}
+
+
+.chain-tag {
+    margin-top: 0.5ex;
+    margin-bottom: 0.5ex;
+    border-radius: 1ex;
+    background-color: #111;
+}
+.chain-title {
+    font-size: 125%;
+    text-align: center;
 }

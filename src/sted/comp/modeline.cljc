@@ -10,13 +10,15 @@
    [sted.comp.edit-box :as eb]
    [sted.comp.inspect :as ci]
    [sted.core :as core :refer [get-selected-form
-                               move-selection-tx]]))
+                               move-selection-tx]]
+   [goog.string :as gstring]))
 
 (def save-status (atom nil))
 
 (rum/defc modeline-inner < rum/reactive
   [sel bus rec eps]
-  (let [{:keys [^String text valid]} (some-> eps rum/react)]
+  (let [db (d/entity-db sel)
+        {:keys [^String text valid]} (some-> eps rum/react)]
    [:span {:class (str "modeline code-font"
                        #_(if text " editing modeline-search" " modeline-fixed")
                        "modeline-fixed"
@@ -31,19 +33,26 @@
            :error "Error"
            "")))]
     (if text
-      (do ^:inline (cs/results (d/entity-db sel) bus :token/value text rec))
+      (do ^:inline (cs/results db bus :token/value text rec))
       #_nil
       #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
-      [:span.modeline-content
+      [:span.modeline-content {}
        (if-not sel
          "(no selection)"
-         (str "#" (:db/id sel)
-              " "
-              (or (:coll/type sel)
-                  #_(pr-str (d/touch sel)))))])
+         (str
+          (:db/id sel)
+          "/0x"
+          (.toString (:max-tx db) 16)
+          " " (some-> sel :nav/pointer meta))
+         #_(str "#" (:db/id sel)
+                " / "
+                (:max-tx db)
+                #_(or (:coll/type sel)
+                      #_(pr-str (d/touch sel)))))])
+    
     
     #_(when-some [insp (js/document.getElementById "inspector")]
-      (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
+        (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
     
     #_[:input.edit-box.code-font {:type :text}]]))
 

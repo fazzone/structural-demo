@@ -8,6 +8,12 @@
        [cljs.core.async.macros :refer [go
                                        go-loop]])))
 
+;; This is a really stupid hack
+;; But a div that fights back when you try to scroll is even stupider 
+(def scroll-sequence-number (volatile! 0))
+(def scroll-snapshot (volatile! 0))
+(defn scroll-locked? [] (not= @scroll-sequence-number @scroll-snapshot))
+
 (defn get-selected-form
   [db]
   (d/entity db [:form/highlight true]))
@@ -129,6 +135,7 @@
       (let [[mut-name & args :as mut] (async/<! ch)
             db @conn
             tx-data (apply mut-fn db args)
+            _ (run! prn tx-data)
             report (try (and tx-data
                              (assoc (d/transact! conn tx-data)
                                     :mut mut))
@@ -225,6 +232,7 @@
                                                             e)))
                                                   tx-data)
                                          as (into #{} (map (fn [[_ a]] a)) tx-data)]
+                                     (vreset! scroll-snapshot @scroll-sequence-number)
                                      (js/ReactDOM.unstable_batchedUpdates
                                       (fn []
                                         (doseq [e es]

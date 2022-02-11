@@ -38,58 +38,16 @@
 (defn linebreak-selected-form-tx
   [db]
   (let [sel           (get-selected-form db)
-        parent-indent (:form/indent (move/move :move/up sel))]
+        parent-indent (:form/indent (move/move :move/up sel))
+        pre-lb        (:form/linebreak sel)]
     #_(println "PArentindent" parent-indent)
-    [[:db/add (:db/id sel) :form/linebreak (not (:form/linebreak sel))]
-     (when parent-indent
-       [:db/add (:db/id sel) :form/indent parent-indent])]))
-
-#_(defn recursive-multiline
-  [db]
-  (println "Mtlin")
-  (letfn [(go [[e & es] ind idx acc]
-              (println "Go" e ind idx acc)
-              (cond
-                (nil? e) acc
-                
-                (and (zero? idx) (nil? (:coll/type e)))
-                (do (println "Leafy")
-                    (recur es ind (inc idx) acc))
-                
-                (not (zero? idx))
-                (do
-                  (println "First" (when-not es "And last"))
-                  (if-not es
-                    acc
-                    (recur es ind (inc idx)
-                           (conj acc [:db/add (:db/id e) :form/indent ind]))))
-                
-                (nil? (:coll/type e))
-                (do (println "Not CT")
-                    (recur es ind (inc idx)
-                           (conj acc
-                                 [:db/add (:db/id e) :form/indent ind]
-                                 [:db/add (:db/id e) :form/linebreak true])))
-                
-                :else
-                (let [ch (e/seq->vec e)]
-                  (println (count ch) "children")
-                  (go ch (+ 2 ind) 0 acc))
-                
-                #_(do
-                    (println "Reducey")
-                    (reduce (fn [a [i ch]]
-                              (go ch (+ 2 ind) i a))
-                            acc
-                            (map vector (range) (e/seq->vec e))))))]
-    (doto
-        (go (list (get-selected-form db)) 0 0 [])
-      (prn )
-      )))
-
+    [(if pre-lb
+       [:db/retract (:db/id sel) :form/linebreak true]
+       [:db/add (:db/id sel) :form/linebreak true])
+     (when (not pre-lb)
+       [:db/retract (:db/id sel) :form/indent (:form/indent sel)])]))
 (defn recursive-multiline
   [db]
-  (println "Mtlin")
   (letfn [(fnlike [tt]
             (case tt (:symbol :keyword) true false))
           (+txe [acc e lb ind]
@@ -99,7 +57,6 @@
                   d-ind   (if (zero? ind) nil ind)
                   nop-ind (= d-ind pre-ind)
                   nop-lb  (= (some? lb) (some? pre-lb))]
-              (println "Go" pre-ind "=>" d-ind (e/->string e) )
               (if (and nop-ind nop-lb)
                 acc
                 (cond-> acc
@@ -111,8 +68,6 @@
                           [:db/retract (:db/id e) :form/indent]
                           [:db/add (:db/id e) :form/indent d-ind]))))))
           (go [[e & es] ind idx acc]
-              
-              (println "Go" idx (e/->string e))
               (cond
                 (nil? e) acc
                 
@@ -133,15 +88,30 @@
                            (e/->string e))
                   (if-not es
                     (recur ch (+ 2 ind) 0 (into acc rec))
-                    (recur es ind (inc idx) (into acc rec)))
-                  #_(reduce into
-                            (map (fn [c]
-                                   (go ch (+ 2 ind) 0 []))
-                                 ch)))))]
-    (let [t (go (e/seq->vec (get-selected-form db)) 2 0 [])]
-      (println "T=")
-      (run! prn t)
-      t)))
+                    (recur es ind (inc idx) (into acc rec))))))]
+    (go (e/seq->vec (get-selected-form db)) 2 0 [])))
+
+
+(defn recursive-oneline
+  [db]
+  (println "Oneline" (get-selected-form db))
+  (let [a
+        (->> (get-selected-form db)
+             (tree-seq :coll/contains :coll/contains)
+             (next)
+             (keep (fn [e]
+                     (prn (keys e))
+                     (when (:form/linebreak e)
+                       (cond-> [[:db/retract (:db/id e) :form/linebreak (:form/linebreak e)]]
+                         (:form/indent e) (conj [:db/retract (:db/id e) :form/indent ])))
+                     #_(cond-> []
+                         (:form/indent e)    (conj [:db/retract (:db/id e) :form/indent (:db/id e)])
+                         (:form/linebreak e) (conj [:db/retract (:db/id e) :form/linebreak (:db/id e)])
+                         #_(= [])              #_(do nil))))
+             (reduce into))]
+    (run! prn a)
+    a
+    ))
 
 #_(defn select-1based-nth-reverse-parent
   [sel n]
@@ -228,6 +198,30 @@
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
 
+(defn delete-by-eid
+  [db eid]
+  (let [e (d/entity db eid)]
+    (println "Dbeid" eid)
+    (if-not (:form/highlight e)
+      (edit/form-delete-tx e)
+      (move-and-delete-tx db :move/backward-up :move/next-sibling))))
+
+(defn clear-one-eval
+  [db]
+  (let [sel (get-selected-form db)
+        top-level (peek (nav/parents-vec sel))
+        chain     (some-> top-level :coll/_contains edit/exactly-one)
+        ch-set (->> (:db/id chain)
+                    (d/datoms db :avet :coll/contains)
+                    (into #{} (map first)))]
+    (some->> (d/rseek-datoms db :eavt (:db/id chain) :coll/contains)
+             (take-while (fn [[e]] (= e (:db/id chain))))
+             (keep (fn [[_ _ v t]]
+                     (when (seq (d/datoms db :eavt v :eval/of))
+                       v)))
+             (first)
+             (delete-by-eid db))))
+
 (defn ingest-nav-assoc
   [[[k v] & kvs]]
   (let [e (e/new-tempid)]
@@ -275,7 +269,7 @@
 (defn ingest-eval-result
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node (-> (e/->tx* c)
+        new-node (-> (e/->tx c)
                      (update :db/id #(or % "new-node")))
         outer {:db/id "outer"
                :coll/type :eval-result
@@ -299,7 +293,7 @@
 (defn ingest-after
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node  (-> (e/->tx* c)
+        new-node  (-> (e/->tx c)
                       (update :db/id #(or % "new-node")))]
     (into [new-node]
           #_(edit/insert-before-tx top-level new-node)
@@ -309,7 +303,7 @@
   [et c]
   (let [top-level (peek (nav/parents-vec et))
         prev (move/move :move/prev-sibling top-level)
-        result-node (-> (e/->tx* c)
+        result-node (-> (e/->tx c)
                         (update :db/id #(or % "import-formdata-tx")))]
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
@@ -394,7 +388,7 @@
 (defn stitch*
   [sel e]
   (when-let [head (:seq/first e)]
-    (let [text (->> (tree-seq :coll/type e/seq->vec e)
+    (let [text (->> (tree-seq :coll/contains :coll/contains e)
                     (keep :token/value)
                     (apply str))]
       (into (vector (assoc (e/parse-token-tx text) :db/id (:db/id head)))
@@ -422,7 +416,7 @@
   (letfn [(try-split [[head & more :as groups]]
             (when more groups))]
     (or (try-split (string/split s #"\s+"))
-        (try-split (string/split s (tear-re "[:\\.\\-_\\$/]")))
+        (try-split (string/split s (tear-re "[:\\.\\-_\\$/<>]")))
         (try-split (string/split s #"(?<=[^A-Z])(?=[A-Z])")))))
 
 (defn tear*
@@ -510,7 +504,7 @@
           (concat (edit/insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "newnode")))))
 
-(defn drag*
+#_(defn drag*
   [chain-mover chain-inserter sel]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
@@ -519,12 +513,13 @@
                         (:seq/first other-chain))
         target-tl   (peek (nav/parents-vec target))
         ;; new-sel (move/move :move/backward-up sel)
-]
+        ]
     (into (edit/form-unlink-tx sel)
           (cond
             target-tl
-            (concat (edit/insert-before-tx target-tl sel)
-                    #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
+            (concat
+             (edit/insert-before-tx target-tl sel)
+             #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
             (and chain (nil? other-chain))
             (let [new-chain {:db/id "newchain"
                              :coll/type :chain
@@ -533,6 +528,34 @@
               (concat [new-chain]
                       (chain-inserter chain new-chain)
                       #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
+
+(defn drag-to-chain-selection
+  [chain-inserter sel target]
+  (let [top (peek (nav/parents-vec target))]
+    (into (edit/form-unlink-tx sel)
+          (edit/insert-before-tx top sel))))
+
+(defn drag-to-head-of-chain
+  [chain-inserter sel target-chain]
+  (into (edit/form-unlink-tx sel)
+        (edit/form-cons-tx sel target-chain)))
+
+(defn drag*
+  [chain-mover chain-inserter sel]
+  (let [top-level   (peek (nav/parents-vec sel))
+        chain       (some-> top-level :coll/_contains edit/exactly-one)
+        other-chain (move/move chain-mover chain)
+        target      (:chain/selection other-chain)]
+    (into (edit/form-unlink-tx sel)
+          (if-let [top (peek (nav/parents-vec target))]
+            (edit/insert-before-tx top sel)
+            (if other-chain
+              (edit/form-cons-tx sel other-chain)
+              (let [nc {:db/id         "newchain"
+                        :coll/type     :chain
+                        :coll/contains (:db/id sel)
+                        :seq/first     (:db/id sel)}]
+                (into [nc] (chain-inserter chain nc))))))))
 
 (def drag-left-tx  (partial drag* :move/prev-sibling edit/insert-before-tx))
 
@@ -548,8 +571,6 @@
                      (merge props))]
     (into [new-node]
           (edit/insert-after-tx chain new-node))))
-
-
 
 (def movement-commands
   {:select (fn [e eid] (d/entity (d/entity-db e) eid))
@@ -659,6 +680,8 @@
    :splice                (comp edit/form-splice-tx get-selected-form)
    :offer                 (comp edit/offer-tx get-selected-form)
    :multiline             recursive-multiline
+   :oneline               recursive-oneline
+   :clear-one-eval        clear-one-eval
    
    :ingest-result (fn [db et data]
                     (let [top-level  (peek (nav/parents-vec et))

@@ -1,67 +1,63 @@
-(ns sted.comp.scroll)
+(ns sted.comp.scroll
+  (:require [sted.comp.common :as cc]))
 
 (def ^:const scroll-hysteresis-px 3)
+(defn do-hysteresis
+  [pos npos]
+  (when-not (< (- scroll-hysteresis-px)
+               (- pos npos)
+               (+ scroll-hysteresis-px))
+    npos))
 
 (defn scroll-1d
-  [size h pos off]
-  (let [align-bottom (- off (- size h))
-        top-closer? (< (js/Math.abs (- pos off))
-                       (js/Math.abs (- pos align-bottom)))
-        [best other] (if (or top-closer? (> h size))
-                       [off align-bottom]
-                       [align-bottom off])]
-    (if-not (< (- scroll-hysteresis-px) (- pos best) scroll-hysteresis-px)
-      (int best))))
+  [outer-size inner-size pos off]
+  (let [align-start off
+        align-end (- off (- outer-size inner-size))]
+    (do-hysteresis
+     pos
+     (if (< (js/Math.abs (- pos align-start))
+            (js/Math.abs (- pos align-end)))
+       align-start
+       align-end))))
 
 (defn scroll-to-selected*
-  [el]
-  (let [tl            (some-> el (.closest ".form-card"))
-        chain         (some-> (or tl el) (.closest ".chain"))
-        bar           (some-> chain (.closest ".bar"))
-        chain-height  (some-> chain (.-clientHeight))
-        bar-width     (some-> bar (.-clientWidth))
-        ;; fit the entire toplevel if we can, otherwise just the selection
-        tlh           (some-> tl (.getBoundingClientRect) (.-height) (js/Math.ceil))
-        elh           (some-> el (.getBoundingClientRect) (.-height) (js/Math.ceil))
-        vst           (if (< tlh chain-height) tl  el)
-        h             (if (< tlh chain-height) tlh elh)
-        vpos          (some-> chain (.-scrollTop))
-        voff          (some-> vst (.-offsetTop))
-        new-chain-top (and tl chain (scroll-1d chain-height h vpos voff))
-        w             (some-> chain (.getBoundingClientRect) (.-width) (js/Math.ceil))
-        hpos          (some-> bar (.-scrollLeft))
-        hoff          (some-> chain (.-offsetLeft))
-        new-bar-left  (and bar (scroll-1d bar-width w hpos hoff))]
-    #_(js/console.log "Tl" tl "Chain" chain "Bar" bar)
-    #_(println "================================Scroll"
-             "\nChain-height" chain-height
-             "\nBar-width" bar-width
-             "\nTLH" h
-             "vpos" vpos
-             "voff" voff
-             "\nCHW" w
-             "hpos" hpos
-             "hoff" hoff
-             "\nCan fit?" (< h chain-height)
-             ;; "Vis?" [vpos voff (+ h voff) (+ vpos chain-height)]
-             ;; "Already visible?"  (not (< vpos voff (+ h voff)
-             ;;                             (+ vpos chain-height)))
-             ;; "\nAlways scroll?" always
-             "\nNCT" new-chain-top
-             )
-    #_(when (> h chain-height)
-      (println "Too bigby " (- h chain-height) h chain-height)
-      (println "NCT" new-chain-top))
-    (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
-    (when new-bar-left  (.scrollTo bar   #js {:left new-bar-left}))))
+  [el el-cr]
+  (let [tl       (some-> el (.closest ".form-card"))
+        tl-cr    (some-> tl (.getBoundingClientRect))
+        chain    (some-> (or tl el) (.closest ".chain"))
+        chain-cr (some-> chain (.getBoundingClientRect))
+        chh      (some-> chain-cr (.-height))
+        chw      (some-> chain-cr (.-width))
+        tlh      (some-> tl-cr (.-height) (js/Math.ceil))
+        tlw      (some-> tl-cr (.-height) (js/Math.ceil))
+        elh      (some-> el-cr (.-height) (js/Math.ceil))
+        ;; fit entire toplevel if possible
+        vst      (if (< tlh chh) tl el)
+        h        (max tlh elh)
+        vpos     (some-> chain (.-scrollTop))
+        voff     (some-> vst (.-offsetTop))
+        bar      (some-> chain (.closest ".bar"))
+        bar-cr   (some-> bar (.getBoundingClientRect))
+        barw     (some-> bar-cr (.-width))
+        w        (some-> chain-cr (.-width) (js/Math.ceil))
+        hpos     (some-> bar (.-scrollLeft))
+        hoff     (some-> chain (.-offsetLeft))
+        
+        new-chain-top (and tl chain (scroll-1d chh h vpos voff))
+        new-bar-left  (and bar (scroll-1d barw w hpos hoff))]
+    (when new-chain-top
+      (.scrollTo chain #js {:top new-chain-top}))
+    (when new-bar-left
+      (.scrollTo bar #js {:left new-bar-left}))))
 
-#_(defn scroll-to-selected!
-  ([] (scroll-to-selected! true))
-  ([always]
+(defn scroll-to-selected!
+  ([]
    (let [[el & more :as els] (js/document.querySelectorAll ".selected")]
      (when more
-       (js/console.log "More than one selected element!" els))
-     (scroll-to-selected* el always))))
+       (js/console.log "There should be one selected element!" els))
+     (if-not el
+       (js/console.log "There should be one selected element!" )
+       (scroll-to-selected* el (.getBoundingClientRect el))))))
 
 
 

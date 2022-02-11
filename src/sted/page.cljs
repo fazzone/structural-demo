@@ -15,6 +15,7 @@
    [sted.comp.cons :as cc]
    [sted.comp.edit-box :as eb]
    [sted.comp.code :as code]
+   [sted.comp.scroll :as csc]
    [sted.comp.common :as ccommon]
    [sted.comp.modeline :as ml]
    [sted.cmd.move :as move]
@@ -37,7 +38,8 @@
                                    go-loop]]
    [sted.macros :as m]))
 
-(def test-form-data-bar (e/string->tx-all (m/macro-slurp "srv/index.cljc")))
+
+(def test-form-data-bar (e/string->tx-all (m/macro-slurp "src/sted/user.clj")))
 
 (def init-tx-data
   
@@ -115,11 +117,13 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
+
+
 (rum/defc root-component
   [db bus]
   (let [state (d/entity db ::state)
         ml-ref (rum/create-ref)]
-    [:div.bar-container {} #_(test-image)
+    [:div.bar-container {}
      (rum/bind-context [ccommon/*modeline-ref* ml-ref]
                        (code/form (:state/bar state) bus 0 nil))
      [:div.modeline-outer {:id "modeline" :ref ml-ref}]
@@ -135,7 +139,7 @@
       (let [kbd (ske/event->kbd ev)
             bindings skm/default
             mut (get bindings kbd)]
-        (println kbd mut)
+        #_(println kbd mut)
         (core/send! @keyboard-bus [:kbd kbd tkd])
         (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
 
@@ -179,7 +183,9 @@
                                       (core/send! bus [mut]))))
          (core/register-mutation! :eval-sci (eval-sci/mutatef a))
          (core/register-simple! :zp (sf/mutatef a))
+         (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
          (sm/setup!)
+         
          (core/register-mutation!
           :save
           (fn [_ db bus]
@@ -216,6 +222,9 @@
 
 (defonce the-app (atom nil))
 
+(defonce set-scroll-user
+  (fn [ev]
+    (vswap! core/scroll-sequence-number inc)))
 
 (defn ^:dev/after-load init
   []
@@ -223,16 +232,17 @@
   
   (js/document.removeEventListener "keydown" global-keydown true)
   (js/document.addEventListener "keydown" global-keydown true)
+  (js/document.addEventListener "scroll" set-scroll-user true)
   
-  (comment
-   (js/document.removeEventListener "mousedown" global-mousedown)
-   (js/document.addEventListener "mousedown" global-mousedown)
+  #_(comment
+      (js/document.removeEventListener "mousedown" global-mousedown)
+      (js/document.addEventListener "mousedown" global-mousedown)
     
-   (js/document.removeEventListener "mouseup" global-mouseup true)
-   (js/document.addEventListener "mouseup" global-mouseup true)
+      (js/document.removeEventListener "mouseup" global-mouseup true)
+      (js/document.addEventListener "mouseup" global-mouseup true)
 
-   (js/document.removeEventListener "contextmenu" global-ctxmenu true)
-   (js/document.addEventListener "contextmenu" global-ctxmenu true))
+      (js/document.removeEventListener "contextmenu" global-ctxmenu true)
+      (js/document.addEventListener "contextmenu" global-ctxmenu true))
   
   (some-> the-singleton-db meta :listeners (reset! {}))
   (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)]

@@ -4,6 +4,7 @@
            [java.util.zip ZipOutputStream ZipInputStream ZipEntry]
            [java.io ByteArrayOutputStream]))
 
+[a b]
 (defn bb-selfextractor
   [exe args]
   (let [name "bb.exe"

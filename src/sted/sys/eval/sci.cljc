@@ -13,7 +13,9 @@
             [sted.df.async :as a]
             [clojure.datafy :as datafy]
             [clojure.string :as string]
-            [sted.core :as core :refer [get-selected-form]]))
+            [sted.core :as core :refer [get-selected-form]]
+            [sted.sys.eval.sci.protocols :as esp]
+            [goog.object :as gobj]))
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                         :clj nil))
@@ -24,73 +26,91 @@
                         (aget "list_dir"))]
     (.then (f p) js->clj)))
 
+(defn list-chains
+  [db]
+  )
+
+(defn transactor
+  [conn]
+  (fn [tx-data]
+    (js/Promise.
+     (fn [resolve reject]
+       (let [tx-report (d/transact! conn tx-data)]
+         (js/setTimeout
+          (fn []
+            (resolve {:tx-data (:tx-data tx-report)
+                      :tempids (:tempids tx-report)}))
+          0))))))
+
 (defn sci-opts
-  ([app] (sci-opts app nil))
-  ([{:keys [conn bus] :as app} {:keys [namespaces bindings]}]
-   {:classes    {'js goog/global :allow :all}
-    :namespaces (-> {'d        {'datoms    d/datoms
-                                'touch     d/touch
-                                'entity-db d/entity-db
-                                'entity    d/entity
-                                'q         d/q
-                                'freeze    dser/serializable
-                                'thaw      dser/from-serializable}
-                     'js       {'Promise.resolve (fn [p]
-                                                   (println "Resolver" p)
-                                                   (js/Promise.resolve p))}
-                     'df.async {'do ^:sci/macro (fn [&form &env & body]
-                                                  (println "Macro!" &form body)
-                                                  (let [ret (a/do* body)]
-                                                    (println "Ret:Do" ret)
-                                                    ret))}
-                     'dom {'qsa (fn [s] (vec (js/document.querySelectorAll s)))
+  [{:keys [conn bus] :as app}]
+  {:classes    {'js goog/global :allow :all}
+   :namespaces {'d        {'datoms    d/datoms
+                           'touch     d/touch
+                           'entity-db d/entity-db
+                           'entity    d/entity
+                           'q         d/q
+                           'freeze    dser/serializable
+                           'thaw      dser/from-serializable
+
+                           
+                           }
+                'js       {'Promise.resolve (fn [p]
+                                              (println "Resolver" p)
+                                              (js/Promise.resolve p))}
+                'df.async {'do ^:sci/macro (fn [&form &env & body]
+                                             (println "Macro!" &form body)
+                                             (let [ret (a/do* body)]
+                                               (println "Ret:Do" ret)
+                                               ret))}
+                'dom      {'qsa (fn [s] (vec (js/document.querySelectorAll s)))
                            'ecl (fn [s] (vec (js/document.getElementsByClassName s)))
-                           'qs  (fn [s] (js/document.querySelector s))
-                           'eid (fn [s] (js/document.getElementById s))}
-                     'di       {'element   rdi/element
-                                'interpret rdi/interpret}
-                     'a        {'let ^:sci/macro (fn [&form &env bindings & body]
-                                                   (println "Macro!Let" &form)
-                                                   (prn 'bindings bindings 'body body)
-                                                   (let [ret (a/sci-let** bindings body)]
-                                                     (println "Ret:Let" ret)
-                                                     ret))}
-                     
-                     'b {'encode benc/serialize
-                         'decode benc/deserialize}
-                     'hn {'stories dfg/stories}
-                     #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
-                                     'all     (fn [a b c] (js/Promise.all a b c))}])}
-                    (merge namespaces))
-    :bindings (-> {'send!  (fn [m] (core/send! bus m))
-                   '->seq  e/seq->seq
-                   'datafy datafy/datafy
-                   'nav    datafy/nav
-                   'ls     dfg/ls
-                   'thing  (fn [z]
-                             (mapv pr-str z))
-                   #?@ (:clj ['slurp slurp
-                              'spit spit]
-                        :cljs ['fetch-text (fn [z]
-                                             (.then (js/fetch z)
-                                                    (fn [resp] (.text resp))))
-                               'fetch-json (fn [u]
-                                             (.then (js/fetch u)
-                                                    (fn [resp]
-                                                      (.then (.json resp)
-                                                             #(js->clj % :keywordize-keys true)))))
-                               'ingest (fn [z]
-                                         (with-meta (list z) {`ingest true}))
-                               'then (fn [p f] (.then (js/Promise.resolve p) f))
-                               'slurp      (some-> electron-bridge (aget "slurp"))
-                               'spit       (some-> electron-bridge (aget "spit"))
-                               'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
-                               'new-window (fn [u name features]
-                                             (js/window.open
-                                              (or u js/window.location)
-                                              name
-                                              features))])}
-                  (merge bindings))}))
+                           'qs (fn [s] (js/document.querySelector s))
+                           'eid (fn [s] (js/document.getElementById s))
+                           'sel (fn [s] (js/document.querySelectorAll ".selected"))}
+                'di       {'element   rdi/element
+                           'interpret rdi/interpret}
+                'gobj {'view (fn [obj] (gobj/createImmutableView obj))
+                       'extend (fn [a b]
+                                 (gobj/extend a b))}
+                'a        {'let ^:sci/macro (fn [&form &env bindings & body]
+                                              (println "Macro!Let" &form)
+                                              (prn 'bindings bindings 'body body)
+                                              (let [ret (a/sci-let** bindings body)]
+                                                (println "Ret:Let" ret)
+                                                ret))}
+                'b  {'encode benc/serialize
+                     'decode benc/deserialize}
+                'hn {'stories dfg/stories}
+                #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
+                                'all     (fn [a b c] (js/Promise.all a b c))}])}
+   :bindings {'send!  (fn [m] (core/send! bus m))
+              '->seq  e/seq->seq
+              'datafy esp/datafy
+              'nav    esp/nav
+              'ls     dfg/ls
+
+              #?@ (:clj ['slurp slurp
+                         'spit spit]
+                   :cljs ['fetch-text (fn [z]
+                                        (.then (js/fetch z)
+                                               (fn [resp] (.text resp))))
+                          'fetch-json (fn [u]
+                                        (.then (js/fetch u)
+                                               (fn [resp]
+                                                 (.then (.json resp)
+                                                        #(js->clj % :keywordize-keys true)))))
+                          'ingest (fn [z]
+                                    (with-meta (list z) {`ingest true}))
+                          'then (fn [p f] (.then (js/Promise.resolve p) f))
+                          'slurp      (some-> electron-bridge (aget "slurp"))
+                          'spit       (some-> electron-bridge (aget "spit"))
+                          'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
+                          'new-window (fn [u name features]
+                                        (js/window.open
+                                         (or u js/window.location)
+                                         name
+                                         features))])}})
 
 (defn failure-cont
   [eval-target bus print-output]
@@ -135,10 +155,42 @@
     (when ea
       (into [e] ea))))
 
+
+
+(defn xd
+  [conn po]
+  (fn []
+    (let [db @conn
+          cts (fn [ch]
+                (if-let [[_ _ _ t] (d/datoms db :eavt (:db/id ch) :chain/selection)]
+                  t
+                  (:db/id ch)))
+          ni (fn nav-impl [c k v]
+               (js/console.log "At" (:max-tx @conn) "Nav you " c k v )
+               (if (number? k)
+                 (d/entity db k)))]
+      (with-meta
+        {:max-tx (:max-tx db)
+         :prints (deref po) 
+         :ctl '[transact!]
+         :state (d/entity db :sted.page/state)}
+        {`p/nav ni}))))
+
 (defn mutatef
   [{:keys [conn bus] :as app}]
   (let [sel# (sci/new-dynamic-var 'sel nil)
-        ctx  (sci/init (sci-opts app {:bindings {'sel sel#}}))]
+        unbound-prints (atom [])
+        ctx  (-> (sci-opts app #_{:bindings {'sel sel#}})
+                 (sci/init)
+                 (sci/merge-opts {:bindings {'sel sel#
+                                             'xd (xd conn unbound-prints)
+                                             'transact! (transactor conn)}}))
+        ]
+    (sci/alter-var-root sci/print-newline (fn [_] false))
+    (sci/alter-var-root sci/print-fn (fn [_]
+                                       (fn [msg]
+                                         (js/console.log "Var root babyyyyyyyy" msg)
+                                         (swap! unbound-prints conj msg))))
     (fn [_ db bus]
       (let [eval-target                  (get-selected-form db)
             parents                      (nav/parents-seq eval-target)
@@ -165,13 +217,14 @@
                               (case (:coll/type eval-context)
                                 (:vec :list) (datafy/nav ptr nil k)
                                 (:map :set)  (datafy/nav ptr k (get ptr k)))))
-                     :eval (sci/binding [sel# eval-target
+                     :eval #_(sci/binding [sel# eval-target
                                          sci/print-newline true
                                          sci/print-fn (fn [m] (swap! print-output conj m))]
-                             (sci/eval-string* ctx (e/->string eval-context))))
+                             (sci/eval-string* ctx (e/->string eval-context)))
+                     (sci/eval-string* ctx (e/->string eval-context)))
                    #?@ (:clj [(success)]
                         :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
-               (catch :default ex (js/console.log ex) (failure ex))))))))
+               (catch :default ex (js/console.error "sci exception" ex) (failure ex))))))))
 
 (comment
   (sci/binding [sci/print-newline true

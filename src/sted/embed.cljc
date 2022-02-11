@@ -7,7 +7,8 @@
    [rewrite-clj.reader :as r]
    [rewrite-clj.node.protocols :as np]
    [clojure.string :as string]
-   [datascript.core :as d]))
+   [datascript.core :as d]
+   [datascript.impl.entity :as di]))
 
 (def some-map
   {:this :is
@@ -25,6 +26,8 @@
      (-> a (conj k) (conj v)))
    []
    m))
+
+
 
 (defn seq-tx
   [xs]
@@ -139,30 +142,39 @@
   [s]
   (n->tx (p/parse-string s)))
 
-(declare ->tx)
+#_(declare ->tx)
 
 (defn ->tx*
-  [e]
+  [e rec]
   (letfn [(coll-tx [coll-type xs]
             (let [id (new-tempid)]
               (cond-> {:db/id id :coll/type coll-type}
                 (seq xs) (merge (seq-tx (for [x xs]
-                                          (assoc (->tx x) :coll/_contains id)))))))]
+                                          (assoc (rec x) :coll/_contains id)))))))]
     (cond
-      (symbol? e)     {:token/type :symbol :token/value (str e)}
-      (keyword? e)    {:token/type :keyword :token/value (str e)}
-      (string? e)     {:token/type :string :token/value e}
-      (number? e)     {:token/type :number :token/value e}
-      (boolean? e)    {:token/type :symbol :token/value (str e)}
-      (list? e)       (coll-tx :list e)
-      (vector? e)     (coll-tx :vec e)
-      (map? e)        (coll-tx :map (flatten-map e))
-      (set? e)        (coll-tx :set e)
-      (sequential? e) (coll-tx :list e)
+      (symbol? e)      {:token/type :symbol :token/value (str e)}
+      (keyword? e)     {:token/type :keyword :token/value (str e)}
+      (string? e)      {:token/type :string :token/value e}
+      (number? e)      {:token/type :number :token/value e}
+      (boolean? e)     {:token/type :symbol :token/value (str e)}
+      (list? e)        (coll-tx :list e)
+      (vector? e)      (coll-tx :vec e)
+      (map? e)         (coll-tx :map (flatten-map e))
+      (set? e)         (coll-tx :set e)
+      (sequential? e)  (coll-tx :list e)
       #?@ (:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
                   (instance? js/URL e)  {:token/type :string :token/value (str e)}])
-      (nil? e)        {:token/type :symbol :token/value "nil"}
-      :else           (throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
+      (nil? e)         {:token/type :symbol :token/value "nil"}
+      (instance? di/Entity e)
+      (coll-tx :map
+               (interleave (cons :db/id (keys e))
+                           (for [v (cons (:db/id e) (vals e))]
+                             (cond
+                               (set? v) (mapv :db/id v)
+                               (associative? v) {:db/id (:db/id v)}
+                               :else v))))
+      
+      :else (throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
 
 (defn ->tx
   [e]
@@ -170,7 +182,7 @@
     (prn 'Mta mta))
   #_(merge (meta e) (->tx* e))
   #_(merge (->tx* e) (meta e))
-  (->tx* e))
+  (->tx* e ->tx))
 
 
 
@@ -543,4 +555,5 @@
                     e
                     (recur (partition-all n e))))]
     (recpart (range 99))))
+
 
