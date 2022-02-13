@@ -8,7 +8,8 @@
             [datascript.core :as d]
             [datascript.serialize :as dser]
             [sci.impl.vars :as v]
-            [sted.sys.nrepl.bencode :as benc]
+            [sci.impl.namespaces :as n]
+            #_[sted.sys.nrepl.bencode :as benc]
             [sted.df.github :as dfg]
             [sted.df.async :as a]
             [clojure.datafy :as datafy]
@@ -18,7 +19,9 @@
             [goog.object :as gobj]))
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
-                        :clj nil))
+                         :clj nil))
+
+(def the-sci-context (atom nil))
 
 (defn list-dir*
   [p]
@@ -72,15 +75,13 @@
                                  (gobj/extend a b))}
                 'a        {'let ^:sci/macro (fn [&form &env bindings & body]
                                               (a/sci-let** bindings body))}
-                'b  {'encode benc/serialize
-                     'decode benc/deserialize}
                 'hn {'stories dfg/stories}
                 #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                 'all     (fn [a b c] (js/Promise.all a b c))}])}
    :bindings {'send!  (fn [m] (core/send! bus m))
               '->seq  e/seq->seq
-              'datafy esp/datafy
-              'nav    esp/nav
+              'datafy p/datafy
+              'nav    p/nav
               'ls     dfg/ls
 
               #?@ (:clj ['slurp slurp
@@ -167,6 +168,12 @@
          :db (d/entity db :sted.page/state)}
         {`p/nav nav-entity}))))
 
+(extend-protocol p/Datafiable
+  v/SciNamespace
+  (datafy [n]
+    the-sci-context
+    ))
+
 (defn mutatef
   [{:keys [conn bus] :as app}]
   (let [sel# (sci/new-dynamic-var 'sel nil)
@@ -180,6 +187,7 @@
     (sci/alter-var-root sci/print-fn (fn [_]
                                        (fn [msg]
                                          (swap! unbound-prints conj msg))))
+    (reset! the-sci-context ctx)
     (fn [_ db bus]
       (let [eval-target                  (get-selected-form db)
             parents                      (nav/parents-seq eval-target)
@@ -190,6 +198,12 @@
                   (core/send! bus [:eval-result eval-target
                                    (str (ex-message ex) "\n" (.-stack ex))]))
                 (success [r]
+                  (println "Eval-success " (type r) r)
+                  (when (instance? v/SciVar r)
+                    (println "Value" (v/getRawRoot r)))
+                  (when (instance? v/SciNamespace r)
+                    (println "Value" r))
+                  
                   (core/send! bus
                               (cond
                                 (or (= :nav action) (some-> r meta (get `p/nav)))

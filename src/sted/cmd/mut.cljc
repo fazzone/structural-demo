@@ -17,13 +17,11 @@
                       eid)))
 
 ;; second movement type is plan B in case we are asked to delete first/last of chain
-
-
 (defn move-and-delete-tx
-  [db mta mtb]
+  [db mva mvb]
   (let [src (get-selected-form db)]
-    (when-let [dst (or (move/move mta src)
-                       (and mtb (move/move mtb src)))]
+    (when-let [dst (or (mva src)
+                       (and mvb (mvb src)))]
       (concat (edit/form-delete-tx src)
               [[:db/add (:db/id dst) :form/highlight true]]))))
 
@@ -38,14 +36,14 @@
 (defn linebreak-selected-form-tx
   [db]
   (let [sel           (get-selected-form db)
-        parent-indent (:form/indent (move/move :move/up sel))
+        parent-indent (:form/indent (move/up sel))
         pre-lb        (:form/linebreak sel)]
-    #_(println "PArentindent" parent-indent)
     [(if pre-lb
        [:db/retract (:db/id sel) :form/linebreak true]
        [:db/add (:db/id sel) :form/linebreak true])
      (when (not pre-lb)
        [:db/retract (:db/id sel) :form/indent (:form/indent sel)])]))
+
 (defn recursive-multiline
   [db]
   (letfn [(fnlike [tt]
@@ -84,8 +82,6 @@
                               (+ ind (count (e/open-delim (:coll/type e))))
                               0
                               (+txe [] e (not (zero? idx)) ind))]
-                  (println "Collection First?" (zero? idx)
-                           (e/->string e))
                   (if-not es
                     (recur ch (+ 2 ind) 0 (into acc rec))
                     (recur es ind (inc idx) (into acc rec))))))]
@@ -94,31 +90,15 @@
 
 (defn recursive-oneline
   [db]
-  (println "Oneline" (get-selected-form db))
-  (let [a
-        (->> (get-selected-form db)
-             (tree-seq :coll/contains :coll/contains)
-             (next)
-             (keep (fn [e]
-                     (prn (keys e))
-                     (when (:form/linebreak e)
-                       (cond-> [[:db/retract (:db/id e) :form/linebreak (:form/linebreak e)]]
-                         (:form/indent e) (conj [:db/retract (:db/id e) :form/indent ])))
-                     #_(cond-> []
-                         (:form/indent e)    (conj [:db/retract (:db/id e) :form/indent (:db/id e)])
-                         (:form/linebreak e) (conj [:db/retract (:db/id e) :form/linebreak (:db/id e)])
-                         #_(= [])              #_(do nil))))
-             (reduce into))]
-    (run! prn a)
-    a
-    ))
-
-#_(defn select-1based-nth-reverse-parent
-  [sel n]
-  (let [rpa (reverse (nav/parents-vec sel))]
-    (when (< 0 n (inc (count rpa)))
-      (move-selection-tx (:db/id sel)
-                         (:db/id (nth rpa (dec n)))))))
+  (->> (get-selected-form db)
+       (tree-seq :coll/contains :coll/contains)
+       (next)
+       (keep (fn [e]
+               (prn (keys e))
+               (when (:form/linebreak e)
+                 (cond-> [[:db/retract (:db/id e) :form/linebreak (:form/linebreak e)]]
+                   (:form/indent e) (conj [:db/retract (:db/id e) :form/indent ])))))
+       (reduce into)))
 
 (defn el-bfs
   [top limit]
@@ -133,17 +113,6 @@
                                      (cond-> (subvec front 1)
                                        (:seq/next e)  (conj (:seq/next e))
                                        (:seq/first e) (conj (:seq/first e))))))))
-
-#_(defn lazy-bfs
-  [top limit]
-  ((fn iter [i [e :as front]]
-     (when (and (some? e) (> limit i))
-       (cond->> (lazy-seq (iter (cond-> i (:coll/type e) inc)
-                                (cond-> (subvec front 1)
-                                  (:seq/next e)  (conj (:seq/next e))
-                                  (:seq/first e) (conj (:seq/first e)))))
-         (:coll/type e) (cons e)))))
-  0 top)
 
 (defn lazy-bfs
   [top]
@@ -165,32 +134,23 @@
            add? (cons x)))))
    nmv #{}))
 
-(comment
-  (run! prn
-        (map e/->form
-             (no-double-colls-lazy (lazy-bfs (e/->entity
-                                         '(defn bar [{:keys [a b]}]))))))
-  (map :db/id (lazy-bfs (e/->entity '[:a :b :c [[[:dd [:bv [:ok]]]]]]))))
-
 (defn get-numeric-movement-vec
   [sel]
   (let [children (next (take 8 (no-double-colls (lazy-bfs sel))))]
-    (if (move/move :move/up sel)
+    (if (move/up sel)
       (into [(peek (nav/parents-vec sel))] children)
       (into [nil] children))))
 
 (defn numeric-movement
   [n sel]
   (when-let [nmv (get-numeric-movement-vec sel)]
-    #_(println "NMove" n sel)
-    #_(run! prn (map vector (range) nmv))
     (when (< -1 n (count nmv))
       (nth nmv n))))
 
 (defn eval-result-above-toplevel
   [db et resp-str]
   (let [top-level   (peek (nav/parents-vec et))
-        prev        (move/move :move/prev-sibling top-level)
+        prev        (move/prev-sibling top-level)
         result-node {:db/id "nn"
                      :token/type :verbatim
                      :token/value resp-str
@@ -203,7 +163,7 @@
   (let [e (d/entity db eid)]
     (if-not (:form/highlight e)
       (edit/form-delete-tx e)
-      (move-and-delete-tx db :move/backward-up :move/next-sibling))))
+      (move-and-delete-tx db move/backward-up move/next-sibling))))
 
 (defn clear-one-eval
   [db]
@@ -252,19 +212,6 @@
       (assoc :nav/pointer c :eval/action :nav)
       (update :db/id #(or % "new-node"))))
 
-#_(defn ingest-eval-result
-  [db et c]
-  (let [top-level (peek (nav/parents-vec et))
-        new-node (ingest-navigable c)
-        outer {:db/id "outer"
-               :coll/type :eval-result
-               :seq/first (:db/id new-node)
-               :eval/of (:db/id et)
-               :coll/contains (:db/id new-node)}]
-    (into [new-node outer]
-          #_(edit/insert-before-tx top-level new-node)
-          (edit/insert-after-tx top-level outer))))
-
 (defn ingest-eval-result
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
@@ -301,7 +248,7 @@
 (defn insert-data
   [et c]
   (let [top-level (peek (nav/parents-vec et))
-        prev (move/move :move/prev-sibling top-level)
+        prev (move/prev-sibling top-level)
         result-node (-> (e/->tx c)
                         (update :db/id #(or % "import-formdata-tx")))]
     (into [result-node]
@@ -310,7 +257,7 @@
 (defn insert-txdata
   [et c]
   (let [top-level (peek (nav/parents-vec et))
-        prev (move/move :move/prev-sibling top-level)
+        prev (move/prev-sibling top-level)
         result-node (update c :db/id #(or % "import-formdata-tx"))]
     (into [result-node]
           (edit/insert-before-tx top-level result-node))))
@@ -344,7 +291,6 @@
     [[:db/add (:db/id e) :token/value (f (:token/value e))]]))
 
 (def plus*  (partial unary-arith inc))
-
 (def minus* (partial unary-arith dec))
 
 (defn hoist-tx
@@ -353,36 +299,39 @@
     (when (< 1 (count ps))
      (into (edit/form-unlink-tx sel)
            (concat (edit/insert-before-tx (peek ps) sel)
-                   (some->> (move/move :move/backward-up sel)
+                   (some->> (move/backward-up sel)
                             (:db/id)
                             (move-selection-tx (:db/id sel))))))))
 
+(defn gobble*
+  [sel gt]
+  (into (edit/form-unlink-tx gt)
+        (concat (edit/insert-after-tx sel gt)
+                (move-selection-tx (:db/id sel) (:db/id gt)))))
+
 (defn gobble-tx
   [sel]
-  (when-let [gt (some->> sel
-                         (nav/parents-vec)
-                         (peek)
-                         (move/move :move/prev-sibling))]
-    (into (edit/form-unlink-tx gt)
-          (concat (edit/insert-after-tx sel gt)
-                  (move-selection-tx (:db/id sel) (:db/id gt))))))
+  (some->> sel
+           (nav/parents-vec)
+           (peek)
+           (move/prev-sibling)
+           (gobble* sel)))
 
 (defn move-to-deleted-chain
   [sel]
   (when-let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)]
-    (when-let [nsel (move/move :move/backward-up sel)]
+    (when-let [nsel (move/backward-up sel)]
       (concat (edit/form-unlink-tx sel)
               (edit/form-cons-tx sel dch)
               (move-selection-tx (:db/id sel) (:db/id nsel))))))
 
 (defn uneval-and-next
   [sel]
-  (let [dst (move/move :move/next-sibling sel)]
+  (let [dst (move/next-sibling sel)]
     (concat (edit/form-wrap-tx sel :uneval)
             (when dst (move-selection-tx (:db/id sel) (:db/id dst))))))
 
 ;; This is junk because of retracting the highlight properly
-
 
 (defn stitch*
   [sel e]
@@ -475,9 +424,7 @@
         tempid "alias"
         new-node {:db/id tempid
                   :coll/type :alias
-                  :alias/of (:db/id sel)
-                  
-                  #_ #_:seq/first (:db/id sel)}]
+                  :alias/of (:db/id sel)}]
     (println "MAke alias" new-node)
     (into [new-node]
           (concat
@@ -494,71 +441,36 @@
                               :coll/type :chain
                               :seq/first {:db/id "newnode"
                                           :form/edit-initial ""
-                                          :form/editing true}}
-                  #_{:db/id "inner"
-                     :coll/_contains "newnode"
-                     :form/edit-initial (or init  "")
-                     :form/editing true}}]
+                                          :form/editing true}}}]
     (into [new-node]
           (concat (edit/insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "newnode")))))
-
-#_(defn drag*
-  [chain-mover chain-inserter sel]
-  (let [top-level   (peek (nav/parents-vec sel))
-        chain       (some-> top-level :coll/_contains edit/exactly-one)
-        other-chain (move/move chain-mover chain)
-        target      (or (:chain/selection other-chain)
-                        (:seq/first other-chain))
-        target-tl   (peek (nav/parents-vec target))
-        ;; new-sel (move/move :move/backward-up sel)
-        ]
-    (into (edit/form-unlink-tx sel)
-          (cond
-            target-tl
-            (concat
-             (edit/insert-before-tx target-tl sel)
-             #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel))))
-            (and chain (nil? other-chain))
-            (let [new-chain {:db/id "newchain"
-                             :coll/type :chain
-                             :coll/contains (:db/id sel)
-                             :seq/first (:db/id sel)}]
-              (concat [new-chain]
-                      (chain-inserter chain new-chain)
-                      #_(when new-sel (move-selection-tx (:db/id sel) (:db/id new-sel)))))))))
-
-(defn drag-to-chain-selection
-  [chain-inserter sel target]
-  (let [top (peek (nav/parents-vec target))]
-    (into (edit/form-unlink-tx sel)
-          (edit/insert-before-tx top sel))))
-
-(defn drag-to-head-of-chain
-  [chain-inserter sel target-chain]
-  (into (edit/form-unlink-tx sel)
-        (edit/form-cons-tx sel target-chain)))
 
 (defn drag*
   [chain-mover chain-inserter sel]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
-        other-chain (move/move chain-mover chain)
+        other-chain (chain-mover chain)
         target      (:chain/selection other-chain)]
     (into (edit/form-unlink-tx sel)
-          (if-let [top (peek (nav/parents-vec target))]
-            (edit/insert-before-tx top sel)
-            (if other-chain
-              (edit/form-cons-tx sel other-chain)
-              (let [nc {:db/id         "newchain"
-                        :coll/type     :chain
-                        :coll/contains (:db/id sel)
-                        :seq/first     (:db/id sel)}]
-                (into [nc] (chain-inserter chain nc))))))))
+          (concat
+           (if-let [ncs (or (move/next-sibling sel)
+                            (move/prev-sibling sel))]
+             [[:db/add (:db/id chain) :chain/selection (:db/id ncs)]]
+             [[:db/retract (:db/id chain) :chain/selection]])
+           (if-let [top (peek (nav/parents-vec target))]
+             (edit/insert-before-tx top sel)
+             (if other-chain
+               (edit/form-cons-tx sel other-chain)
+               (let [nc {:db/id         "newchain"
+                         :coll/type     :chain
+                         :coll/contains (:db/id sel)
+                         :seq/first     (:db/id sel)}]
+                 (into [nc] (chain-inserter chain nc)))))))))
 
-(def drag-left-tx  (partial drag* :move/prev-sibling edit/insert-before-tx))
+(def drag-left-tx  (partial drag* move/prev-sibling edit/insert-before-tx))
 
-(def drag-right-tx (partial drag* :move/next-sibling edit/insert-after-tx))
+(def drag-right-tx (partial drag* move/next-sibling edit/insert-after-tx))
 
 (defn chain-from-text
   [sel text props]
@@ -577,7 +489,7 @@
              (let [e (d/entity (d/entity-db sel) eid)]
                (cond
                  (= eid (:db/id sel))
-                 (move/move :move/up e)
+                 (move/up e)
                  
                  (nil? (:coll/type sel))
                  e
@@ -591,20 +503,20 @@
                    (or parent e))))) 
    :find-next       find-next
    :find-first      find-first
-   :flow-right      (partial move/move :move/flow)
-   :flow-left       (partial move/move :move/back-flow)
+   :flow-right      move/flow
+   :flow-left       move/flow-left
    :flow-right-coll (fn [sel]
                       (->> sel
-                           (iterate (partial move/move :move/flow))
+                           (iterate move/flow)
                            (next)
                            (take-while some?)
                            (filter :coll/type)
                            (first)))
-   :parent          (partial move/move :move/up)
-   :toplevel        (partial move/move :move/most-upward)
-   :next            (partial move/move :move/next-sibling)
-   :prev            (partial move/move :move/prev-sibling)
-   :tail            (partial move/move :move/most-nested)
+   :parent          move/up
+   :toplevel        move/most-upward
+   :next            move/next-sibling
+   :prev            move/prev-sibling
+   :tail            move/most-nested
    :m1              (partial numeric-movement 0)
    :m2              (partial numeric-movement 1)
    :m3              (partial numeric-movement 2)
@@ -638,10 +550,10 @@
    :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
    :edit/finish-and-edit-next-node (fn [db text] (->> text (insert/finish-edit-and-edit-next-tx (d/entity db [:form/editing true]))))
    :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
-   :delete-left                    (fn [db] (move-and-delete-tx db :move/backward-up :move/next-sibling))
-   :delete-right                   (fn [db] (move-and-delete-tx db :move/forward-up :move/prev-sibling))
+   :delete-left                    (fn [db] (move-and-delete-tx db move/backward-up move/next-sibling))
+   :delete-right                   (fn [db] (move-and-delete-tx db move/forward-up move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
-   :raise-parent                   (comp edit/form-raise-tx (partial move/move :move/up) get-selected-form )
+   :raise-parent                   (comp edit/form-raise-tx move/up get-selected-form )
    :clone                          (comp edit/insert-duplicate-tx get-selected-form)
    :linebreak                      linebreak-selected-form-tx
    :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))

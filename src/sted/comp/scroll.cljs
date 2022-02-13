@@ -1,5 +1,6 @@
 (ns sted.comp.scroll
-  (:require [sted.comp.common :as cc]))
+  (:require [sted.comp.common :as cc]
+            [rum.core :as rum]))
 
 (def ^:const scroll-hysteresis-px 3)
 (defn do-hysteresis
@@ -50,6 +51,8 @@
     (when new-bar-left
       (.scrollTo bar #js {:left new-bar-left}))))
 
+
+
 (defn scroll-to-selected!
   ([]
    (let [[el & more :as els] (js/document.querySelectorAll ".selected")]
@@ -59,5 +62,19 @@
        (js/console.log "There should be one selected element!" )
        (scroll-to-selected* el (.getBoundingClientRect el))))))
 
+(def scroll-window-percents
+  [20 0 80 0])
 
-
+(rum/defc scroll-area-viz
+  []
+  [:div
+   {:style
+    {:position :fixed
+     :top "20vh"
+     :left "0px"
+     :width "100vw"
+     ;; :height "calc(80vh - 20px)" 
+     :height "60vh"
+     :background-color "#4504b982"
+     
+     }}])

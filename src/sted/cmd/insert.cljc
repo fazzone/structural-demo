@@ -21,20 +21,23 @@
 
 (defn accept-edit-tx
   [form-eid value]
-  (when-some [ptx (parse-editbox-tx value form-eid)]
-    [{:db/id :db/current-tx
-      :edit/of form-eid}
-     [:db/retract form-eid :token/value]
-     [:db/retract form-eid :token/type]
-     ptx
-     [:db/add form-eid :form/edited-tx :db/current-tx]
-     [:db/retract form-eid :form/editing true]
-     [:db/retract form-eid :form/edit-initial]]))
+  (if-not form-eid
+    (println "NO FORM EDIT!" value)
+    (when-some [ptx (parse-editbox-tx value form-eid)]
+      [{:db/id :db/current-tx
+        :edit/of form-eid}
+       [:db/retract form-eid :token/value]
+       [:db/retract form-eid :token/type]
+       ptx
+       [:db/add form-eid :form/edited-tx :db/current-tx]
+       [:db/retract form-eid :form/editing true]
+       [:db/retract form-eid :form/edit-initial]])))
 
 (defn reject-edit-tx
   [db form-eid]
-  (concat (move/movement-tx db :move/backward-up)
-          (edit/form-delete-tx (d/entity db form-eid))))
+  (let [e (d/entity db form-eid)]
+   (concat (move/backward-up e)
+           (edit/form-delete-tx e))))
 
 (defn wrap-edit-tx
   [ed ct value]
@@ -63,7 +66,7 @@
   (if (empty? text)
     (reject-edit-tx db eid)
     (some-> (accept-edit-tx eid text)
-            (into (move/movement-tx db :move/up)))))
+            (into (move/movement-tx db move/up)))))
 
 (defn finish-edit-and-edit-next-tx
   [ed text]

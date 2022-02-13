@@ -85,7 +85,7 @@
            "«⋯»"]}
    :hop-left  {:label "<-hop"}
    :hop-right {:label "hop->"}
-   :find-next {:label "next"}
+   :find-next {:label "look"}
    :undo {:label "undo"}
    :insert-left  {:label "insert"}
    :insert-right {:label "->insert"}

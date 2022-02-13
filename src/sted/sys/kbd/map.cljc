@@ -1,6 +1,6 @@
-(ns sted.sys.kbd)
+(ns sted.sys.kbd.map)
 
-(def default-keymap
+(def default
   {"f"   :flow-right
    "S-^" :new-meta
    "S-F" :flow-right-coll
@@ -18,7 +18,9 @@
    "S-N" :find-first
    "C-/" :undo
    ;; "S-R" :reify-undo
+   "r"   :raise
    "S-R" :unraise
+   "M-r" :raise-parent
    "S-_" :uneval
    "S-W" :save
    "t"   :tear
@@ -27,11 +29,11 @@
    "w"   :float
    "s"   :sink
    ;; "S-H"       :toplevel
-   "h"         :parent
-   "j"         :next
-   "k"         :prev
-   "l"         :tail
-   "r"         :raise
+   "h"   :parent
+   "j"   :next
+   "k"   :prev
+   "l"   :tail
+
    " "         :insert-right
    "S- "       :insert-left
    "d"         :delete-right
@@ -46,39 +48,34 @@
    "x"         :hop-right
    "9"         :wrap
    ;; "9"         :new-list
-   "0"     :parent
-   "]"     :parent
-   "p"     :slurp-right
-   "S-P"   :barf-right
-   "Tab"   :indent
-   "S-Tab" :dedent
-   "e"     :eval-sci
-   "S-("   :new-list
-   "["     :new-vec
-   "S-C"   :new-chain
-   "S-B"   :new-bar "'" :new-quote
-   "1"     :m1
-   "2"     :m2
-   "3"     :m3
-   "4"     :m4
-   "5"     :m5
-   "6"     :m6
-   "7"     :m7
-   "8"     :m8
-   "v"     :scroll
-   "-"     :hide
-   "i"     :insert-left
-   "S-Q"   :stringify
-   "S-+"   :plus})
-
-#?(:cljs
-   (defn event->kbd
-     [^KeyboardEvent ev]
-     (str (when (.-altKey ev) "M-")
-          (when (.-ctrlKey ev)
-            "C-")
-          (when (.-shiftKey ev) "S-")
-          (.-key ev))))
+   "0"         :parent
+   "]"         :parent
+   "p"         :slurp-right
+   "S-P"       :barf-right
+   "Tab"       :zp
+   ;; "S-Tab"     :dedent
+   "e"         :eval-sci
+   "S-("       :new-list
+   "["         :new-vec
+   "S-C"       :new-chain
+   "S-B"       :new-bar "'" :new-quote
+   "1"         :m1
+   "2"         :m2
+   "3"         :m3
+   "4"         :m4
+   "5"         :m5
+   "6"         :m6
+   "7"         :m7
+   "8"         :m8
+   "v"         :scroll
+   "-"         :hide
+   "i"         :insert-left
+   "S-Q"       :stringify
+   "S-+"       :plus
+   "S-M"       :multiline
+   "S-O"       :oneline
+   "M-l"       :clear-one-eval
+   })
 
 (defn kbd->keydowns
   [kbd]
@@ -88,4 +85,6 @@
       (contains? mods "S-") (into ["ShiftLeft"])
       (contains? mods "M-") (into ["AltLeft"])
       (contains? mods "C-") (into ["Control"]))))
+
+
 

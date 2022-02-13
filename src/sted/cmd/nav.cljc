@@ -12,7 +12,7 @@
 (defn parents-seq
   [e]
   (->> e
-       (iterate (partial move/move :move/up))
+       (iterate move/up)
        (take-while some?)))
 
 (defn parents-vec

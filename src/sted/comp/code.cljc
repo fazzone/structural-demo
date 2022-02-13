@@ -32,19 +32,35 @@
 (defn make-iobs
   []
   ;; hack - must specify these in px, ex/em not allowed
-  (let [memory (atom nil)]
-   (->> #js {:rootMargin "0px 0px -20px 0px" :threshold #js [0]}
-        (js/IntersectionObserver.
-         (fn [ents me]
-           (when-not (core/scroll-locked?)
-             (loop [[ioe & more] ents
-                    did-scroll nil]
-               (cond (nil? ioe) nil
-                     (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
-                     :else (do (if did-scroll
-                           (js/console.log "What does this mean?")
-                           (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
-                         (recur more true))))))))))
+  (->> #js {:rootMargin "0px 0px -20px 0px" :threshold #js [0]}
+       (js/IntersectionObserver.
+        (fn [ents me]
+          (js/console.log "Obs" (count ents))
+          #_(when-not (core/scroll-locked?)
+              (loop [[ioe & more] ents
+                     did-scroll nil]
+                (when ioe
+                  (js/console.log "IR" (.-intersectionRatio ioe) ioe))
+                (cond (nil? ioe) nil
+                      (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
+                      :else (do (if did-scroll
+                                  (js/console.log "What does this mean?")
+                                  (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+                                (recur more true)))))
+          (loop [[ioe & more] ents
+                 did-scroll nil]
+            (when ioe
+              (js/console.log "IR" (.-intersectionRatio ioe) ioe))
+            (cond (nil? ioe) nil
+                  (nil? (.-rootBounds ioe)) (recur more did-scroll)
+                  (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
+                  :else (do (if did-scroll
+                              (js/console.log "What does this mean?")
+                              (do (println "Would scroll"
+                                           (core/scroll-locked?)
+                                           ))
+                              #_(scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+                            (recur more true))))))))
 
 (def the-iobs (make-iobs))
 
@@ -121,7 +137,24 @@
 
 #_(def inhibit-scroll? (volatile! false))
 
+(defonce secret-chain-scroll-position-cache (atom {}))
+
+(def remember-scroll-position
+  {:will-unmount (fn [state]
+                   (let [st (some-> state rum/dom-node (.-scrollTop))
+                         eid (-> state :rum/args first :db/id)]
+                     (when (and eid (not (zero? st)))
+                       (swap! secret-chain-scroll-position-cache assoc eid st)))
+                   state)
+   :after-render (fn [state]
+                   (if-some [sp (some->> state :rum/args first :db/id
+                                         (get @secret-chain-scroll-position-cache))]
+                     (set! (.-scrollTop (rum/dom-node state))
+                           sp))
+                   state)})
+
 (rum/defc chain
+  < remember-scroll-position
   [ch bus classes]
   [:div.chain.hide-scrollbar
    {:key (:db/id ch)
@@ -140,22 +173,9 @@
      ^:inline (form f bus 0 nil))])
 
 (rum/defc bar [b bus classes]
-  (prn 'bar b)
-  (let [iobs (make-iobs)
-        ref-me (rum/create-ref)]
-    ;; rum/bind-context [cc/*bar-iobs* [iobs ref-me]]
+  (let [ref-me (rum/create-ref)]
     [:div.bar.hide-scrollbar
      {:class classes}
-     #_[:div {:style {:min-width "60em"
-                    :height "1000ex"
-                    :background-color "tomato"}}
-      "What's this"
-      [:object
-       {:type "application/pdf"
-        :data "Genera_User_s_Guide.pdf"
-        :width "100%"
-        :height "100%"}]]
-     
      (for [chain-head (e/seq->vec b)]
        (-> (form chain-head bus 0 nil)
            (rum/with-key (:db/id chain-head))))]))
@@ -167,15 +187,6 @@
    [:div.alternate-reality {}
     (when of (rum/bind-context [cc/*modeline-ref* nil]
                                ^:inline (form of bus 0 nil)))]])
-
-#_(def dispatch-coll
-  {:keyboard ck/keyboard-diagram
-   ;; :inspect comp.inspect/inspect
-   :eval-result erc
-   :bar bar
-   :chain chain
-   :alias aliasc
-   :hidden hiddenc})
 
 (rum/defc delimited-coll*
   [e bus open close cc ec classes indent proply]
@@ -201,7 +212,7 @@
     :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
     :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
     :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
-    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
+    :tear             (delimited-coll* e b "Â«"  "Â»" "dl" nil c i p)
     :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
     :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
     :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)
@@ -328,7 +339,14 @@
                           (.stopPropagation ev)
                           (core/send! bus [:click (:db/id e)])
                           false)}
-              ^String it])
+              ^String it
+              #_(when (= :symbol tt)
+               (let [off 1
+                     tkl (count tv)
+                     len 3
+                     left (- tkl)]
+                 ))])
+           
            (:coll/type e)
            (case (:coll/type e)
              nil (comment

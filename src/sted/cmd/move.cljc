@@ -4,34 +4,50 @@
    [sted.core :refer [get-selected-form
                       move-selection-tx]]))
 
-(defmulti move (fn [t _] t))
+#_(defmulti move (fn [t _] t))
 
-(defmethod move :move/most-nested [_ e]
+#_(defmethod move :move/most-nested [_ e]
   (last (tree-seq :coll/type e/seq->vec e)))
 
-(defmethod move :move/most-upward [_ e]
+(defn most-nested [e]
+  (last (tree-seq :coll/type e/seq->vec e)))
+
+#_(defmethod move :move/most-upward [_ e]
   (->> e
        (iterate (partial move :move/up))
        (take-while some?)
        last))
 
-(defmethod move :move/next-sibling [_ e]
+(defn up [e]
+  (when-let [cs (:coll/_contains e)]
+    (let [up (first cs)]
+      (when-not (= :chain (:coll/type up))
+        up))))
+
+(defn most-upward [e]
+  (->> e
+       (iterate up)
+       (take-while some?)
+       (last)))
+
+#_(defmethod move :move/next-sibling [_ e]
   (some-> (:seq/_first e) first :seq/next :seq/first))
 
-(defmethod move :move/prev-sibling [_ e]
+#_(defmethod move :move/prev-sibling [_ e]
   (some-> (:seq/_first e) first :seq/_next first :seq/first))
+
+(defn next-sibling [e] (some-> (:seq/_first e) first :seq/next :seq/first))
+(defn prev-sibling [e] (some-> (:seq/_first e) first :seq/_next first :seq/first))
+
+
 
 (defn flow*
   [e]
   (when e
-    (or (move :move/next-sibling e)
-        (recur (move :move/up e)))
-    #_(if-let [m (move :move/next-sibling e)]
-      (do (println "Flow*move" e m) m)
-      (do (println "Flow*recurup" e)
-          (recur (move :move/up e))))))
+    (or (next-sibling e)
+        (recur (up e)))))
 
-(defmethod move :move/flow [_ e]
+#_(defmethod move :move/flow [_ e]
   (or (:seq/first e)
       (flow* e))
   #_(if-let [f (:seq/first e)]
@@ -40,31 +56,47 @@
     (do (println "Flow* " e)
         (flow* e))))
 
-(defmethod move :move/back-flow [_ e]
+(defn flow [e]
+  (or (:seq/first e)
+      (flow* e)))
+
+#_(defmethod move :move/back-flow [_ e]
   (or (->> e
            (move :move/prev-sibling)
            (move :move/most-nested))
       (move :move/up e)))
 
-(defmethod move :move/up [_ e]
+(defn flow-left [e]
+  (or (->> e
+           (prev-sibling)
+           (most-nested))
+      (up e)))
+
+#_(defmethod move :move/up [_ e]
   #_(some-> (:coll/_contains e) first)
   (when-let [cs (:coll/_contains e)]
     (let [up (first cs)]
       (when-not (= :chain (:coll/type up))
-          up))))
+        up))))
 
-(defmethod move :move/forward-up [_ e]
+
+
+#_(defmethod move :move/forward-up [_ e]
   (or (move :move/next-sibling e)
       (move :move/up e)))
 
-(defmethod move :move/backward-up [_ e]
-  (or (move :move/prev-sibling e)
-      (move :move/up e)))
+(defn forward-up [e]
+  (or (next-sibling e)
+      (up e)))
+
+(defn backward-up [e]
+  (or (prev-sibling e)
+      (up e)))
 
 (defn movement-tx
-  [db movement-type]
+  [db mover]
   (let [src (get-selected-form db)
-        dst (move movement-type src)]
+        dst (mover src)]
     (when dst
       (move-selection-tx (:db/id src) (:db/id dst)))
     #_(if-not dst
@@ -72,7 +104,7 @@
         #_(println "Cannot" movement-type "from" src)
         (move-selection-tx (:db/id src) (:db/id dst)))))
 
-(defn repeat-movement-tx
+#_(defn repeat-movement-tx
   [db movement-type reps]
   (let [sel (get-selected-form db)
         dst (loop [i 0

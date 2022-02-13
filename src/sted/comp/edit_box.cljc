@@ -5,6 +5,7 @@
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
    [sted.sys.kbd.evt :as ske]
+   [sted.sys.search.api :as sapi]
    [datascript.core :as d]
    [cljs.core.async :as async]
    [sted.embed :as e]
@@ -53,8 +54,8 @@
 (rum/defcs edit-box
   < (rum/local [] ::text) 
   (focus-ref-on-mount "the-input")
-  [{::keys [text]} e bus]
-  #_(println "Edit box" 'text text 'e e)
+  [{::keys [text] :as ebst} e bus]
+  (println "Edit box" ebst)
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)
                     (:token/value e))
@@ -70,9 +71,13 @@
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
                           token (e/parse-token-tx new-text)]
                       (reset! text new-text)
+                      (prn "EBonchange" (type bus) new-text)
+                      #_(sapi/request-search-update!
+                         new-text)
+                      (core/send! bus [:update-search new-text])
                       (reset! editbox-ednparse-state
                               {:form-eid form-eid
-                               :text new-text
+                               :text new-text 
                                :valid (some? token)
                                :type (some-> token first val)})
                       nil)
@@ -84,5 +89,7 @@
                          (.stopPropagation ev)
                          (when (not= :edit/wrap (first mut))
                            (reset! editbox-ednparse-state nil))
+                         
+                         (println "EB KD" mut)
                          (some->> mut (core/send! bus))
                          #_(async/put! bus mut))))}]))

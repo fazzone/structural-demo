@@ -39,10 +39,11 @@
       [:span.modeline-content {}
        ^String (if-not sel
                  "(no selection)"
+                 
                  (str
                   (:db/id sel)
-                  "/0x"
-                  (.toString (:max-tx db) 16)
+                  "/"
+                  (:max-tx db)
                   " " (some-> sel :nav/pointer meta))
                  #_(str "#" (:db/id sel)
                         " / "

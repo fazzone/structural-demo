@@ -10,9 +10,12 @@
 
 ;; This is a really stupid hack
 ;; But a div that fights back when you try to scroll is even stupider 
-(def scroll-sequence-number (volatile! 0))
-(def scroll-snapshot (volatile! 0))
-(defn scroll-locked? [] (not= @scroll-sequence-number @scroll-snapshot))
+(defonce scroll-sequence-number (volatile! 0))
+(defonce scroll-snapshot (volatile! 0))
+(defn scroll-locked? []
+  (js/console.log "SL" @scroll-sequence-number @scroll-snapshot)
+  true
+  #_(not= @scroll-sequence-number @scroll-snapshot))
 
 (defn get-selected-form
   [db]
@@ -36,7 +39,11 @@
   (get-history [this txid])
   (save-history! [this txid tx-report])
   ;; hacks
-  (zchan [this]))
+  (zchan [this])
+
+  (uniqueid [this]))
+
+
 
 (defprotocol ICursor
   (selection [this ent])
@@ -57,13 +64,15 @@
         pub (async/pub ch first)
         hs (atom {})
         
-        sub-map (js/Map.)]
+        sub-map (js/Map.)
+        uu (d/squuid (js/performance.now))]
     (reify IBus
       (send! [this msg] (async/put! ch msg))
       (connect-sub! [this topic sch]
         (async/sub pub topic sch))
       (disconnect-sub! [this topic sch]
         (async/unsub pub topic sch))
+      
       
       (fire-subs! [this entity]
         (some-> (.get sub-map (:db/id entity))
@@ -78,9 +87,10 @@
       
       (get-history [this txid] (get @hs txid))
       (save-history! [this txid r] (swap! hs assoc txid r))
-      (zchan [this] ch))))
+      (zchan [this] ch)
+      (uniqueid [this] uu))))
 
-(defn context
+#_(defn context
   []
   (let [b (bus)
         c (cursor)]
@@ -110,10 +120,6 @@
     (save-history! [this txid r])
     (zchan [this])))
 
-(defprotocol IApp
-  (sub-chan [this topic])
-  (with [this msg]))
-
 (defrecord App [conn bus! history])
 
 (defn register-mutation!
@@ -123,7 +129,13 @@
     (go (async/<!
          (async/reduce
           (fn [a m]
-            (or (mut-fn m @conn bus) a))
+            (try
+              (or (mut-fn m @conn bus) a)
+              (catch #? (:cljs js/Error :clj Exception) e
+                
+                (js/console.log "Exception in mutation"
+                                (str topic)
+                                e))))
           :ok
           ch)))
     app))
@@ -140,6 +152,7 @@
                                     :mut mut))
                         (catch #? (:cljs js/Error :clj Exception) e
                           {:error e}))]
+        #_(run! prn tx-data)
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
@@ -217,7 +230,8 @@
 
 (defn app
   [conn]
-  (let [the-bus (context)]
+  (let [the-bus  (bus)  #_(context)]
+    (set! (.-uniqueid ^js bus) (d/squuid (js/performance.now)))
     (-> {:bus     the-bus
          :history (atom ())
          :dispatch (atom {})

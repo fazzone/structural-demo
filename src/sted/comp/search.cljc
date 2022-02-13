@@ -15,13 +15,25 @@
   (d/index-range db sa text (str text "􏿿")))
 
 (rum/defc hlp
-  [tkl off len utext? utk?]
-  (let [left (- tkl)]
+  [tkl off len jj utext? utk?]
+  (let [left (- tkl)
+        sj (str jj)]
     [:span {:style {:position :relative}}
      (cond
        (not (or utext? utk?))
-       [:span.hlp {:style {:width (str len "ch")
-                           :left (str (+ off left) "ch")}}]
+       [:span {:style {:position :relative}}
+                  (rum/fragment
+                   #_(when (even? jj)
+                     [:span
+                        {:style {:position :absolute
+                                 :width "1ch"
+                                 :top "-1.25ex"
+                                 :left (str (+ off left) "ch")
+                                 }}
+                        (subs sj 0 1)])
+                   [:span.hlp {:style {:width (str len "ch")
+                                       :left (str (+ off left)
+                                                  "ch")}}])]
        utk?
        [:span.hlp.unique-token {:style {:width (str tkl "ch")
                                         :left (str left "ch")}}]
@@ -35,24 +47,36 @@
                    :left (str (+ off left) "ch")}}]
          [:span.hlp.unique-token
           {:style {:width (str tkl "ch")
-                   :left (str left "ch")}}])]))
+                   :left (str left "ch")}}])]
+    ))
 
 (rum/defc results
+  < rum/reactive
   [db bus sa text rec]
+  (js/console.log bus)
   [:div
+   {}
    (when (< 1 (count text))
+     
      (let [tag           (str  "Searching " text)
            _             (js/console.time tag)
-           results       (s/substring-search-all-visible-tokens (string/lower-case text))
+           results       (rum/react s/results)
+           #_(s/substring-search-all-visible-tokens (string/lower-case text))
            _             (js/console.timeEnd tag)
            unique-text?  (= 1 (count results))
-           unique-token? (and unique-text? (= 1 (count (val (first results)))))]
+           unique-token? (and unique-text? (= 1 (count (val (first results)))))
+           jj            (volatile! 0)]
+       (println (count results) 'results)
+       (prn (type bus))
+       #_(clojure.pprint/pprint results)
+       
        (for [[matched rs] results
              [i n]        rs]
          (do
            #_(js/console.log matched i n)
            (->> n
                 (rum/portal (hlp (count matched) i (count text)
+                                 (vswap! jj inc)
                                  unique-text?
                                  unique-token?)))))))])
 

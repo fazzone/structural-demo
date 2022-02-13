@@ -144,6 +144,8 @@
 
 #_(declare ->tx)
 
+(def whatisthis (symbol ",,??"))
+
 (defn ->tx*
   [e rec]
   (letfn [(coll-tx [coll-type xs]
@@ -165,7 +167,7 @@
       #?@ (:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
                   (instance? js/URL e)  {:token/type :string :token/value (str e)}])
       (nil? e)         {:token/type :symbol :token/value "nil"}
-      (instance? di/Entity e)
+      (instance? #?(:clj datascript.impl.entity.Entity :cljs di/Entity) e)
       (coll-tx :map
                (interleave (cons :db/id (keys e))
                            (for [v (cons (:db/id e) (vals e))]
@@ -174,7 +176,9 @@
                                (associative? v) {:db/id (:db/id v)}
                                :else v))))
       
-      :else (throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
+      :else
+      {:token/type :verbatim :token/value (str (type e) "\n" e)}
+      #_(throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
 
 (defn ->tx
   [e]
@@ -543,11 +547,6 @@
     #_(map = tseq
            (map ->form (tree-seq :coll/type seq->seq ent)))))
 
-
-
-
-
-
 (comment
   (let [n 5
         recpart (fn [e]
@@ -555,5 +554,6 @@
                     e
                     (recur (partition-all n e))))]
     (recpart (range 99))))
+
 
 

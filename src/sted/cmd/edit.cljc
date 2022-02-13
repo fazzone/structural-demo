@@ -335,7 +335,7 @@
                (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))
 
 (defn form-splice-tx
-  ([e] (form-splice-tx (move/move :move/up e) e))
+  ([e] (form-splice-tx (move/up e) e))
   ([e from]
    (let [spine (some-> e :seq/_first exactly-one)
          coll (some-> e :coll/_contains exactly-one)

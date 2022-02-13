@@ -29,7 +29,9 @@
    [sted.sys.fmt :as sf]
    [sted.sys.kbd.map :as skm]
    [sted.sys.kbd.evt :as ske]
+   [sted.sys.search.setup :as search]
    [sted.sys.mouse :as sm]
+   [sted.sys.keyboard :as sk]
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]])
@@ -46,7 +48,15 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                [test-form-data-bar]
+                #_[test-form-data-bar]
+                [(e/->tx ["hello"
+                          "hello"
+                          "hello"
+                          "hello"
+                          "hello"
+                          "hello"
+                          
+                          ])]
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
@@ -123,50 +133,38 @@
   [db bus]
   (let [state (d/entity db ::state)
         ml-ref (rum/create-ref)]
+    
+    (println "Render root" (core/uniqueid bus))
     [:div.bar-container {}
+     #_(csc/scroll-area-viz)
      (rum/bind-context [ccommon/*modeline-ref* ml-ref]
                        (code/form (:state/bar state) bus 0 nil))
      [:div.modeline-outer {:id "modeline" :ref ml-ref}]
      #_(ml/modeline-portal db bus)
      #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
 
-(def keyboard-bus (atom nil))
-
-(defn global-keydown*
-  [ev]
-  (let [tkd (js/performance.now)]
-    (when (identical? js/document.body js/document.activeElement)
-      (let [kbd (ske/event->kbd ev)
-            bindings skm/default
-            mut (get bindings kbd)]
-        #_(println kbd mut)
-        (core/send! @keyboard-bus [:kbd kbd tkd])
-        (when (some? mut) (.preventDefault ev) (.stopPropagation ev))))))
-
-(defonce global-keydown
-  (fn [ev]
-    (global-keydown* ev)))
-
-
-
 (defn save*
   [file contents]
-  (if-let [spit (some-> (aget js/window "my_electron_bridge")
-                        (aget "spit"))]
-    (-> (spit file contents)
-        (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
-        (.catch (fn [] (swap! ml/save-status assoc :status :error))))
-    #_(do
-      (js/console.time "Thing")
-      (prn  (thinger "c"))
-      (js/console.timeEnd "Thing"))
-    (let [w (js/window.open "")]
-      (js/setTimeout
-       (fn []
-         (let [el (js/document.createElement "pre")]
-           (set! (.-innerText el) contents)
-           (.appendChild (.-body (.-document w)) el)))
-       0))))
+  (println "Write" file)
+  (.writeFile (js/require "fs/promises") file contents)
+  
+  #_(if-let [spit (some-> (aget js/window "my_electron_bridge")
+                          (aget "spit"))]
+      (-> (spit file contents)
+          (.then  (fn [] (swap! ml/save-status assoc :status :ok :file file)))
+          (.catch (fn [] (swap! ml/save-status assoc :status :error))))
+      #_(do
+          (js/console.time "Thing")
+          (prn  (thinger "c"))
+          (js/console.timeEnd "Thing"))
+      (let [w (js/window.open "")]
+        (js/setTimeout
+         (fn []
+           (let [el (js/document.createElement "pre")]
+             (set! (.-innerText el) contents)
+             (.appendChild (.-body (.-document w)) el)))
+         0))))
+
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
@@ -177,24 +175,23 @@
      (doseq [[m f] mut/editing-commands]
        (core/register-simple! a m f))
      (-> a
-         (core/register-mutation! :kbd
-                                  (fn [[_ kbd tkd] db bus]
-                                    (when-let [mut (:key/mutation (d/entity db [:key/kbd kbd]))]
-                                      (core/send! bus [mut]))))
          (core/register-mutation! :eval-sci (eval-sci/mutatef a))
          (core/register-simple! :zp (sf/mutatef a))
          (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
+         (sk/setup!)
          (sm/setup!)
-         
+         (search/setup!)
          (core/register-mutation!
           :save
           (fn [_ db bus]
             (let [sel (get-selected-form db)
-                  chain (-> sel
-                            (nav/parents-vec)
-                            (peek)
-                            :coll/_contains
-                            (first))
+                  chain
+                  (cond-> sel
+                    (not= :chain (:coll/type sel))
+                    (-> (nav/parents-vec)
+                        (peek)
+                        :coll/_contains
+                        (first)))
                   file (or (:chain/filename chain) "noname.clj")]
               (when chain
                 (reset! ml/save-status {:at (:max-tx db)
@@ -226,33 +223,31 @@
   (fn [ev]
     (vswap! core/scroll-sequence-number inc)))
 
+
+(defn ^:dev/before-load stop []
+  (js/console.log "stop")
+  (swap! the-app
+         #(-> %
+              (sk/cleanup!)
+              (sm/cleanup!))))
+
 (defn ^:dev/after-load init
   []
-  (some-> @the-app (sm/cleanup!))
-  
-  (js/document.removeEventListener "keydown" global-keydown true)
-  (js/document.addEventListener "keydown" global-keydown true)
+  #_(some-> the-singleton-db meta :listeners (reset! {}))
+  #_(let [ls (:listeners (meta the-singleton-db))]
+      (println "Listeners:" ls)
+      (reset! ls {}))
+  #_(println "Cleared DB listeners")
   (js/document.addEventListener "scroll" set-scroll-user true)
   
-  #_(comment
-      (js/document.removeEventListener "mousedown" global-mousedown)
-      (js/document.addEventListener "mousedown" global-mousedown)
-    
-      (js/document.removeEventListener "mouseup" global-mouseup true)
-      (js/document.addEventListener "mouseup" global-mouseup true)
-
-      (js/document.removeEventListener "contextmenu" global-ctxmenu true)
-      (js/document.addEventListener "contextmenu" global-ctxmenu true))
-  
-  (some-> the-singleton-db meta :listeners (reset! {}))
   (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)]
     (reset! the-app app)
-    (reset! keyboard-bus bus)
+    (println "Created new app and reset kbdb")
+    #_(when-let [req-title (some-> js/window.location.search
+                                   (js/URLSearchParams.)
+                                   (.get "title"))]
+        (set! js/document.title req-title))
     
-    (when-let [req-title (some-> js/window.location.search
-                                 (js/URLSearchParams.)
-                                 (.get "title"))]
-      (set! js/document.title req-title))
     (rum/mount #_(debug-component)
                (root-component @conn bus)
                (.getElementById js/document "root"))))
