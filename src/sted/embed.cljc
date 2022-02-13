@@ -59,8 +59,8 @@
 
 
 (defn n->tx
-  ([n] (n->tx n 0))
-  ([n i]
+  ([n] (n->tx n 0 nil))
+  ([n i my-eid]
    (letfn [(seq-ws-tx [[x & xs] id isf nl acc]
              (if-not x
                acc
@@ -82,7 +82,7 @@
                                     (< 1 isf) (assoc :form/indent isf)
                                     nl        (assoc :form/linebreak true)))))))
            (coll-tx [coll-type xs]
-             (let [id         (new-tempid)]
+             (let [id (or (new-tempid) my-eid)]
                (cond-> {:db/id id :coll/type coll-type}
                  (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil []))))))]
      (case (n/tag n)
@@ -99,25 +99,25 @@
              (false? v)  {:token/type :symbol :token/value "false"}
              (char? v)   {:token/type :char :token/value v}
              :else       (throw (ex-info (str "What token is this? " (pr-str n)) {})))))
-       :list    (coll-tx :list (n/children n))
-       :vector  (coll-tx :vec (n/children n))
-       :map     (coll-tx :map (n/children n))
-       :set     (coll-tx :set (n/children n))
-       :forms   (coll-tx :chain (n/children n))
-       :deref   (coll-tx :deref (n/children n))
-       :comma   nil
-       :comment {:token/type :comment :token/value (string/trimr (n/string n))}
-       :meta    (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
-                      mta                (n/sexpr mta-n)]
+       :list             (coll-tx :list (n/children n))
+       :vector           (coll-tx :vec (n/children n))
+       :map              (coll-tx :map (n/children n))
+       :set              (coll-tx :set (n/children n))
+       :forms            (coll-tx :chain (n/children n))
+       :deref            (coll-tx :deref (n/children n))
+       :comma            nil
+       :comment          {:token/type :comment :token/value (string/trimr (n/string n))}
+       :meta             (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
+                               mta                (n/sexpr mta-n)]
                   #_(println "Mta-n" (n/string mta-n)
-                           "Mta" mta
-                           "Val" (n/string val)
-                           "More" more)
+                             "Mta" mta
+                             "Val" (n/string val)
+                             "More" more)
                   (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
                   (coll-tx :meta (n/children n))
-                  #_{:coll/type :meta
+                  #_{:coll/type     :meta
                      :coll/contains #{"m" "v"}
-                     :seq/first  9}
+                     :seq/first     9}
                   #_(n->tx val))
        ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
@@ -126,8 +126,8 @@
          (coll-tx :reader-macro (n/children n))
          #_(-> (coll-tx :reader-macro body)
                (assoc :reader-macro/dispatch (n/string rmt))))
-       :namespaced-map (coll-tx :map (n/children n))
-       :uneval         (coll-tx :uneval (n/children n))
+       :namespaced-map   (coll-tx :map (n/children n))
+       :uneval           (coll-tx :uneval (n/children n))
        :fn               (coll-tx :fn (n/children n))
        :quote            (coll-tx :quote (n/children n))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -177,7 +177,9 @@
                                :else v))))
       
       :else
-      {:token/type :verbatim :token/value (str (type e) "\n" e)}
+      (do
+        #_(js/console.log "Handle" e)
+        {:token/type :verbatim :token/value (str "type:" (type e) "\nvalue:\t" e)})
       #_(throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
 
 (defn ->tx
@@ -340,6 +342,7 @@
          (cons form (lazy-seq (iter r))))))
    (r/string-reader s)))
 
+
 (defn ->chain
   [text]
   (let [txe (assoc (string->tx-all text)
@@ -412,11 +415,11 @@
 
 (defn parse-token-tx
   [s]
-  
   (try
     (string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e
-      {:token/type :string :token/value s})))
+      {:token/type :verbatim :token/value s})))
+
 
 (comment
   (time (->chain (slurp "subtree/clojure.core.clj")))

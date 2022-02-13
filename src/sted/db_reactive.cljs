@@ -35,10 +35,10 @@
                     (let [[ent bus & args] (some-> state :rum/args)
                           nupdate          (volatile! false)
                           subber           (fn [eid]
-                                             (println "Subly" eid (core/uniqueid bus))
+                                             #_(println "Subly" eid (core/uniqueid bus))
                                              (core/sub-entity bus eid
                                                               (fn [new-ent]
-                                                                (println "Receive updeate" (:db/id new-ent) (core/uniqueid bus))
+                                                                #_(println "Receive update" (:db/id new-ent) (core/uniqueid bus))
                                                                 (vreset! nupdate true)
                                                                 (update-first-arg! react-component new-ent
                                                                                    (str "erx " (:db/id new-ent))))))]
@@ -63,7 +63,7 @@
                             (u))
                           (assoc new-state ::unsubber ((::subber new-eid)))))))
    :will-unmount  (fn [state]
-                    (println "Unsub"  (-> state :rum/args first :db/id)
+                    #_(println "Unsub"  (-> state :rum/args first :db/id)
                              (core/uniqueid
                               (-> state :rum/args second)))
                     (when-some [u (::unsubber state)]

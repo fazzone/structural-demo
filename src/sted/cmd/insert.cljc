@@ -9,7 +9,9 @@
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
-(defn parse-editbox-tx
+
+
+#_(defn parse-editbox-tx
   [s eid]
   (when-not (empty? s)
     (some-> (or (e/parse-token-tx s)
@@ -18,20 +20,37 @@
                 nil)
             ;; todo - handle complex paste (don't clobber tempid)
             (assoc :db/id eid))))
+(defn parse-editbox-tx
+  [s]
+  (when-not (empty? s)
+    (let [at (e/parse-token-tx s)]
+      (if (and (= :verbatim (:token/type at))
+               (string/starts-with? s "\""))
+        (e/parse-token-tx (str s "\""))
+        at))))
+
+(defn unify-with
+  [eid txm]
+  (cond-> txm
+    true (assoc :db/id eid)
+    (:db/id txm)
+    (merge (e/seq-tx
+            (for [elem (e/seq->vec txm)]
+              (assoc elem :coll/_contains eid))))))
 
 (defn accept-edit-tx
   [form-eid value]
   (if-not form-eid
     (println "NO FORM EDIT!" value)
-    (when-some [ptx (parse-editbox-tx value form-eid)]
-      [{:db/id :db/current-tx
+    (when-some [ptx (parse-editbox-tx value)]
+      [{:db/id   :db/current-tx
         :edit/of form-eid}
        [:db/retract form-eid :token/value]
        [:db/retract form-eid :token/type]
-       ptx
+       [:db/retract form-eid :form/editing]
+       [:db/retract form-eid :form/edit-initial]
        [:db/add form-eid :form/edited-tx :db/current-tx]
-       [:db/retract form-eid :form/editing true]
-       [:db/retract form-eid :form/edit-initial]])))
+       (unify-with form-eid ptx)])))
 
 (defn reject-edit-tx
   [db form-eid]

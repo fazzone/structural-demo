@@ -182,6 +182,7 @@
                  (sci/init)
                  (sci/merge-opts {:bindings {'sel sel#
                                              'sted (nav-root conn unbound-prints)
+                                             'bus bus
                                              'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
     (sci/alter-var-root sci/print-fn (fn [_]

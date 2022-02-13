@@ -35,7 +35,7 @@
   (->> #js {:rootMargin "0px 0px -20px 0px" :threshold #js [0]}
        (js/IntersectionObserver.
         (fn [ents me]
-          (js/console.log "Obs" (count ents))
+          #_(js/console.log "Obs" (count ents))
           #_(when-not (core/scroll-locked?)
               (loop [[ioe & more] ents
                      did-scroll nil]
@@ -49,14 +49,14 @@
                                 (recur more true)))))
           (loop [[ioe & more] ents
                  did-scroll nil]
-            (when ioe
+            #_(when ioe
               (js/console.log "IR" (.-intersectionRatio ioe) ioe))
             (cond (nil? ioe) nil
                   (nil? (.-rootBounds ioe)) (recur more did-scroll)
                   (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
                   :else (do (if did-scroll
                               (js/console.log "What does this mean?")
-                              (do (println "Would scroll"
+                              #_(do (println "Would scroll"
                                            (core/scroll-locked?)
                                            ))
                               #_(scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
@@ -212,7 +212,7 @@
     :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
     :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
     :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
-    :tear             (delimited-coll* e b "Â«"  "Â»" "dl" nil c i p)
+    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
     :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
     :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
     :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)

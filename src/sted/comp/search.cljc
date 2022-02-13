@@ -53,7 +53,6 @@
 (rum/defc results
   < rum/reactive
   [db bus sa text rec]
-  (js/console.log bus)
   [:div
    {}
    (when (< 1 (count text))
@@ -66,8 +65,8 @@
            unique-text?  (= 1 (count results))
            unique-token? (and unique-text? (= 1 (count (val (first results)))))
            jj            (volatile! 0)]
-       (println (count results) 'results)
-       (prn (type bus))
+       #_(println (count results) 'results)
+       #_(prn (type bus))
        #_(clojure.pprint/pprint results)
        
        (for [[matched rs] results

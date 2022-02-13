@@ -7,17 +7,37 @@
 
 (def my-generation (swap! generation-track inc))
 
+(def ^:const super "F24")
+(def ^:const hyper "F23")
+
 (defn keydown
-  [^KeyboardEvent ev keymap bus]
+  [^KeyboardEvent ev mods keymap bus]
   (if-not (identical? js/document.body js/document.activeElement)
-    (js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement)
-    (let [kbd (ske/event->kbd ev)]
-      (js/console.log "KBD" my-generation  kbd (pr-str (get @keymap kbd))
-                      "UBid" (core/uniqueid bus))
-      (when-some [mut (get @keymap kbd)]
-        (.preventDefault ev)
-        (.stopPropagation ev)
-        (core/send! bus [mut])))))
+    (do
+      #_(js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement))
+    (let [ms @mods
+          kbd (ske/event->kbd ev (:super ms) (:hyper ms))]
+      #_(js/console.log "KBD" (pr-str ms)
+                        kbd (pr-str (get @keymap kbd)))
+      (cond
+        (= super (.-key ev))
+        (swap! mods conj :super)
+        
+        (= hyper (.-key ev))
+        (swap! mods conj :hyper)
+        
+        :else
+        (when-some [mut (get @keymap kbd)]
+          (.preventDefault ev)
+          (.stopPropagation ev)
+          (core/send! bus [mut]))))))
+
+(defn keyup
+  [^KeyboardEvent ev mods keymap bus]
+  (when (identical? js/document.body js/document.activeElement)
+    (prn "Keyup" (.-key ev) @mods)
+    (if (= super (.-key ev))
+      (swap! mods disj :super))))
 
 (defn cleanup!
   [{::keys [listeners] :as app}]
@@ -32,9 +52,13 @@
   (if (::listeners app)
     (recur (cleanup! app))
     (let [keymap (atom skm/default)
+          mods (atom #{})
           ls {"keydown" (fn [ev]
-                          (println "This keydown")
-                          (keydown ev keymap bus))}]
+                          #_(println "This keydown")
+                          (keydown ev mods keymap bus))
+              "keyup" (fn [ev]
+                        (keyup ev mods keymap bus))
+              }]
       (doseq [[e f] ls]
         (js/document.addEventListener e f true))
       (println "KBD" [my-generation] "Setup")

@@ -13,7 +13,8 @@
 (defonce scroll-sequence-number (volatile! 0))
 (defonce scroll-snapshot (volatile! 0))
 (defn scroll-locked? []
-  (js/console.log "SL" @scroll-sequence-number @scroll-snapshot)
+  #?(:cljs
+     (js/console.log "SL" @scroll-sequence-number @scroll-snapshot))
   true
   #_(not= @scroll-sequence-number @scroll-snapshot))
 
@@ -63,8 +64,7 @@
   (let [ch (async/chan)
         pub (async/pub ch first)
         hs (atom {})
-        
-        sub-map (js/Map.)
+        #?@(:cljs [sub-map (js/Map.)]) 
         uu (d/squuid (js/performance.now))]
     (reify IBus
       (send! [this msg] (async/put! ch msg))
@@ -75,15 +75,17 @@
       
       
       (fire-subs! [this entity]
-        (some-> (.get sub-map (:db/id entity))
-                (.forEach (fn [f] (f entity)))))
+        #?(:cljs
+           (some-> (.get sub-map (:db/id entity))
+                   (.forEach (fn [f] (f entity))))))
       (sub-entity [this eid func]
-        (let [sub-set (or (.get sub-map eid)
-                          (let [s (js/Set.)]
-                            (.set sub-map eid s)
-                            s))]
-          (.add sub-set func)
-          (fn [] (.delete sub-set func))))
+        #?(:cljs
+           (let [sub-set (or (.get sub-map eid)
+                             (let [s (js/Set.)]
+                               (.set sub-map eid s)
+                               s))]
+             (.add sub-set func)
+             (fn [] (.delete sub-set func)))))
       
       (get-history [this txid] (get @hs txid))
       (save-history! [this txid r] (swap! hs assoc txid r))
@@ -152,7 +154,7 @@
                                     :mut mut))
                         (catch #? (:cljs js/Error :clj Exception) e
                           {:error e}))]
-        #_(run! prn tx-data)
+        
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)

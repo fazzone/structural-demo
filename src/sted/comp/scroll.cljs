@@ -47,6 +47,7 @@
         new-chain-top (and tl chain (scroll-1d chh h vpos voff))
         new-bar-left  (and bar (scroll-1d barw w hpos hoff))]
     (when new-chain-top
+      (println "NCT" new-chain-top)
       (.scrollTo chain #js {:top new-chain-top}))
     (when new-bar-left
       (.scrollTo bar #js {:left new-bar-left}))))

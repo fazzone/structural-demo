@@ -55,7 +55,6 @@
   < (rum/local [] ::text) 
   (focus-ref-on-mount "the-input")
   [{::keys [text] :as ebst} e bus]
-  (println "Edit box" ebst)
   (let [value (if (= [] @text)
                 (or (:form/edit-initial e)
                     (:token/value e))
@@ -71,10 +70,10 @@
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
                           token (e/parse-token-tx new-text)]
                       (reset! text new-text)
-                      (prn "EBonchange" (type bus) new-text)
+                      #_(prn "EBonchange" (type bus) new-text)
                       #_(sapi/request-search-update!
                          new-text)
-                      (core/send! bus [:update-search new-text])
+                      #_(core/send! bus [:update-search new-text])
                       (reset! editbox-ednparse-state
                               {:form-eid form-eid
                                :text new-text 
@@ -90,6 +89,6 @@
                          (when (not= :edit/wrap (first mut))
                            (reset! editbox-ednparse-state nil))
                          
-                         (println "EB KD" mut)
+                         #_(println "EB KD" mut)
                          (some->> mut (core/send! bus))
                          #_(async/put! bus mut))))}]))

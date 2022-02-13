@@ -217,7 +217,7 @@
           tree   (fetch-json (-> commit :tree :url))]
     #_(cljs.pprint/pprint tree)))
 
-(defonce the-app (atom nil))
+(defonce ^:export the-app (atom nil))
 
 (defonce set-scroll-user
   (fn [ev]

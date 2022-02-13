@@ -188,13 +188,13 @@
    "Backspace" {:label "←delete"}})
 
 (rum/defc keyboard-diagram
-  [kme]
+  [kme bus classes]
   (let [k->l #_defaultkl
         (into {}
               (for [{:key/keys [kbd mutation]} (:keymap/bindings kme)]
                 [kbd (get mutation->label mutation)]))
         key (partial kkc k->l)]
-    [:div.keyboard-container
+    [:div.keyboard-container {:class classes}
      [:div.keyboard-row.number
       (key "Esc" "Escape")
       (for [ch (vec "1234567890-=")]
@@ -215,11 +215,11 @@
         (rum/with-key (key ch) ch))
       (key "Shift")]
      [:div.keyboard-row.space
-      (key "Ctrl")
-      (key "Mod")
-      (key "Alt")
+      (key "Control")
+      (key "Super")
+      (key "Meta")
       (key " ")
-      (key "Alt")
+      (key "Meta")
       (key "Mod")
       (key "Menu")
-      (key "Ctrl")]]))
+      (key "Control")]]))
