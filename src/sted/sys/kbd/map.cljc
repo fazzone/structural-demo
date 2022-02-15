@@ -30,8 +30,14 @@
    "s"   :sink
    ;; "S-H"       :toplevel
    "h"   :parent
-   "j"   :next
-   "k"   :prev
+   ;; vi
+   ;; "j"   :next
+   ;; "k"   :prev
+   ;; lispm
+   
+   "k" :next
+   "j" :prev
+   
    "l"   :tail
 
    " "         :insert-right
@@ -75,6 +81,7 @@
    "S-M"       :multiline
    "S-O"       :oneline
    "M-l"       :clear-one-eval
+   "q" :compose
    })
 
 (defn kbd->keydowns

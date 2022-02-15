@@ -1,5 +1,10 @@
 (ns sted.user)
 
+
+(a/let [resp (js/fetch "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/reference/global_objects/promise/index.md")
+        text (.text resp)]
+  (send! [:ingest-markdown text]))
+
 (transact! [{:db/id (:db/id (first (:coll/_contains sel))) :chain/filename "src/sted/user.clj"}])
 
 hn/stories

@@ -5,7 +5,7 @@
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
    [sted.sys.kbd.evt :as ske]
-   [sted.sys.search.api :as sapi]
+   [sted.sys.search.dom :as s]
    [datascript.core :as d]
    [cljs.core.async :as async]
    [sted.embed :as e]
@@ -18,12 +18,15 @@
 
 
 (defn editbox-keydown-mutation
-  [text key]
+  [e text key]
+  (println "Edit comp" (:form/edit-comp e))
   (case key
     "Escape"          [:edit/reject]
     "Backspace"       (when (empty? text)
                         [:edit/reject])
-    "Enter"           [:edit/finish text]
+    "Enter"           (if (:form/edit-comp e)
+                        [:edit/finish-and-move-up text]
+                        [:edit/finish text])
     "C-/"             [:undo]
     ("S-)" "]" "S-}") [:edit/finish-and-move-up text]
     "["               [:edit/wrap :vec text]
@@ -34,6 +37,9 @@
                         [:edit/reject]
                         (= "\"" (first text))
                         (println "Quotedstring")
+                        #_(:form/edit-comp e)
+                        #_[:edit/finish-and-move-up text]
+                        
                         :else
                         [:edit/finish-and-edit-next-node text])
     
@@ -55,7 +61,7 @@
   < (rum/local [] ::text) 
   (focus-ref-on-mount "the-input")
   [{::keys [text] :as ebst} e bus]
-  (let [value (if (= [] @text)
+  (let [value    (if (= [] @text)
                 (or (:form/edit-initial e)
                     (:token/value e))
                 @text)
@@ -65,24 +71,35 @@
      {:type        :text
       ;; :wrap :off
       :ref         "the-input"
+      :spellCheck  "false"
       :value       (or value "")
       :style       {:width (str (max 1 (count value)) "ch")}
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
-                          token (e/parse-token-tx new-text)]
+                          token    (e/parse-token-tx new-text)]
                       (reset! text new-text)
                       #_(prn "EBonchange" (type bus) new-text)
                       #_(sapi/request-search-update!
                          new-text)
-                      #_(core/send! bus [:update-search new-text])
+                      (core/send! bus [:update-search new-text])
                       (reset! editbox-ednparse-state
                               {:form-eid form-eid
-                               :text new-text 
-                               :valid (some? token)
-                               :type (some-> token first val)})
+                               :text     new-text 
+                               :valid    (some? token)
+                               :type     (some-> token first val)})
                       nil)
       :on-key-down (fn [ev]
                      (let [kbd (ske/event->kbd ev)
-                           mut (editbox-keydown-mutation value kbd)]
+                           mut (editbox-keydown-mutation e value kbd)]
+                       (when (= kbd "M-2" )
+                         (some-> (js/document.getElementById (str "sr" 2))
+                                 (.closest ".tk")
+                                 (.click))
+                         #_(run! prn
+                                 (map-indexed vector
+                                              (for [[matched rs] @s/results
+                                                    [i n] rs]
+                                                [matched i (.-innerText n)]))))
+                       
                        (when mut
                          (.preventDefault ev)
                          (.stopPropagation ev)

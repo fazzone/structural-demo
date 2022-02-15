@@ -1,6 +1,7 @@
 (ns sted.embed
   (:require
    [sted.schema :as s]
+   [sted.embed.common :as ec]
    [rewrite-clj.parser :as p]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]
@@ -9,15 +10,6 @@
    [clojure.string :as string]
    [datascript.core :as d]
    [datascript.impl.entity :as di]))
-
-(def some-map
-  {:this :is
-   :my :map
-   #_#_:ignored :value})
-
-(defonce tempid-counter (atom 0))
-
-(defn new-tempid [] (swap! tempid-counter dec))
 
 (defn flatten-map
   [m]
@@ -28,13 +20,6 @@
    m))
 
 
-
-(defn seq-tx
-  [xs]
-  (if-let [x (first xs)]
-    (cond-> {:seq/first x}
-      (next xs) (assoc :seq/next (seq-tx (next xs))))))
-
 (defn svtx
   [input]
   (loop [acc      (transient [])
@@ -42,7 +27,7 @@
          p        nil]
     (if-not x
       (persistent! acc)
-      (let [c (new-tempid)]
+      (let [c (ec/new-tempid)]
        (recur
         (cond-> acc
           true (conj! [:db/add c :seq/first x])
@@ -59,8 +44,8 @@
 
 
 (defn n->tx
-  ([n] (n->tx n 0 nil))
-  ([n i my-eid]
+  ([n] (n->tx n 0))
+  ([n i]
    (letfn [(seq-ws-tx [[x & xs] id isf nl acc]
              (if-not x
                acc
@@ -82,9 +67,9 @@
                                     (< 1 isf) (assoc :form/indent isf)
                                     nl        (assoc :form/linebreak true)))))))
            (coll-tx [coll-type xs]
-             (let [id (or (new-tempid) my-eid)]
+             (let [id (ec/new-tempid)]
                (cond-> {:db/id id :coll/type coll-type}
-                 (seq xs) (merge (seq-tx (seq-ws-tx xs id 0 nil []))))))]
+                 (seq xs) (merge (ec/seq-tx (seq-ws-tx xs id 0 nil []))))))]
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
@@ -144,43 +129,45 @@
 
 #_(declare ->tx)
 
-(def whatisthis (symbol ",,??"))
-
+(def ^:dynamic *left* nil)
 (defn ->tx*
   [e rec]
   (letfn [(coll-tx [coll-type xs]
-            (let [id (new-tempid)]
+            (let [id (ec/new-tempid)]
               (cond-> {:db/id id :coll/type coll-type}
-                (seq xs) (merge (seq-tx (for [x xs]
-                                          (assoc (rec x) :coll/_contains id)))))))]
+                (seq xs) (merge (ec/seq-tx (for [x xs]
+                                             (assoc (rec x) :coll/_contains id)))))))]
+    (some-> *left* (vswap! dec))
     (cond
-      (symbol? e)      {:token/type :symbol :token/value (str e)}
-      (keyword? e)     {:token/type :keyword :token/value (str e)}
-      (string? e)      {:token/type :string :token/value e}
-      (number? e)      {:token/type :number :token/value e}
-      (boolean? e)     {:token/type :symbol :token/value (str e)}
-      (list? e)        (coll-tx :list e)
-      (vector? e)      (coll-tx :vec e)
-      (map? e)         (coll-tx :map (flatten-map e))
-      (set? e)         (coll-tx :set e)
-      (sequential? e)  (coll-tx :list e)
+      (and *left* (> 0  @*left*)) {:token/type :symbol :token/value "..."}
+      (symbol? e)                 {:token/type :symbol :token/value (str e)}
+      (keyword? e)                {:token/type :keyword :token/value (str e)}
+      (string? e)                 {:token/type :string :token/value e}
+      (number? e)                 {:token/type :number :token/value e}
+      (boolean? e)                {:token/type :symbol :token/value (str e)}
+      (list? e)                   (coll-tx :list e)
+      (vector? e)                 (coll-tx :vec e)
+      (map? e)                    (coll-tx :map (flatten-map e))
+      (set? e)                    (coll-tx :set e)
+      (sequential? e)             (coll-tx :list e)
       #?@ (:cljs [(instance? js/Date e) {:token/type :string :token/value (str e)}
                   (instance? js/URL e)  {:token/type :string :token/value (str e)}])
-      (nil? e)         {:token/type :symbol :token/value "nil"}
+      (nil? e)                    {:token/type :symbol :token/value "nil"}
       (instance? #?(:clj datascript.impl.entity.Entity :cljs di/Entity) e)
       (coll-tx :map
                (interleave (cons :db/id (keys e))
-                           (for [v (cons (:db/id e) (vals e))]
-                             (cond
-                               (set? v) (mapv :db/id v)
-                               (associative? v) {:db/id (:db/id v)}
-                               :else v))))
+                           (cons (:db/id e)
+                                 (for [v (vals e)]
+                                   (cond
+                                     (set? v)         (mapv :db/id v)
+                                     (associative? v) {:db/id (:db/id v)}
+                                     :else            v)))))
       
       :else
       (do
         #_(js/console.log "Handle" e)
         {:token/type :verbatim :token/value (str "type:" (type e) "\nvalue:\t" e)})
-      #_(throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
+      #_ (throw (ex-info (str "What is this? type:" (type e) "Val: " (pr-str e)) {})))))
 
 (defn ->tx
   [e]
@@ -189,9 +176,6 @@
   #_(merge (meta e) (->tx* e))
   #_(merge (->tx* e) (meta e))
   (->tx* e ->tx))
-
-
-
 
 #? (:clj
     (defn seq->vec
@@ -507,27 +491,6 @@
                 [:db/add tempid :meta/pointer m])))))
 
 
-#_(let [m {:jafonglsy 4}
-        form [{:a :b :c {:nested :map 4  ^:form/highlight [(with-meta [:ok] m)]}} :ok [:a [[:x]] :Y]]
-        {:keys [max-eid] :as old-db} (d/entity-db (->entity (range (rand-int 99)) ))
-        [ftx mtam] (tx-and-meta form)
-
-        
-        {:keys [db-after tx-data] :as new-db} (d/with old-db
-                                                      (into ftx
-                                                            (for [[eid v] mtam]
-                                                              [:db/add eid :meta/pointer v])))]
-  #_(run! prn tx-data)
-  #_(run! prn ftx)
-  (identical?
-   m
-   (:meta/pointer (:seq/first (d/entity db-after [:form/highlight true]))))
-  
-  
-
-  #_(d/entity db-after [:form/highlight true]))
-
-
 (comment
   (let [thinger [{:a :b :c {:nested :map 4 ^:nice [1]}} :ok [:a [[:x]] :Y]]
         ent (->entity thinger)
@@ -560,3 +523,27 @@
 
 
 
+
+
+
+(comment
+  (time
+   (count
+    (d/datoms (:db-after (in-new-db
+                          #_[(string->tx-all
+                              (slurp (clojure.java.io/resource "clojure/core.clj")))]
+                          (mapv (comp string->tx-all slurp)
+                                (filter
+                                 (fn [s]
+                                   (prn s)
+                                   (let [ss (str s)]
+                                     (or (clojure.string/ends-with? ss ".cljc")
+                                         (clojure.string/ends-with? ss ".cljs")
+                                         (clojure.string/ends-with? ss ".cljc"))))
+                                 (file-seq (clojure.java.io/file "src"))))
+                       
+                          #_[(string->tx-all (slurp "src/sted/page.cljs"))]))
+              :avet
+              ))))
+;; => 94699
+;; => 95057

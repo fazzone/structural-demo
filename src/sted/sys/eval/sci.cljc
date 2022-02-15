@@ -16,7 +16,10 @@
             [clojure.string :as string]
             [sted.core :as core :refer [get-selected-form]]
             [sted.sys.eval.sci.protocols :as esp]
-            [goog.object :as gobj]))
+            [goog.object :as gobj]
+            [sted.sys.handle :as sh]
+            [mdast-util-from-markdown :as mdast]
+            [sted.doc.remark :as sdr]))
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                          :clj nil))
@@ -45,6 +48,15 @@
                       :tempids (:tempids tx-report)}))
           0))))))
 
+(defn new-window-with-text
+  [text]
+  (let [w (js/window.open "")]
+    (-> (fn []
+          (let [el (js/document.createElement "pre")]
+            (set! (.-innerText el) text)
+            (.appendChild (.-body (.-document w)) el)))
+        (js/setTimeout 0))))
+
 (defn sci-opts
   [{:keys [conn bus] :as app}]
   {:classes    {'js goog/global :allow :all}
@@ -65,46 +77,58 @@
                                                ret))}
                 'dom      {'qsa (fn [s] (vec (js/document.querySelectorAll s)))
                            'ecl (fn [s] (vec (js/document.getElementsByClassName s)))
-                           'qs (fn [s] (js/document.querySelector s))
+                           'qs  (fn [s] (js/document.querySelector s))
                            'eid (fn [s] (js/document.getElementById s))
                            'sel (fn [s] (js/document.querySelectorAll ".selected"))}
                 'di       {'element   rdi/element
                            'interpret rdi/interpret}
-                'gobj {'view (fn [obj] (gobj/createImmutableView obj))
-                       'extend (fn [a b]
-                                 (gobj/extend a b))}
+                'sdr {'go
+                      (fn [j]
+                        (sdr/go j))}
+                'mdast    {'parse
+                           (fn [mdtext]
+                             (mdast/fromMarkdown mdtext))}
+                'gobj     {'view   (fn [obj] (gobj/createImmutableView obj))
+                           'extend (fn [a b] (gobj/extend a b))
+                           'get (fn [o k d]
+                                  (gobj/get o k d))}
                 'a        {'let ^:sci/macro (fn [&form &env bindings & body]
                                               (a/sci-let** bindings body))}
-                'hn {'stories dfg/stories}
+                'hn       {'stories dfg/stories}
                 #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                 'all     (fn [a b c] (js/Promise.all a b c))}])}
-   :bindings {'send!  (fn [m] (core/send! bus m))
-              '->seq  e/seq->seq
-              'datafy p/datafy
-              'nav    p/nav
-              'ls     dfg/ls
-
-              #?@ (:clj ['slurp slurp
-                         'spit spit]
-                   :cljs ['fetch-text (fn [z]
-                                        (.then (js/fetch z)
-                                               (fn [resp] (.text resp))))
-                          'fetch-json (fn [u]
-                                        (.then (js/fetch u)
-                                               (fn [resp]
-                                                 (.then (.json resp)
-                                                        #(js->clj % :keywordize-keys true)))))
-                          'ingest (fn [z]
-                                    (with-meta (list z) {`ingest true}))
-                          'then (fn [p f] (.then (js/Promise.resolve p) f))
-                          'slurp      (some-> electron-bridge (aget "slurp"))
-                          'spit       (some-> electron-bridge (aget "spit"))
-                          'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
-                          'new-window (fn [u name features]
-                                        (js/window.open
-                                         (or u js/window.location)
-                                         name
-                                         features))])}})
+   :bindings   {'send!   (fn [m]
+                           (js/setTimeout (fn [] (core/send! bus m))
+                                          0))
+                '->seq   e/seq->seq
+                'datafy  p/datafy
+                'nav     p/nav
+                'ls      dfg/ls
+                'object? (fn [o] (object? o))
+                'textwin new-window-with-text
+                'handle (fn [k]
+                          (get @sh/storage k))
+                #?@ (:clj ['slurp slurp
+                           'spit spit]
+                     :cljs ['fetch-text (fn [z]
+                                          (.then (js/fetch z)
+                                                 (fn [resp] (.text resp))))
+                            'fetch-json (fn [u]
+                                          (.then (js/fetch u)
+                                                 (fn [resp]
+                                                   (.then (.json resp)
+                                                          #(js->clj % :keywordize-keys true)))))
+                            'ingest (fn [z]
+                                      (with-meta (list z) {`ingest true}))
+                            'then (fn [p f] (.then (js/Promise.resolve p) f))
+                            'slurp      (some-> electron-bridge (aget "slurp"))
+                            'spit       (some-> electron-bridge (aget "spit"))
+                            'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
+                            'new-window (fn [u name features]
+                                          (js/window.open
+                                           (or u js/window.location)
+                                           name
+                                           features))])}})
 
 (defn failure-cont
   [eval-target bus print-output]
@@ -175,22 +199,26 @@
     ))
 
 (defn mutatef
-  [{:keys [conn bus] :as app}]
-  (let [sel# (sci/new-dynamic-var 'sel nil)
+  [{:keys [conn bus] :as app} app-atom-circular-ref]
+  (let [sel#           (sci/new-dynamic-var 'sel nil)
+        app#           (sci/new-var 'sted
+                                    app-atom-circular-ref
+                                    nil)
         unbound-prints (atom [])
-        ctx  (-> (sci-opts app #_{:bindings {'sel sel#}})
-                 (sci/init)
-                 (sci/merge-opts {:bindings {'sel sel#
-                                             'sted (nav-root conn unbound-prints)
-                                             'bus bus
-                                             'transact! (transactor conn)}}))]
+        ctx            (-> (sci-opts app #_{:bindings {'sel sel#}})
+                           (sci/init)
+                           (sci/merge-opts {:bindings {'sel sel#
+                                                       'sted app#      #_(nav-root conn unbound-prints)
+                                                       'bus       bus
+                                                       'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
     (sci/alter-var-root sci/print-fn (fn [_]
                                        (fn [msg]
                                          (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
     (fn [_ db bus]
-      (let [eval-target                  (get-selected-form db)
+      (let [tes                          (js/performance.now)
+            eval-target                  (get-selected-form db)
             parents                      (nav/parents-seq eval-target)
             [eval-context action :as jj] (or (some eval-action? parents)
                                              [(last parents) :eval])
@@ -199,12 +227,14 @@
                   (core/send! bus [:eval-result eval-target
                                    (str (ex-message ex) "\n" (.-stack ex))]))
                 (success [r]
-                  (println "Eval-success " (type r) r)
+                  (println "Eval-success " (type r)
+                           (- (js/performance.now) tes)
+                           "ms")
                   (when (instance? v/SciVar r)
                     (println "Value" (v/getRawRoot r)))
                   (when (instance? v/SciNamespace r)
                     (println "Value" r))
-                  
+
                   (core/send! bus
                               (cond
                                 (or (= :nav action) (some-> r meta (get `p/nav)))
@@ -214,13 +244,15 @@
                                 [:ingest-after eval-target (first r)]
                                 
                                 :else
-                                [:eval-result eval-target (str r) print-output ])))]
+                                [:eval-result eval-target (str r) print-output ]
+                                
+                                )))]
           (try (-> (case action
-                     :nav (when-some [ptr (:nav/pointer eval-context)]
-                            (let [k (e/->form eval-target)]
-                              (case (:coll/type eval-context)
-                                (:vec :list) (datafy/nav ptr nil k)
-                                (:map :set)  (datafy/nav ptr k (get ptr k)))))
+                     :nav  (when-some [ptr (:nav/pointer eval-context)]
+                             (let [k (e/->form eval-target)]
+                               (case (:coll/type eval-context)
+                                 (:vec :list) (datafy/nav ptr nil k)
+                                 (:map :set)  (datafy/nav ptr k (get ptr k)))))
                      :eval (sci/binding [sel# eval-target
                                          sci/print-fn (fn [m] (swap! print-output conj m))]
                              (sci/eval-string* ctx (e/->string eval-context))))

@@ -150,8 +150,13 @@
             db @conn
             tx-data (apply mut-fn db args)
             report (try (and tx-data
-                             (assoc (d/transact! conn tx-data)
-                                    :mut mut))
+                             #_(assoc (d/transact! conn tx-data)
+                                          :mut mut)
+                             (let [_ (js/console.time "Transacting")
+                                   ans (assoc (d/transact! conn tx-data)
+                                              :mut mut)
+                                   _ (js/console.timeEnd "Transacting")]
+                               ans))
                         (catch #? (:cljs js/Error :clj Exception) e
                           {:error e}))]
         
@@ -161,6 +166,7 @@
                 #_(println txid mut)
                 (reset! history (cons report @history)))
             (println "No current-tx?")))
+        
         (when-let [e (:error report)]
           (println (str "Error transacting " e (pr-str mut)) e)
           (println "Tx-data")
@@ -247,11 +253,16 @@
                                                             e)))
                                                   tx-data)
                                          as (into #{} (map (fn [[_ a]] a)) tx-data)]
+                                     
                                      (vreset! scroll-snapshot @scroll-sequence-number)
+                                     (js/console.time "batchedUpdates")
                                      (js/ReactDOM.unstable_batchedUpdates
                                       (fn []
                                         (doseq [e es]
                                           (when-not (empty? (d/datoms db-after :eavt e))
-                                            (fire-subs! the-bus (d/entity db-after e)))))))))))}
+                                            (fire-subs! the-bus (d/entity db-after e))))))
+                                     (js/console.timeEnd "batchedUpdates"))
+                                   (catch #? (:cljs js/Error :clj Exception) e
+                                     (js/console.log "Exception in listener" e))))))}
         (map->App)
         (setup-undo!))))

@@ -8,9 +8,10 @@
                :output-dir "srv/js"
                :modules {:main {:init-fn sted.page/init}}
                :release {:compiler-options {:optimizations :advanced
-                                            :pretty-print true
-                                            :pseudo-names true
-                                            :output-feature-set :es2018}}}
+                                            :output-feature-set :es2018
+                                            ;; :pretty-print true
+                                            ;; :pseudo-names true
+                                            }}}
           :elec {:target :node-script
                  :output-to "srv/electron-main.js"
                  :main sted.electron-main/main}

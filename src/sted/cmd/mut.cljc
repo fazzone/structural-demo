@@ -1,5 +1,6 @@
 (ns sted.cmd.mut
   (:require
+   [sted.embed.common :as ec]
    [clojure.string :as string]
    [datascript.core :as d]
    [sted.embed :as e]
@@ -7,6 +8,8 @@
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
    [sted.cmd.nav :as nav]
+   [sted.loopy :as loopy]
+   [sted.embed.md :as emd]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
@@ -183,9 +186,9 @@
 
 (defn ingest-nav-assoc
   [[[k v] & kvs]]
-  (let [e (e/new-tempid)]
+  (let [e (ec/new-tempid)]
     (merge {:db/id e :coll/type :map}
-           (e/seq-tx
+           (ec/seq-tx
             (->> kvs
                  (mapcat (fn [[k v]]
                            [(assoc (e/->tx k)
@@ -197,9 +200,9 @@
 
 (defn ingest-nav-seq
   [vs]
-  (let [e (e/new-tempid)]
+  (let [e (ec/new-tempid)]
     (merge {:db/id e :coll/type :vec}
-           (e/seq-tx
+           (ec/seq-tx
             (for [v vs]
               (assoc (e/->tx v) :coll/_contains e))))))
 
@@ -215,8 +218,10 @@
 (defn ingest-eval-result
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node (-> (e/->tx c)
-                     (update :db/id #(or % "new-node")))
+        new-node (binding [e/*left* (volatile! 100)]
+                     
+                   (-> (e/->tx c)
+                       (update :db/id #(or % "new-node"))))
         outer {:db/id "outer"
                :coll/type :eval-result
                :seq/first (:db/id new-node)
@@ -239,11 +244,15 @@
 (defn ingest-after
   [db et c]
   (let [top-level (peek (nav/parents-vec et))
-        new-node  (-> (e/->tx c)
-                      (update :db/id #(or % "new-node")))]
-    (into [new-node]
+        ;; new-node (binding [e/*left* (volatile! 100)]
+        ;;            (-> (e/->tx c)
+        ;;                  (update :db/id #(or % "new-node"))))
+
+        tx-data (loopy/go c 99)]
+    (into tx-data
           #_(edit/insert-before-tx top-level new-node)
-          (edit/insert-after-tx top-level new-node))))
+          (edit/insert-after-tx top-level
+                                {:db/id (second (first tx-data))}))))
 
 (defn insert-data
   [et c]
@@ -336,7 +345,7 @@
 (defn stitch*
   [sel e]
   (when-let [head (:seq/first e)]
-    (let [text (->> (tree-seq :coll/contains :coll/contains e)
+    (let [text (->> (tree-seq :coll/type e/seq->vec e)
                     (keep :token/value)
                     (apply str))]
       (into (vector (assoc (e/parse-token-tx text) :db/id (:db/id head)))
@@ -371,22 +380,25 @@
   [sel [head & more]]
   (let [tt (:token/type sel)]
     (into [[:db/add (:db/id sel) :token/value head]
-           (when more [:db/add "newnode" :seq/next "newtail"])
+           (when more [:db/add "torn" :seq/next "newtail"])
            (when more
              (-> (for [e more]
                    {:token/value e
                     :token/type tt
-                    :coll/_contains "newnode"})
-                 (e/seq-tx)
+                    :coll/_contains "torn"})
+                 (ec/seq-tx)
                  (assoc :db/id "newtail")))]
-          (concat (edit/form-wrap-tx sel :tear)
-                  (move-selection-tx (:db/id sel) "newnode")))))
+          (concat (edit/form-wrap-tx sel :tear "torn")
+                  (move-selection-tx (:db/id sel) "torn")))))
 
 (defn tear-tx
   [sel]
   (if-some [parts (some-> sel :token/value tear-preference-order)]
     (tear* sel parts)
     (restitch sel sel )))
+
+(comment
+  (tear-preference-order "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/reference/global_objects/promise/index.md"))
 
 (defn find-next*
   [me ir]
@@ -472,11 +484,25 @@
 
 (def drag-right-tx (partial drag* move/next-sibling edit/insert-after-tx))
 
-(defn chain-from-text
+#_(defn chain-from-text
   [sel text props]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
         new-node (-> (e/string->tx-all text)
+                     (update :db/id #(or % "cft"))
+                     (assoc :coll/type :chain)
+                     (merge props))]
+    (into [new-node]
+          (edit/insert-after-tx chain new-node))))
+
+(defn chain-from-text
+  [sel text props]
+  (let [top-level   (peek (nav/parents-vec sel))
+        chain       (some-> top-level :coll/_contains edit/exactly-one)
+        _ (js/console.time "S->tx")
+        stx (e/string->tx-all text)
+        _ (js/console.timeEnd "S->tx")
+        new-node (-> stx
                      (update :db/id #(or % "cft"))
                      (assoc :coll/type :chain)
                      (merge props))]
@@ -547,9 +573,16 @@
    ;; :insert-right-newline           (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {:form/linebreak true}))
    :edit/reject                    (fn [db] (insert/reject-edit-tx db (d/entid db [:form/editing true])))
    :edit/finish                    (fn [db text] (insert/finish-edit-tx db (d/entid db [:form/editing true]) text))
-   :edit/finish-and-move-up        (fn [db text] (insert/finish-edit-and-move-up-tx db (d/entid db [:form/editing true]) text))
+   :edit/finish-and-move-up        (fn [db text]
+                                     (insert/finish-edit-and-move-up-tx
+                                      db
+                                      (d/entid
+                                       db
+                                       [:form/editing true])
+                                      text))
    :edit/finish-and-edit-next-node (fn [db text] (->> text (insert/finish-edit-and-edit-next-tx (d/entity db [:form/editing true]))))
    :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
+
    :delete-left                    (fn [db] (move-and-delete-tx db move/backward-up move/next-sibling))
    :delete-right                   (fn [db] (move-and-delete-tx db move/forward-up move/prev-sibling))
    :raise                          (comp edit/form-raise-tx get-selected-form)
@@ -572,7 +605,8 @@
    :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
    :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
    :eval-result                    ingest-eval-result #_eval-result-above-toplevel
-
+   
+   
    :ingest-after          ingest-after
    :hide                  (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
    :stringify             (fn [db] (replace-with-pr-str (get-selected-form db)))
@@ -606,7 +640,16 @@
                              (move-selection-tx (:db/id et) -1)))))
    
    :unraise (comp edit/unraise-tx get-selected-form)
-   })
+   :compose (fn [db]
+              (let [sel (get-selected-form db)]
+                (edit/ffff sel)))
+   :ingest-markdown (fn [db md-text]
+                      (let [top-level (peek (nav/parents-vec (get-selected-form db)))
+                            txe (emd/md->tx md-text)]
+                        #_(println
+                         "Top" (:db/id top-level) "Txe" txe)
+                        (into [txe]
+                              (edit/insert-before-tx top-level txe))))})
 
 (def dispatch-table
   (merge movement-commands

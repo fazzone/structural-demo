@@ -21,19 +21,21 @@
     [:span {:style {:position :relative}}
      (cond
        (not (or utext? utk?))
-       [:span {:style {:position :relative}}
-                  (rum/fragment
-                   #_(when (even? jj)
-                     [:span
-                        {:style {:position :absolute
-                                 :width "1ch"
-                                 :top "-1.25ex"
-                                 :left (str (+ off left) "ch")
-                                 }}
-                        (subs sj 0 1)])
-                   [:span.hlp {:style {:width (str len "ch")
-                                       :left (str (+ off left)
-                                                  "ch")}}])]
+       (rum/fragment
+        [:span
+         {:id (str "sr" sj)
+          :style {:position :absolute
+                  :width "1ch"
+                  :top "-1.25ex"
+                  :color "#fff"
+                  ;; :background-color "tomato"
+                  :z-index 999
+                  :left (str (+ off left) "ch")}}
+         sj
+         #_(subs sj 0 1)]
+        [:span.hlp {:style {:width (str len "ch")
+                            :left (str (+ off left)
+                                       "ch")}}])
        utk?
        [:span.hlp.unique-token {:style {:width (str tkl "ch")
                                         :left (str left "ch")}}]
@@ -57,11 +59,7 @@
    {}
    (when (< 1 (count text))
      
-     (let [tag           (str  "Searching " text)
-           _             (js/console.time tag)
-           results       (rum/react s/results)
-           #_(s/substring-search-all-visible-tokens (string/lower-case text))
-           _             (js/console.timeEnd tag)
+     (let [results       (rum/react s/results)
            unique-text?  (= 1 (count results))
            unique-token? (and unique-text? (= 1 (count (val (first results)))))
            jj            (volatile! 0)]
@@ -73,6 +71,7 @@
              [i n]        rs]
          (do
            #_(js/console.log matched i n)
+           #_(println (str  "[" text "]") "hlp" matched i n)
            (->> n
                 (rum/portal (hlp (count matched) i (count text)
                                  (vswap! jj inc)

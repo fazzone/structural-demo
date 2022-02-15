@@ -5,6 +5,7 @@
    [sted.cmd.move :as move]
    [clojure.string :as string]
    [sted.embed :as e]
+   [sted.embed.common :as ec ]
    [clojure.edn :as edn]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
@@ -34,9 +35,8 @@
   (cond-> txm
     true (assoc :db/id eid)
     (:db/id txm)
-    (merge (e/seq-tx
-            (for [elem (e/seq->vec txm)]
-              (assoc elem :coll/_contains eid))))))
+    (merge (ec/seq-tx (for [elem (e/seq->vec txm)]
+                        (assoc elem :coll/_contains eid))))))
 
 (defn accept-edit-tx
   [form-eid value]
@@ -49,6 +49,7 @@
        [:db/retract form-eid :token/type]
        [:db/retract form-eid :form/editing]
        [:db/retract form-eid :form/edit-initial]
+       [:db/retract form-eid :form/edit-comp]
        [:db/add form-eid :form/edited-tx :db/current-tx]
        (unify-with form-eid ptx)])))
 

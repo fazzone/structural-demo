@@ -8,7 +8,9 @@
    :coll/contains {:db/valueType :db.type/ref
                    :db/cardinality :db.cardinality/many}
    :seq/first {:db/valueType :db.type/ref}
-   :seq/next {:db/valueType :db.type/ref}})
+   :seq/next {:db/valueType :db.type/ref}
+   :handle/token {:db/unique :db.unique/identity}
+   })
 
 (def schema
   (merge

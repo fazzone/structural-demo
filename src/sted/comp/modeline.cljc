@@ -44,12 +44,9 @@
                   (:db/id sel)
                   "/"
                   (:max-tx db)
-                  " " (some-> sel :nav/pointer meta))
-                 #_(str "#" (:db/id sel)
-                        " / "
-                        (:max-tx db)
-                        #_(or (:coll/type sel)
-                              #_(pr-str (d/touch sel)))))])
+                  " " (some-> sel :nav/pointer meta)
+                  ;; " " (pr-str (d/touch sel))
+                  ))])
     
     
     #_(when-some [insp (js/document.getElementById "inspector")]

@@ -1,6 +1,7 @@
 (ns sted.cmd.edit
   (:require
    [datascript.core :as d]
+   [sted.embed.common :as ec]
    [sted.embed :as e]
    [sted.core :refer [get-selected-form move-selection-tx]]
    [sted.cmd.move :as move]))
@@ -149,6 +150,7 @@
 (def duplicated-attrs [:form/indent
                        :form/linebreak])
 
+
 (defn form-duplicate-tx
   [e]
   (letfn [(dup-spine [parent head]
@@ -160,7 +162,7 @@
            (cond
              (:token/type e) {:token/type  (:token/type e)
                               :token/value (:token/value e)}
-             (:coll/type e)  (let [us (e/new-tempid)]
+             (:coll/type e)  (let [us (ec/new-tempid)]
                                (merge {:db/id us :coll/type (:coll/type e)}
                                       (dup-spine us e)))))))
 
@@ -181,19 +183,22 @@
           (insert-after-tx sel new-node))))
 
 (defn form-wrap-tx
-  [e ct]
-  (let [{:form/keys [linebreak indent]} e]
-    (into [(cond-> {:db/id "newnode"
-                    :coll/type ct
-                    :coll/contains (:db/id e)
-                    :seq/first (:db/id e)}
-             linebreak (assoc :form/linebreak linebreak)
-             indent (assoc :form/indent indent))
-           (when linebreak
-             [:db/retract (:db/id e) :form/linebreak linebreak])
-           (when indent
-             [:db/retract (:db/id e) :form/indent indent])]
-          (form-overwrite-tx e "newnode"))))
+  ([e ct]
+   (form-wrap-tx e ct "frtx-newnode"))
+  ([e ct tempid]
+   (let [{:form/keys [linebreak indent]} e]
+     (into [(cond-> {:db/id tempid
+                     :coll/type ct
+                     :coll/contains (:db/id e)
+                     :seq/first (:db/id e)}
+              linebreak (assoc :form/linebreak linebreak)
+              indent (assoc :form/indent indent))
+            (when linebreak
+              [:db/retract (:db/id e) :form/linebreak linebreak])
+            (when indent
+              [:db/retract (:db/id e) :form/indent indent])]
+           (form-overwrite-tx e tempid)))))
+
 
 (defn begin-edit-existing-node-tx
   [e]
@@ -425,3 +430,39 @@
               (form-replace-tx ts sel)
               (form-replace-tx sel p)))))
 
+
+(defn ffff
+  ([sel]
+   (ffff sel {:form/editing true
+              :form/edit-initial ""
+              :form/edit-comp true}))
+  ([sel props]
+   (into [{:db/id "funcall"
+           :coll/type :list
+           :coll/contains #{"funcname" (:db/id sel)} 
+           :seq/first (merge {:db/id "funcname"} props)
+           :seq/next {:seq/first (:db/id sel)}}]
+         (concat (form-overwrite-tx sel "funcall")
+                 (move-selection-tx (:db/id sel) "funcname")))))
+
+(comment
+  (let [top (e/->entity '[1 foo 2 3])
+        sel (-> top :seq/next :seq/first)
+        ]
+    (println 'Top (:db/id top) (e/->string top) )
+    (println 'Sel (:db/id sel) (e/->string sel) )
+  
+    #_(println "================ Wrap")
+    #_(run! clojure.pprint/pprint (form-wrap-tx sel :list))
+    #_(println "================ ILeft")
+    #_(run! clojure.pprint/pprint (insert-editing-before sel))
+    
+    (let [txd (ffff sel {:token/type :symbol :token/value "Func"})
+          rep (d/with (d/entity-db top)
+                      txd
+                      ) ]
+      (run! clojure.pprint/pprint txd)
+      (println "================================================================================" )
+      (run! prn (:tx-data rep))
+      (println (e/->string (d/entity (:db-after rep)
+                                     (:db/id top)))))))

@@ -1,15 +1,10 @@
 (ns sted.comp.code
   (:require
    [sted.embed :as e]
-   [sted.schema :as s]
-   [goog.string :as gstring]
-   [goog.functions :as gfunc]
-   [datascript.core :as d]
-   [clojure.datafy :as datafy]
+   [sted.schema :as s] 
+   [datascript.core :as d] 
    [clojure.string :as string]
    [rum.core :as rum]
-   [cljs.core.async :as async]
-   [sci.core :as sci]
    [sted.db-reactive :as dbrx]
    [sted.comp.edit-box :as eb]
    [sted.comp.scroll :as scroll]
@@ -160,6 +155,11 @@
    {:key (:db/id ch)
     :class classes
     :id (str "c" (:db/id ch))}
+   [:span.prose-font 
+    {:style {:text-align :center
+             :font-style :italic
+             :font-size "200%"}}
+    "Document Examiner"]
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
          (rum/with-key (:db/id f))))])
@@ -247,20 +247,87 @@
     #_(for [c children] ^:inline (form c bus indent proply))
     #_(e/close-delim coll-type)]])
 
+(rum/defc para
+  [ch bus classes]
+  [:p {:key (:db/id ch)
+       :class classes}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdroot
+  [ch bus classes]
+  [:div
+   (cond-> {:key (:db/id ch)
+            :class (str "md-root prose-font " classes)}
+     classes (assoc :class classes))
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdlist
+  [ch bus classes]
+  [:ul {:key (:db/id ch)
+        :class (str "md-list " classes)}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdli
+  [ch bus classes]
+  [:li {:key (:db/id ch)
+        :class (str "md-li " classes)}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdh
+  [ch bus classes]
+  [:h2 {:key (:db/id ch)
+        :class (str "md-h " classes)}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdem
+  [ch bus classes]
+  [:em {:key (:db/id ch)
+        :class (str "md-em " classes)}
+   (for [f (e/seq->vec ch)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mda
+  [a bus classes]
+  [:span {:key (:db/id a)
+          :class (str "md-link " classes)}
+   (for [f (e/seq->vec a)]
+     ^:inline (form f bus 0 nil))])
+
+(rum/defc mdbq
+  [a bus classes]
+  [:span {:key (:db/id a)
+          :class (str "md-blockquote " classes)}
+   (for [f (e/seq->vec a)]
+     ^:inline (form f bus 0 nil))])
+
 (defn any-coll
   [e b c i p]
   (let [ct (:coll/type e)]
     (or
      (code-coll ct e b c i p)
      (case ct
-       :chain       (chain e b c i p)
-       :inspect     (ci/inspect-portal)
-       :grid        (grid e b c i p)
-       :bar         (bar e b c i p)
-       :hidden      (hiddenc e b c i p)
-       :keyboard    (ck/keyboard-diagram e b c i p)
-       :eval-result (erc e b c i p)
-       :alias       (aliasc e b c i p)
+       :chain         (chain e b c i p)
+       :inspect       (ci/inspect-portal)
+       :grid          (grid e b c i p)
+       :bar           (bar e b c i p)
+       :hidden        (hiddenc e b c i p)
+       :keyboard      (ck/keyboard-diagram e b c i p)
+       :eval-result   (erc e b c i p)
+       :alias         (aliasc e b c i p)
+       :md/root       (mdroot e b c i p)
+       :md/para       (para e b c i p)
+       :md/list       (mdlist e b c i p)
+       :md/li         (mdli e b c i p)
+       :md/heading    (mdh e b c i p)
+       :md/strong     (mdem e b c i p)
+       :md/emphasis   (mdem e b c i p)
+       :md/link       (mda e b c i p)
+       :md/blockquote (mdbq e b c i p)
        (do
          (prn "???????????" ct)
          (str "What are you? " ct))))))
@@ -272,20 +339,23 @@
                       ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
                        "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
                        "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
-                      "m"
+                      "tk m"
                       ("first" "map" "filter" "apply" "reset!" "swap!"
                        "get" "assoc" "update" "cons" "conj" "seq" "next"
                        "prn" "println" "into" "set" "vector"
                        "take" "drop" "take-while" "drop-while" "reduce"
                        "concat")
-                      "s"
-                      "v")
-    :keyword        "k"
-    (:string :char) "l"
-    :number         "n"
-    :regex          "re"
-    :verbatim       "verbatim"
-    :comment        "comment"))
+                      "tk s"
+                      "tk v")
+    :keyword        "tk k"
+    (:string :char) "tk l"
+    :number         "tk n"
+    :regex          "tk re"
+    :verbatim       "tk verbatim"
+    :comment        "comment"
+    :md/text        "md"
+    :md/code        "md-code code-font"
+    :md/inline-code "md-inline-code code-font"))
 
 (defn token-text
   [t v]
@@ -305,9 +375,11 @@
     :number (str v)
     :comment v
     :char v
-    :regex (str "REGEX:" v)))
+    :regex (str "REGEX:" v)
+    (:md/text :md/code :md/inline-code) v
 
-
+    
+    ))
 
 
 (rum/defc form
@@ -332,9 +404,9 @@
              [:span
               {:key (:db/id e)
                ;; :dangerouslySetInnerHTML {:__html it}
-               :class (if selected?
-                        (str "tk selected " tc)
-                        (str "tk " tc))
+               :class (if-not selected?
+                        tc
+                        (str tc " selected"))
                :onClick (fn [ev]
                           (.stopPropagation ev)
                           (core/send! bus [:click (:db/id e)])

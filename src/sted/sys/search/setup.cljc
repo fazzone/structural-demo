@@ -1,5 +1,6 @@
 (ns sted.sys.search.setup
   (:require [sted.core :as core]
+            #_[sted.sys.search.db :as sdb]
             #?(:cljs [sted.sys.search.dom :as sdom])))
 
 (defn cleanup!
@@ -19,4 +20,9 @@
            :update-search
            (fn [[_ text] _ _]
              #?(:cljs
-                (reset! results (sdom/substring-search-all-visible-tokens text)))))))))
+                (let [t (str "dbsearch " text)]
+                  #_(js/console.time t)
+                  #_(prn "Prefxi" (count (sdb/db-prefix-search)))
+                  #_(js/console.timeEnd t)
+                  #_(js/setTimeout (fn [] (reset! results (sdom/substring-search-all-visible-tokens text)))
+                                 0)))))))))

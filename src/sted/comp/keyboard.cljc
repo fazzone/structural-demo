@@ -3,11 +3,16 @@
    [rum.core :as rum]
    [datascript.core :as d]))
 
-(rum/defc keyboard-key-component
+#_(rum/defc keyboard-key-component
   [k->l keycap]
   [:div {:class ["key"
                  (when (= 1 (count keycap))
-                     " single-width")]}
+                   " single-width")]}
+   [:div {:style {:position :absolute
+                  :height "100%"
+                  :border-left "1px solid #fff"}}
+    "What"
+    ]
    [:div.keycap keycap]
    (when-let [legend (k->l keycap)]
      (if-not (string? legend)
@@ -20,6 +25,22 @@
     [:div {:class ["key"
                    (when (= 1 (count keycap))
                      " single-width")]}
+     (comment
+       [:div {:style {:position :relative
+                      :top "0.5ex"
+                      :left "1.5ex"}}
+        [:div {:style {:position :absolute
+                       :width "4ex"
+                       :height "2.5ex"
+                       :border "1px solid #333"}}]
+        [:div {:style {:position :absolute
+                       :margin-top "1.25ex"
+                       :width "4ex"
+                       :border-top "1px dotted #333"}}]
+        [:div {:style {:position :absolute
+                       :margin-left "2ex"
+                       :height "2.5ex"
+                       :border-left "1px dotted #333"}}]])
      [:div.keycap-parent [:div.keycap keycap]]
      (when symbol [:div.key-symbol-parent [:div.key-symbol symbol]])
      (when label [:div.key-label label])]))
@@ -38,37 +59,37 @@
 
 (def mutation->label
   {
-   :flow-right {:label "flow->" :symbol [:span.symbol1 "==>"]}
-   :flow-left  {:label "<-flow" :symbol [:span.symbol1 "<=="]}
+   :flow-right {:label "flow->" :symbol
+                [:div {:style {:margin-top "0.65ex"
+                               :margin-left "0.15ex"}}
+                 "=>>"]}
+   :flow-left  {:label "<-flow" :symbol
+                [:div {:style {:transform "scale(-1,1)"
+                               :margin-top "0.65ex"
+                               :margin-left "0.15ex"}}
+                 "=>>"]}
    :raise      {:label  "raise"
                 :symbol [:div {:style {:transform   "rotate(225deg)"
-                                       :margin-top  "0.5ex"
-                                       :margin-left "-0.5ex"}} "=>>"]}
+                                       :margin-top  "0.5ex"}} "=>>"]}
    :float      {:label  "float"
                 :symbol [:div {:style {:margin-top  "0.5ex"
-                                       :margin-left "-0.5ex"
+                                       ;; :margin-left "0.15ex"
                                        :transform   "rotate(-90deg)"}}
                          "=>>"]}
    :sink       {:label  "sink"
                 :symbol [:div {:style {:margin-top  "0.5ex"
+                                       ;; :margin-left "0.15ex"
                                        :margin-left "-0.5ex"
-                                       :transform   "rotate(90deg)"}} "=>>"]}
-   :eval-sci   {:label  [:span #_{:style {:color "tomato"}} "eval"]
-                
-                :symbol
-                #_[:div {:style {:font-size   "220%"
-                                 :margin-top  "-1.175ex"
-                                 :margin-left "0ex"}}
-                         
-                 "…"]
-                [:div {:style {:font-size   "120%"
-                               :margin-left "0ex"}}
-                         
-                    "λ>"]}
+                                       :transform   "rotate(90deg)"}}
+                         "=>>"]}
+   :eval-sci   {:label  "eval"
+                :symbol [:div {:style {:font-size   "135%"
+                                       :margin-left "0.25ex"
+                                       :margin-top "0.175ex"}}
+                         "λ>"]}
    :hide {:label [:span {:style {:color "tomato"}} "hide"]}
-   :compose {:label  [:span {:style {:color "tomato"}} "comp"]
-             :symbol [:div {:style {:font-size   "120%"
-                                    :margin-left "0.2ex"}}
+   :compose {:label  "comp"
+             :symbol [:div {:style {:font-size "150%" :margin-left "0.55ex"}}
                       "◯"]}
    :select-chain {:label "chain"}
    :m1 {:label "top"}
@@ -79,113 +100,68 @@
    :offer {:label "offer"}
    :new-comment {:label "doc"}
    :tear {:label "-tear-"
-          ;; :symbol 
-          :symbol
-          [:div {:style {:font-size   "130%"}}
-           "«⋯»"]}
-   :hop-left  {:label "<-hop"}
-   :hop-right {:label "hop->"}
+          :symbol [:div {:style {:font-size "130%"
+                                 :margin-top "0.15ex"
+                                 :margin-left "-0.15ex"}}
+                   "«⋯»"]}
+   :hop-left  {:label "<-hop"
+               :symbol [:div {:style {:font-size "130%"
+                                      :margin-top "0.15ex"
+                                      :margin-left "-0.15ex"}}
+                        "<|"]}
+   :hop-right {:label "hop->"
+               :symbol [:div {:style {:font-size "130%"
+                                      :margin-top "0.15ex"
+                                      :margin-left "-0.15ex"}}
+                        "|>"]}
    :find-next {:label "look"}
    :undo {:label "undo"}
    :insert-left  {:label "insert"}
    :insert-right {:label "->insert"}
-   :wrap         {:label "(wrap)" :symbol [:div {:style {:margin-top "0.3ex"}} "(+)"]}
-   :new-vec      {:label "new []" :symbol [:div {:style {:margin-top "0.3ex"}} "+[]"]}
+   :wrap         {:label "(wrap)"
+                  :symbol [:div {:style {:margin-top "0.65ex"
+                                         :margin-left "0.15ex"}}
+                           "(+)"]}
+   :new-vec      {:label "new []" :symbol
+                  [:div {:style {:margin-top "0.65ex"
+                                 :margin-left "0.15ex"}}
+                   "+[]"]}
    :delete-right {:label  "del->"
                   :symbol [:div {:style {:font-size   "120%"
-                                         :margin-left "0.0ex"
-                                         :margin-top  "-0.2ex"}}
+                                         :margin-left "0.15ex"
+                                         :margin-top  "0.25ex"}}
                            "⌦"]}
    :delete-left  {:label "<-delete"}
    :scroll {:label "view"}
    :parent {:label  "parent"
-            :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
+            :symbol [:div {:style {:transform "rotate(225deg)"
+                                   :font-size "130%"
+                                   ;; :margin-top "0.25ex"
+                                   ;; :margin-left "0.15ex"
+                                   }} "->"]}
    :next   {:label  "next"
-            :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
+            :symbol [:div {:style {:font-size "130%"}} "->"]}
    :prev   {:label  "prev"
-            :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"]}
+            :symbol [:div {:style {:font-size "130%"}} "<-"]}
+   
+   ;; :next   {:label  "next"
+   ;;          :symbol [:div {:style {:transform "rotate(90deg)"
+   ;;                                 :font-size "130%"}} "->"]}
+   ;; :prev   {:label  "prev"
+   ;;          :symbol [:div {:style {:transform "rotate(-90deg)"
+   ;;                                 :font-size "130%"}} "->"]}
    :tail   {:label "tail"
-            :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
-   :clone     {:label "clone" :symbol [:div.symbol3 "++"]}
+            :symbol [:div {:style {:transform "rotate(45deg)"
+                                   :font-size "130%"
+                                   ;; :margin-top "0.25ex"
+                                   ;; :margin-left "0.15ex"
+                                   }} "->"]}
+   :clone     {:label "clone"
+               :symbol [:div {:style {:margin-top "0.25ex"
+                                      :margin-left "0.25ex"
+                                      :font-size "130%"}}
+                        "++"]}
    :linebreak {:label "linebreak"}})
-
-(def defaultkl
-  {
-   "f" {:label "flow->" :symbol [:span.symbol1 "==>"]}
-   "a" {:label "<-flow" :symbol [:span.symbol1 "<=="]}
-   "r" {:label "raise"
-        :symbol [:div {:style {:transform "rotate(225deg)"
-                               :margin-top "0.5ex"
-                               :margin-left "-0.5ex"}} "=>>"]}
-   "w" {:label "float"
-        :symbol [:div {:style {:margin-top "0.5ex"
-                               :margin-left "-0.5ex"
-                               :transform "rotate(-90deg)"}}
-                 "=>>"]}
-   "s" {:label "sink"
-        :symbol [:div {:style {:margin-top "0.5ex"
-                               :margin-left "-0.5ex"
-                               :transform "rotate(90deg)"}} "=>>"]}
-   "e" {:label [:span {:style {:color "tomato"}} "eval"]
-        :symbol [:div {:style {:font-size "220%"
-                               :margin-top "-1.175ex"
-                               :margin-left "0ex"}}
-                 "…"]}
-   "y" {:label [:span {:style {:color "tomato"}} ""]
-        :symbol [:div {:style {:font-size "140%" :margin-left "0.3ex"}} "λ"]}
-   "u" {:label [:span {:style {:color "tomato"}} "undo"]
-        :symbol [:div {:style {:font-size "160%"
-                               :margin-top "-0.4ex"
-                               :margin-left "-0.0ex"}}
-                 "⎌"]}
-   ;; append is "n Space"? - kinda, last vs. tail pos
-   ;; "o" {:label [:span {:style {:color "tomato"}} "append"]}
-   "t" {:label [:span {:style {:color "tomato"}} "thread"]}
-   "=" {:label [:span {:style {:color "tomato"}} "rename"]}
-   "-" {:label [:span {:style {:color "tomato"}} "hide"]}
-   ;; chainable, call more functions on it
-   ;; needs to specify movement/up after  edit complete
-   "q" {:label [:span {:style {:color "tomato"}} "comp"]
-        :symbol [:div {:style {:font-size "120%"
-                               :margin-left "0.2ex"}}
-                 "◯"]}
-   "m" {:label [:span {:style {:color "tomato"}} "modify"]}
-   "n" {:label [:span {:style {:color "tomato"}} "next"]}
-   "b" {:label [:span {:style {:color "tomato"}} "bind"]}
-   "p" {:label [:span {:style {:color "tomato"}} "push)→"]}
-   "o" {:label [:span {:style {:color "tomato"}} "←)pull"]}
-   "z" {:label "<-hop"}
-   "x" {:label "hop->"}
-   "/" {:label [:span {:style {:color "tomato"}} "search"]}
-   "," {:label [:span {:style {:color "tomato"}} "prefix"]}
-   "g" {:label [:span {:style {:color "tomato"}} "goto"]}
-   ";" {:label [:span {:style {:color "tomato"}} "doc"]}
-   " " {:label "insert"}
-   "0" {:label "parent"}
-   "9" {:label "(wrap)"}
-   "[" {:label "new []"}
-   "]" {:label "parent"}
-   "d" {:label "delete"
-        :symbol [:div {:style {:font-size "120%"
-                               ;; :font-size "210%"
-                               :margin-left "0.0ex"
-                               :margin-top "-0.2ex"}}
-                 "⌦"
-                 #_
-                 "×"]}
-   "v" {:label "view"}
-   "h" {:label "parent"
-        :symbol [:div.symbol2 {:style {:transform "rotate(225deg)"}} "->"]}
-   "j" {:label "next"
-        :symbol [:div.symbol2 {:style {:transform "rotate(90deg)"}} "->"]}
-   "k" {:label "prev"
-        :symbol [:div.symbol2 {:style {:transform "rotate(-90deg)"}} "->"]}
-   "l" {:label "tail"
-        :symbol [:div.symbol2 {:style {:transform "rotate(45deg)"}} "->"]}
-   "i"         {:label "indent"}
-   "c"         {:label "clone" :symbol [:div.symbol3 "++"]}
-   "Enter"     {:label "linebreak"}
-   "Backspace" {:label "←delete"}})
 
 (rum/defc keyboard-diagram
   [kme bus classes]
@@ -205,7 +181,7 @@
       (for [ch "qwertyuiop[]\\"]
         (rum/with-key (key ch) ch))]
      [:div.keyboard-row.asdf
-      (key "Caps")
+      (key "Control")
       (for [ch "asdfghjkl;'"]
         (rum/with-key (key ch) ch))
       (key "Enter")]
@@ -215,11 +191,11 @@
         (rum/with-key (key ch) ch))
       (key "Shift")]
      [:div.keyboard-row.space
-      (key "Control")
+      (key "Hyper")
       (key "Super")
       (key "Meta")
       (key " ")
       (key "Meta")
-      (key "Mod")
-      (key "Menu")
+      (key "Super")
+      (key "Hyper")
       (key "Control")]]))

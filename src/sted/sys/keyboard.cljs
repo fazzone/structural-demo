@@ -35,7 +35,7 @@
 (defn keyup
   [^KeyboardEvent ev mods keymap bus]
   (when (identical? js/document.body js/document.activeElement)
-    (prn "Keyup" (.-key ev) @mods)
+    #_(prn "Keyup" (.-key ev) @mods)
     (if (= super (.-key ev))
       (swap! mods disj :super))))
 

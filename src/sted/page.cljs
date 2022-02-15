@@ -2,6 +2,7 @@
   (:require
    [clojure.edn :as edn]
    [sted.embed :as e]
+   [sted.embed.common :as ec]
    [sted.schema :as s]
    [goog.string :as gstring]
    [goog.functions :as gfunc]
@@ -31,14 +32,15 @@
    [sted.sys.kbd.evt :as ske]
    [sted.sys.search.setup :as search]
    [sted.sys.mouse :as sm]
+   [sted.sys.handle :as sh]
    [sted.sys.keyboard :as sk]
    [zprint.core :as zp-hacks]
-   [sted.core :as core :refer [get-selected-form
-                               move-selection-tx]])
+   [sted.core :as core :refer [get-selected-form]])
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
    [sted.macros :as m]))
+
 
 
 (def test-form-data-bar (e/string->tx-all (m/macro-slurp "src/sted/user.clj")))
@@ -48,15 +50,15 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                #_[test-form-data-bar]
-                [(e/->tx ["hello"
-                          "hello"
-                          "hello"
-                          "hello"
-                          "hello"
-                          "hello"
+                [test-form-data-bar]
+                #_[(e/->tx ["hello"
+                            "hello"
+                            "hello"
+                            "hello"
+                            "hello"
+                            "hello"
                           
-                          ])]
+                            ])]
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state  :state/bar "bar"}
@@ -70,7 +72,7 @@
       :coll/type :keyboard
       :keymap/bindings (for [[k m] skm/default]
                          {:key/kbd k  :key/mutation m})}
-     (assoc (e/seq-tx
+     (assoc (ec/seq-tx
              (concat
               (for [ch chains]
                 (assoc ch
@@ -146,7 +148,14 @@
 (defn save*
   [file contents]
   (println "Write" file)
-  (.writeFile (js/require "fs/promises") file contents)
+  #_(.writeFile (js/require "fs/promises") file contents)
+  (let [w (js/window.open "")]
+    (js/setTimeout
+     (fn []
+       (let [el (js/document.createElement "pre")]
+         (set! (.-innerText el) contents)
+         (.appendChild (.-body (.-document w)) el)))
+     0))
   
   #_(if-let [spit (some-> (aget js/window "my_electron_bridge")
                           (aget "spit"))]
@@ -166,6 +175,8 @@
          0))))
 
 
+(defonce ^:export the-app (atom nil))
+
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
@@ -175,12 +186,16 @@
      (doseq [[m f] mut/editing-commands]
        (core/register-simple! a m f))
      (-> a
-         (core/register-mutation! :eval-sci (eval-sci/mutatef a))
+         
+         (sh/setup!)
+         
+         (core/register-mutation! :eval-sci (eval-sci/mutatef a the-app))
          (core/register-simple! :zp (sf/mutatef a))
          (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
+         (assoc :Assface true)
          (core/register-mutation!
           :save
           (fn [_ db bus]
@@ -217,7 +232,7 @@
           tree   (fetch-json (-> commit :tree :url))]
     #_(cljs.pprint/pprint tree)))
 
-(defonce ^:export the-app (atom nil))
+
 
 (defonce set-scroll-user
   (fn [ev]
