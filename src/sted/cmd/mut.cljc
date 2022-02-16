@@ -396,17 +396,6 @@
 
 (def drag-right-tx (partial drag* move/next-sibling edit/insert-after-tx))
 
-#_(defn chain-from-text
-  [sel text props]
-  (let [top-level   (peek (nav/parents-vec sel))
-        chain       (some-> top-level :coll/_contains edit/exactly-one)
-        new-node (-> (e/string->tx-all text)
-                     (update :db/id #(or % "cft"))
-                     (assoc :coll/type :chain)
-                     (merge props))]
-    (into [new-node]
-          (edit/insert-after-tx chain new-node))))
-
 (defn chain-from-text
   [sel text props]
   (let [top-level   (peek (nav/parents-vec sel))

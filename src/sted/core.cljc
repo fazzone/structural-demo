@@ -65,7 +65,7 @@
         pub (async/pub ch first)
         hs (atom {})
         #?@(:cljs [sub-map (js/Map.)]) 
-        uu (d/squuid (js/performance.now))]
+        uu (d/squuid #_(js/performance.now))]
     (reify IBus
       (send! [this msg] (async/put! ch msg))
       (connect-sub! [this topic sch]
@@ -239,7 +239,7 @@
 (defn app
   [conn]
   (let [the-bus  (bus)  #_(context)]
-    (set! (.-uniqueid ^js bus) (d/squuid (js/performance.now)))
+    (set! (.-uniqueid ^js bus) (d/squuid #_(js/performance.now)))
     (-> {:bus     the-bus
          :history (atom ())
          :dispatch (atom {})

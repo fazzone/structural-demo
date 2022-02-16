@@ -329,7 +329,6 @@
          (cons form (lazy-seq (iter r))))))
    (r/string-reader s)))
 
-
 (defn ->chain
   [text]
   (let [txe (assoc (string->tx-all text)
@@ -372,149 +371,12 @@
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
 
-#_(defn chain->flat-tx
-  [text]
-  (let [db  (d/entity-db (->chain text))
-        aref? (into #{}
-                    (comp (filter (comp #{:db.type/ref} :db/valueType val))
-                          (map key))
-                    s/schema)]
-    (loop [[[e a v] & more] (d/datoms db :eavt)
-           tx (transient [])]
-      (if (nil? e)
-        (persistent! tx)
-        (recur more (conj! tx #_[:db/add (- e) a (cond-> v (aref? a) -)]
-                           [:db/add e a v]))))))
-(defn ->flat-tx
-  [db]
-  (let [aref? (into #{}
-                    (comp (filter (comp #{:db.type/ref} :db/valueType val))
-                          (map key))
-                    s/schema)]
-    (loop [[[e a v] & more] (d/datoms db :eavt)
-           tx (transient [])]
-      (if (nil? e)
-        (persistent! tx)
-        (recur more (conj! tx
-                           [:db/add (- e) a (cond-> v (aref? a) -)]
-                           #_[:db/add e a v]))))))
-
-
 (defn parse-token-tx
   [s]
   (try
     (string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e
       {:token/type :verbatim :token/value s})))
-
-
-(comment
-  (time (->chain (slurp "subtree/clojure.core.clj")))
-  (dotimes [i 20]
-    (println "================================================================") 
-    (let [cn (d/create-conn s/form-schema)
-          ftx (time (chain->flat-tx (slurp "subtree/clojure.core.clj")))
-          _ (println "Count?" (count ftx))
-          db (:db-after (time (d/transact! cn ftx)))
-          [ch] (for [[e a v] (d/datoms db :eavt)
-                     :when (= v :chain)]
-                 (d/entity db e))]
-      ch
-      #_(->string ch))))
-
-
-
-
-
-
-(defn bcount
-  [n syms]
-  (if (= 1 n)
-    (map vector syms)
-    (for [s syms
-          r (bcount (dec n) syms)]
-      (into [s] r))))
-
-#_(run! prn (bcount 4 [:tok :leaf]))
-
-;; no child []
-;; both child [a b]
-;; left child [a]
-;; right child only - not allowed
-
-
-
-
-
-(comment
-  (let [ctr (atom 0)
-        fresh (fn [] (swap! ctr inc))
-        expand-one (fn [n]
-                     (let [q 'e]
-                       (list
-                        [q n]
-                        [n q]
-                        (conj n q))))
-        res (->> '[[]]
-                 (mapcat expand-one)
-                 (mapcat expand-one)
-                 (mapcat expand-one)
-                 (mapcat expand-one)
-                 (mapcat expand-one))]
-    #_(run! prn res)
-    (println "Res" (count res) (count (set res)))))
-
-
-
-
-
-
-
-
-
-(defn tx-and-meta
-  [form]
-  (let [ent (->entity form)]
-    [(->flat-tx (d/entity-db ent))
-     (into {}
-           (map (fn [fake real]
-                  (when-some [mta (meta real)]
-                    [(- (:db/id fake)) real])) 
-                (tree-seq :coll/type seq->seq ent)
-                (->> form
-                     (tree-seq (some-fn sequential? map? set?) seq)
-                     (filter (comp not map-entry?)))))]))
-
-(comment
-  (defn tx-with-meta
-    [form]
-    (let [[ftx mtam] (tx-and-meta form)]
-      (concat ftx
-              (for [[tempid m] mtam]
-                [:db/add tempid :meta/pointer m])))))
-
-
-(comment
-  (let [thinger [{:a :b :c {:nested :map 4 ^:nice [1]}} :ok [:a [[:x]] :Y]]
-        ent (->entity thinger)
-        mta-map (into {}
-                      (map (fn [fake real]
-                             (when-some [mta (meta real)]
-                               [(:db/id fake) mta])) 
-                           (tree-seq :coll/type seq->seq ent)
-                           (->> thinger
-                                (tree-seq (some-fn sequential? map? set?) seq)
-                                (filter (comp not map-entry?)))))]
-  
-  
-    (for [e (tree-seq :coll/type seq->seq ent)
-          :let [m (get mta-map (:db/id e))]
-          :when m]
-      [(:db/id e)
-       (->form e)
-       m])
-    #_(map = tseq
-           (map ->form (tree-seq :coll/type seq->seq ent)))))
 
 (comment
   (let [n 5
@@ -523,11 +385,6 @@
                     e
                     (recur (partition-all n e))))]
     (recpart (range 99))))
-
-
-
-
-
 
 (comment
   (time
@@ -548,5 +405,3 @@
                           #_[(string->tx-all (slurp "src/sted/page.cljs"))]))
               :avet
               ))))
-;; => 94699
-;; => 95057

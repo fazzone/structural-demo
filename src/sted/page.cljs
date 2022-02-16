@@ -195,7 +195,6 @@
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
-         (assoc :Assface true)
          (core/register-mutation!
           :save
           (fn [_ db bus]

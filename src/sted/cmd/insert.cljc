@@ -56,8 +56,8 @@
 (defn reject-edit-tx
   [db form-eid]
   (let [e (d/entity db form-eid)]
-   (concat (move/backward-up e)
-           (edit/form-delete-tx e))))
+    (into (move/movement-tx db move/up)
+          (edit/form-delete-tx e))))
 
 (defn wrap-edit-tx
   [ed ct value]
@@ -92,3 +92,5 @@
   [ed text]
   (some-> (accept-edit-tx (:db/id ed) text)
           (into (edit/insert-editing-after ed))))
+
+

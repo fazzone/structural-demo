@@ -155,11 +155,6 @@
    {:key (:db/id ch)
     :class classes
     :id (str "c" (:db/id ch))}
-   [:span.prose-font 
-    {:style {:text-align :center
-             :font-style :italic
-             :font-size "200%"}}
-    "Document Examiner"]
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
          (rum/with-key (:db/id f))))])
