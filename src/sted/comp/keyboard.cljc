@@ -62,26 +62,26 @@
    :flow-right {:label "flow->" :symbol
                 [:div {:style {:margin-top "0.65ex"
                                :margin-left "0.15ex"}}
-                 "=>>"]}
+                 "==>"]}
    :flow-left  {:label "<-flow" :symbol
                 [:div {:style {:transform "scale(-1,1)"
                                :margin-top "0.65ex"
                                :margin-left "0.15ex"}}
-                 "=>>"]}
+                 "==>"]}
    :raise      {:label  "raise"
                 :symbol [:div {:style {:transform   "rotate(225deg)"
-                                       :margin-top  "0.5ex"}} "=>>"]}
+                                       :margin-top  "0.5ex"}} "->>"]}
    :float      {:label  "float"
                 :symbol [:div {:style {:margin-top  "0.5ex"
                                        ;; :margin-left "0.15ex"
                                        :transform   "rotate(-90deg)"}}
-                         "=>>"]}
+                         "->>"]}
    :sink       {:label  "sink"
                 :symbol [:div {:style {:margin-top  "0.5ex"
                                        ;; :margin-left "0.15ex"
                                        :margin-left "-0.5ex"
                                        :transform   "rotate(90deg)"}}
-                         "=>>"]}
+                         "->>"]}
    :eval-sci   {:label  "eval"
                 :symbol [:div {:style {:font-size   "135%"
                                        :margin-left "0.25ex"

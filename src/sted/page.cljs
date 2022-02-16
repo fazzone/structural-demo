@@ -249,10 +249,11 @@
 (defn ^:dev/after-load init
   []
   #_(some-> the-singleton-db meta :listeners (reset! {}))
-  #_(let [ls (:listeners (meta the-singleton-db))]
-      (println "Listeners:" ls)
-      (reset! ls {}))
-  #_(println "Cleared DB listeners")
+  (let [ls (:listeners (meta the-singleton-db))]
+    (println "Listeners:" ls)
+    (reset! ls {}))
+  
+  (println "Cleared DB listeners")
   (js/document.addEventListener "scroll" set-scroll-user true)
   
   (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)]

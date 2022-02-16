@@ -77,12 +77,9 @@
            (when old-parent
              [:db/retract (:db/id old-parent) :coll/contains (:db/id r)])])))
 
-
-
-
 (defn insert-after-tx
   [target new-node]
-  (when-let [spine (first (:seq/_first target))]
+  (when-let [spine (exactly-one (:seq/_first target))]
     (when-let [coll (exactly-one (:coll/_contains target))]
       [{:db/id (:db/id spine)
         :seq/next {:db/id "cons"

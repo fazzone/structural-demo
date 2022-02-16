@@ -7,8 +7,10 @@
    [sted.cmd.move :as move]
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
+   [sted.sys.handle :as sh]
    [sted.cmd.nav :as nav]
-   [sted.loopy :as loopy]
+   #_[sted.loopy :as loopy]
+   [sted.embed.data :as sed]
    [sted.embed.md :as emd]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
@@ -150,17 +152,6 @@
     (when (< -1 n (count nmv))
       (nth nmv n))))
 
-(defn eval-result-above-toplevel
-  [db et resp-str]
-  (let [top-level   (peek (nav/parents-vec et))
-        prev        (move/prev-sibling top-level)
-        result-node {:db/id "nn"
-                     :token/type :verbatim
-                     :token/value resp-str
-                     :eval/of (:db/id et)}]
-    (into [result-node]
-          (edit/insert-before-tx top-level result-node))))
-
 (defn delete-by-eid
   [db eid]
   (let [e (d/entity db eid)]
@@ -183,85 +174,6 @@
                        v)))
              (first)
              (delete-by-eid db))))
-
-(defn ingest-nav-assoc
-  [[[k v] & kvs]]
-  (let [e (ec/new-tempid)]
-    (merge {:db/id e :coll/type :map}
-           (ec/seq-tx
-            (->> kvs
-                 (mapcat (fn [[k v]]
-                           [(assoc (e/->tx k)
-                                   :form/linebreak true
-                                   :form/indent 1)
-                            (e/->tx v)]))
-                 (list* (e/->tx k) (e/->tx v))
-                 (map #(assoc % :coll/_contains e)))))))
-
-(defn ingest-nav-seq
-  [vs]
-  (let [e (ec/new-tempid)]
-    (merge {:db/id e :coll/type :vec}
-           (ec/seq-tx
-            (for [v vs]
-              (assoc (e/->tx v) :coll/_contains e))))))
-
-(defn ingest-navigable
-  [c]
-  (-> (if (and (associative? c) (not (sequential? c)))
-        (ingest-nav-assoc c)
-        (ingest-nav-seq c)
-        #_(e/->tx* c))
-      (assoc :nav/pointer c :eval/action :nav)
-      (update :db/id #(or % "new-node"))))
-
-(defn ingest-eval-result
-  [db et c]
-  (let [top-level (peek (nav/parents-vec et))
-        new-node (binding [e/*left* (volatile! 100)]
-                     
-                   (-> (e/->tx c)
-                       (update :db/id #(or % "new-node"))))
-        outer {:db/id "outer"
-               :coll/type :eval-result
-               :seq/first (:db/id new-node)
-               :eval/of (:db/id et)
-               :coll/contains (:db/id new-node)}]
-    (into [new-node outer]
-          (edit/insert-before-tx top-level outer)
-          #_(edit/insert-after-tx top-level outer))))
-
-#_(defn ingest-replacing
-  [db et c]
-  (let [top-level (peek (nav/parents-vec et))
-        new-node  (ingest-navigable c)]
-    (into [new-node]
-          #_(edit/insert-before-tx top-level new-node)
-          #_(edit/insert-after-tx top-level outer)
-          (concat (edit/form-overwrite-tx et (:db/id new-node))
-                  (move-selection-tx (:db/id et) (:db/id new-node))))))
-
-(defn ingest-after
-  [db et c]
-  (let [top-level (peek (nav/parents-vec et))
-        ;; new-node (binding [e/*left* (volatile! 100)]
-        ;;            (-> (e/->tx c)
-        ;;                  (update :db/id #(or % "new-node"))))
-
-        tx-data (loopy/go c 99)]
-    (into tx-data
-          #_(edit/insert-before-tx top-level new-node)
-          (edit/insert-after-tx top-level
-                                {:db/id (second (first tx-data))}))))
-
-(defn insert-data
-  [et c]
-  (let [top-level (peek (nav/parents-vec et))
-        prev (move/prev-sibling top-level)
-        result-node (-> (e/->tx c)
-                        (update :db/id #(or % "import-formdata-tx")))]
-    (into [result-node]
-          (edit/insert-before-tx top-level result-node))))
 
 (defn insert-txdata
   [et c]
@@ -561,6 +473,17 @@
                    :form/edit-initial ";; "}
             (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
+(defn go
+  [data coll-eid cell-eid]
+  (binding [sed/*store-reference!* sh/store
+            sed/*store-reference?* (fn [v]
+                                     (when-some [m (meta v)]
+                                       (str (d/squuid))))]
+    (sed/rplacd data
+                8
+                coll-eid
+                cell-eid)))
+
 (def editing-commands
   {:float                          (comp edit/exchange-with-previous-tx get-selected-form)
    :sink                           (comp edit/exchange-with-next-tx get-selected-form)
@@ -583,37 +506,36 @@
    :edit/finish-and-edit-next-node (fn [db text] (->> text (insert/finish-edit-and-edit-next-tx (d/entity db [:form/editing true]))))
    :edit/wrap                      (fn [db ct value] (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value))
 
-   :delete-left                    (fn [db] (move-and-delete-tx db move/backward-up move/next-sibling))
-   :delete-right                   (fn [db] (move-and-delete-tx db move/forward-up move/prev-sibling))
-   :raise                          (comp edit/form-raise-tx get-selected-form)
-   :raise-parent                   (comp edit/form-raise-tx move/up get-selected-form )
-   :clone                          (comp edit/insert-duplicate-tx get-selected-form)
-   :linebreak                      linebreak-selected-form-tx
-   :wrap                           (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
-   :indent                         (fn [db] (indent-selected-form-tx db 1))
-   :dedent                         (fn [db] (indent-selected-form-tx db -1))
-   :slurp-right                    (fn [db] (edit/slurp-right-tx (get-selected-form db)))
-   :barf-right                     (fn [db] (edit/barf-right-tx (get-selected-form db)))
-   :new-list                       (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {}))
-   :new-vec                        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :vec "" {}))
-   :new-deref                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :deref "" {}))
-   :new-quote                      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
-   :new-syntax-quote               (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
-   :new-unquote                    (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
-   :new-meta                       (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :meta "" {}))
-   :new-comment                    (comp new-comment-tx get-selected-form)
-   :open-chain                     (fn [db t props] (chain-from-text (get-selected-form db) t props))
-   :new-bar                        (fn [db] (new-bar-tx (get-selected-form db)))
-   :eval-result                    ingest-eval-result #_eval-result-above-toplevel
+   :delete-left      (fn [db] (move-and-delete-tx db move/backward-up move/next-sibling))
+   :delete-right     (fn [db] (move-and-delete-tx db move/forward-up move/prev-sibling))
+   :raise            (comp edit/form-raise-tx get-selected-form)
+   :raise-parent     (comp edit/form-raise-tx move/up get-selected-form )
+   :clone            (comp edit/insert-duplicate-tx get-selected-form)
+   :linebreak        linebreak-selected-form-tx
+   :wrap             (fn [db] (edit/form-wrap-tx (get-selected-form db) :list))
+   :indent           (fn [db] (indent-selected-form-tx db 1))
+   :dedent           (fn [db] (indent-selected-form-tx db -1))
+   :slurp-right      (fn [db] (edit/slurp-right-tx (get-selected-form db)))
+   :barf-right       (fn [db] (edit/barf-right-tx (get-selected-form db)))
+   :new-list         (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :list "" {}))
+   :new-vec          (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :vec "" {}))
+   :new-deref        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :deref "" {}))
+   :new-quote        (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :quote "" {}))
+   :new-syntax-quote (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :syntax-quote "" {}))
+   :new-unquote      (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :unquote "" {}))
+   :new-meta         (fn [db] (edit/edit-new-wrapped-tx (get-selected-form db) :meta "" {}))
+   :new-comment      (comp new-comment-tx get-selected-form)
+   :open-chain       (fn [db t props] (chain-from-text (get-selected-form db) t props))
+   :new-bar          (fn [db] (new-bar-tx (get-selected-form db)))
    
-   
-   :ingest-after          ingest-after
    :hide                  (fn [db] (toggle-hide-show (peek (nav/parents-vec (get-selected-form db)))))
    :stringify             (fn [db] (replace-with-pr-str (get-selected-form db)))
    :plus                  (comp plus* get-selected-form)
    :minus                 (comp minus* get-selected-form)
-   :insert-data           (fn [db c] (insert-data (get-selected-form db) c))
+   
+   ;; bad
    :insert-txdata         (fn [db c] (insert-txdata (get-selected-form db) c))
+   
    :hoist                 (comp hoist-tx get-selected-form)
    :gobble                (comp gobble-tx get-selected-form)
    :move-to-deleted-chain (comp move-to-deleted-chain get-selected-form)
@@ -628,16 +550,51 @@
    :oneline               recursive-oneline
    :clear-one-eval        clear-one-eval
    
-   :ingest-result (fn [db et data]
-                    (let [top-level  (peek (nav/parents-vec et))
-                          [ftx mtam] (e/tx-and-meta data)]
-                      (println "Ingest result" mtam)
-                      (into ftx
-                            (concat
-                             (for [[tempid v] mtam]
-                               [:db/add tempid :nav/pointer v])
-                             (edit/form-overwrite-tx et -1)
-                             (move-selection-tx (:db/id et) -1)))))
+   :eval-result (fn [db et data]
+                  (let [target  (peek (nav/parents-vec et))
+                        spine (edit/exactly-one (:seq/_first target))
+                        coll (edit/exactly-one (:coll/_contains target))]
+                    (when (and spine coll)
+                      (into [[:db/add (:db/id spine) :seq/next "ncell"]
+                             (when-let [old-next (:seq/next spine)]
+                               [:db/add "ncell" :seq/next (:db/id old-next)])]
+                            (go (list data) (:db/id coll) "ncell")))))
+
+   :eval-inplace (fn [db target data]
+                   (let [spine (edit/exactly-one (:seq/_first target))
+                         coll (edit/exactly-one (:coll/_contains target))]
+                     (when (and spine coll)
+                       (let [ans (go (list data) (:db/id coll) (:db/id spine))
+                             id-hack (some (fn [[_ e]]
+                                             (when (neg? e) e))
+                                           ans)]
+                         (into (select-form-tx db id-hack)
+                               ans)))))
+   
+   :eval-cont (fn [db target data]
+                (println "Eval-cont"
+                         (pr-str data))
+                (let [spine (edit/exactly-one (:seq/_first target))
+                      coll (edit/exactly-one (:coll/_contains target))]
+                  (when (and spine coll)
+                    (let [sn (next data)]
+                      (if (nil? sn)
+                        (into (select-form-tx db (:db/id (move/backward-up target)))
+                              (edit/form-delete-tx target))
+                        (let [root (if-not (:seq/next spine)
+                                     sn
+                                     (list sn))
+                              tx-data (go root (:db/id coll) (:db/id spine))
+                              id-hack (some (fn [[_dbadd e a]]
+                                              (when (and (neg? e)
+                                                         (or (= a :token/type) (= a :coll/type)))
+                                                e))
+                                            tx-data)]
+                          (into
+                           (select-form-tx db
+                                           (or id-hack
+                                               (:db/id (move/backward-up target))))
+                           tx-data)))))))
    
    :unraise (comp edit/unraise-tx get-selected-form)
    :compose (fn [db]
@@ -646,11 +603,6 @@
    :ingest-markdown (fn [db md-text]
                       (let [top-level (peek (nav/parents-vec (get-selected-form db)))
                             txe (emd/md->tx md-text)]
-                        #_(println
-                         "Top" (:db/id top-level) "Txe" txe)
                         (into [txe]
                               (edit/insert-before-tx top-level txe))))})
 
-(def dispatch-table
-  (merge movement-commands
-         editing-commands))

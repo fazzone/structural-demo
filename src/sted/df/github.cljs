@@ -70,8 +70,8 @@
   (m/let [res (fetch-hn (str "/user/" user ".json"))]
     (vary-meta res assoc `nav #'nav-hn)))
 
-(defn nav-item [_coll _k v]
-  (println "NAVitem" v)
+(defn nav-item [c k v]
+  (println "NAVitem" c k v)
   (m/let [res (fetch-hn (str "/item/" v ".json"))]
     (println "The res!!!")
     (vary-meta res assoc `nav #'nav-hn)))
@@ -85,7 +85,10 @@
 (defn fetch-stories [type]
   (println "Fstories")
   (m/let [res (fetch-hn (str "/" (name type) ".json"))]
-    (vary-meta (take 15 res) assoc `nav #'nav-item)))
+    (let [answer (vary-meta (take 15 res) assoc `nav #'nav-item)]
+      (println "Answer" answer)
+      (println "MetaAnswer" (meta answer))
+      answer)))
 
 (defn nav-hn [coll k v]
   (println "NAv HN" k v 'in coll)

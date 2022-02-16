@@ -45,6 +45,7 @@
                   "/"
                   (:max-tx db)
                   " " (some-> sel :nav/pointer meta)
+                  " " (:handle/token sel)
                   ;; " " (pr-str (d/touch sel))
                   ))])
     

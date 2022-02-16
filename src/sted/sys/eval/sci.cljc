@@ -9,7 +9,6 @@
             [datascript.serialize :as dser]
             [sci.impl.vars :as v]
             [sci.impl.namespaces :as n]
-            #_[sted.sys.nrepl.bencode :as benc]
             [sted.df.github :as dfg]
             [sted.df.async :as a]
             [clojure.datafy :as datafy]
@@ -31,10 +30,6 @@
   (when-some [f (some-> electron-bridge
                         (aget "list_dir"))]
     (.then (f p) js->clj)))
-
-(defn list-chains
-  [db]
-  )
 
 (defn transactor
   [conn]
@@ -108,6 +103,7 @@
                 'textwin new-window-with-text
                 'handle (fn [k]
                           (get @sh/storage k))
+                'storage sh/storage
                 #?@ (:clj ['slurp slurp
                            'spit spit]
                      :cljs ['fetch-text (fn [z]
@@ -167,11 +163,15 @@
 
 (defn eval-action?
   [e]
-  (let [ea (or (some-> e :eval/action vector)
-               (when-some [m (:nav/pointer e)]
-                 [:nav]))]
-    (when ea
-      (into [e] ea))))
+  (or (when-let [t (:handle/token e)]
+        [t :token]))
+  #_(let [ea (or (some-> e :eval/action vector)
+                 #_(when-some [m (:nav/pointer e)]
+                     [:nav])
+                 (when-some [m (:handle/token e)]
+                   [:nav]))]
+      (when ea
+        (into [e] ea))))
 
 (defn nav-root
   [conn po]
@@ -207,8 +207,8 @@
         unbound-prints (atom [])
         ctx            (-> (sci-opts app #_{:bindings {'sel sel#}})
                            (sci/init)
-                           (sci/merge-opts {:bindings {'sel sel#
-                                                       'sted app#      #_(nav-root conn unbound-prints)
+                           (sci/merge-opts {:bindings {'sel       sel#
+                                                       'sted      app# #_ (nav-root conn unbound-prints)
                                                        'bus       bus
                                                        'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
@@ -217,48 +217,45 @@
                                          (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
     (fn [_ db bus]
-      (let [tes                          (js/performance.now)
-            eval-target                  (get-selected-form db)
-            parents                      (nav/parents-seq eval-target)
-            [eval-context action :as jj] (or (some eval-action? parents)
-                                             [(last parents) :eval])
-            print-output                 (atom [])]
-        (letfn [(failure [ex]
-                  (core/send! bus [:eval-result eval-target
-                                   (str (ex-message ex) "\n" (.-stack ex))]))
-                (success [r]
-                  (println "Eval-success " (type r)
-                           (- (js/performance.now) tes)
-                           "ms")
-                  (when (instance? v/SciVar r)
-                    (println "Value" (v/getRawRoot r)))
-                  (when (instance? v/SciNamespace r)
-                    (println "Value" r))
+      (let [target  (get-selected-form db)]
+        (if-let [h (:handle/token target)]
+          (do
+            (println "Eval-cont LOAD" h)
+            (core/send! bus [:eval-cont target (sh/load h)]))
+          (if-let [up-h (some-> target move/up :handle/token)]
+            (let [c (sh/load up-h)
+                  k (e/->form target)]
+              (println
+               "Mta" (meta c)
+               "C=" c)
+              (.then (js/Promise.resolve
+                      (cond
+                        (sequential? c)
+                        (datafy/nav c nil k)
 
-                  (core/send! bus
-                              (cond
-                                (or (= :nav action) (some-> r meta (get `p/nav)))
-                                [:ingest-result eval-target r]
-
-                                (some-> r meta (get `ingest))
-                                [:ingest-after eval-target (first r)]
-                                
-                                :else
-                                [:eval-result eval-target (str r) print-output ]
-                                
-                                )))]
-          (try (-> (case action
-                     :nav  (when-some [ptr (:nav/pointer eval-context)]
-                             (let [k (e/->form eval-target)]
-                               (case (:coll/type eval-context)
-                                 (:vec :list) (datafy/nav ptr nil k)
-                                 (:map :set)  (datafy/nav ptr k (get ptr k)))))
-                     :eval (sci/binding [sel# eval-target
-                                         sci/print-fn (fn [m] (swap! print-output conj m))]
-                             (sci/eval-string* ctx (e/->string eval-context))))
-                   #?@ (:clj [(success)]
-                        :cljs [(js/Promise.resolve) (.then success) (.catch failure)]))
-               (catch :default ex (js/console.error "sci exception" ex) (failure ex))))))))
+                        (associative? c)
+                        (datafy/nav c k (get c k))
+                        
+                        (set? c)
+                        (datafy/nav c k k)
+                        
+                        :else
+                        (str "Lmao:" (type c))))
+                     (fn [z]
+                       #_(core/send! bus [:eval-cont target (list nil z)])
+                       (core/send! bus [:eval-inplace target z]))))
+            
+            (let [top (peek (nav/parents-vec target))
+                  estr (e/->string top)
+                  res (sci/eval-string* ctx estr)]
+              (prn "Res" (type res) res)
+              (if-not (instance? js/Promise res)
+                (core/send! bus [:eval-result top res])
+                (do
+                  (println "It was a promise")
+                  (.then res
+                         (fn [v]
+                           (core/send! bus [:eval-result top res]))))))))))))
 
 (comment
   (sci/binding [sci/print-newline true

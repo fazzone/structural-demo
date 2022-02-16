@@ -236,7 +236,10 @@
         :symbol (symbol (:token/value e))
         :keyword (parse-keyword e)
         :number (:token/value e)
-        :string (:token/value e))))
+        :string (:token/value e)
+        (throw (ex-info (str "Bad form " (:db/id e))
+                        {:token-type (:token/type e)
+                         :coll-type (:coll/type e)})))))
 
 (defn open-delim
   [ct]
