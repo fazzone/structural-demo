@@ -219,15 +219,10 @@
     (fn [_ db bus]
       (let [target  (get-selected-form db)]
         (if-let [h (:handle/token target)]
-          (do
-            (println "Eval-cont LOAD" h)
-            (core/send! bus [:eval-cont target (sh/load h)]))
+          (core/send! bus [:eval-cont target (sh/load h)])
           (if-let [up-h (some-> target move/up :handle/token)]
             (let [c (sh/load up-h)
                   k (e/->form target)]
-              (println
-               "Mta" (meta c)
-               "C=" c)
               (.then (js/Promise.resolve
                       (cond
                         (sequential? c)
@@ -248,7 +243,6 @@
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
                   res (sci/eval-string* ctx estr)]
-              (prn "Res" (type res) res)
               (if-not (instance? js/Promise res)
                 (core/send! bus [:eval-result top res])
                 (do

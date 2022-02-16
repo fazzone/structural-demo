@@ -56,7 +56,6 @@
 
 (defn ^:dynamic *store-reference?* [_])
 (defn ^:dynamic *store-reference!* [_ _])
-(defn ^:dynamic *mapper* [e] e)
 
 (defn drain*
   [acc {:keys [rest outer cell lazy?]}]
@@ -67,9 +66,6 @@
               :handle/token hid
               :token/type :symbol
               :token/value "..."}]
-    #_(println "Draining " lazy? cell hid "===" rest (->coll-type fst) (type fst))
-    #_(when (= :lazy-map-tail lazy?)
-        (println "Draining " lazy? cell hid "===" rest (->coll-type fst) (type fst)))
     (*store-reference!* hid rest)
     (if (= :lazy-map-tail lazy?)
       (-> acc (conj! {:db/id cell :seq/first cont}))
@@ -77,25 +73,17 @@
           (emit1 car (->coll-type fst) fst)
           (conj! {:db/id cell
                   :seq/first {:db/id car :coll/_contains outer}
-                  :seq/next {:seq/first cont}})))
-    #_(-> acc
-        (cond-> (not= :lazy-map-tail lazy?) (emit1 car (->coll-type fst) fst))
-        (conj! {:db/id cell
-                :seq/first {:db/id car :coll/_contains outer}
-                :seq/next {:seq/first {:coll/_contains outer
-                                       :handle/token hid
-                                       :token/type :symbol
-                                       :token/value "..."}}}))))
+                  :seq/next {:seq/first cont}})))))
 
 (defn bigloop
   [ ncount stk out]
-  ;; (>= 1 ncount) (persistent! (reduce drain* out stk))
   (if (empty? stk)
     (persistent! out)
     (let [{:keys [rest outer cell lazy?]} (first stk)
           popped (subvec stk 1)]
       (cond
-        (empty? rest) (recur ncount popped out)
+        (empty? rest)
+        (recur ncount popped out)
         
         (and lazy? (>= 1 ncount))
         (persistent! (reduce drain* out stk))
@@ -136,63 +124,6 @@
                   (recur ncount
                          (cond-> npopped nrest (conj (LoopState. car car nrest :lazy-enter)))
                          (emit1 nout car coll-type me)))))))))))
-#_(defn bigloop
-  [ ncount stk out]
-  (cond
-    (empty? stk)  (persistent! out)
-    (>= 1 ncount) (persistent! (reduce drain* out stk))
-    :else
-    (let [{:keys [rest outer cell]} (first stk)
-          popped                    (subvec stk 1)
-          ;; note: this forces TWO lazy seq elems
-          [me & more]             rest]
-      #_(println "Meta" (meta me))
-      (cond
-        #_(nil? me)
-        (empty? rest)
-        (recur ncount popped out) 
-        
-        ;; hack to explore maps in the order we like
-        (map-entry? me) 
-        (let [ncell    (when more (ec/new-tempid))
-              vcell    (ec/new-tempid)
-              vsimple? (or (nil? (val me))
-                           (->token-type (val me)))]
-          (println "Ncell" ncell "Vcell" vcell)
-          (recur ncount
-                 ;; transfer our pre-allocated cell into the next iter 
-                 (cond-> [(LoopState. outer cell (list (key me)) nil)]
-                   vsimple?       (conj (LoopState. outer vcell (list (val me)) nil))
-                   more           (conj (LoopState. outer ncell more :lazy-map-tail))
-                   true           (into popped)
-                   (not vsimple?) (conj (LoopState. outer vcell (list (val me)) nil)))
-                 (cond-> out
-                   ;; link the rest (if any) after the value 
-                   ncell (conj! [:db/add vcell :seq/next ncell])
-                   ;; always link the key to the value
-                   true  (conj! [:db/add cell :seq/next vcell]))))
-        
-        :else
-        (let [car       (ec/new-tempid)
-              ncell     (when more (ec/new-tempid))
-              sref?     (*store-reference?* me)
-              nout      (cond-> out
-                          ;; fill in our cell
-                          cell  (conj! [:db/add cell :seq/first car])
-                          ;; link it to the next cell we just created
-                          ncell (conj! [:db/add cell :seq/next ncell])
-                          outer (conj! [:db/add outer :coll/contains car])
-                          sref? (conj! [:db/add car :handle/token sref?]))
-              npopped   (cond-> popped more (conj (LoopState. outer ncell more :lazy-tail)))
-              coll-type (->coll-type me)]
-          (when sref?
-            (*store-reference!* sref? me))
-          (if-not coll-type
-            (recur (dec ncount) npopped (emit1 nout car nil me))
-            (let [nrest (seq me)]
-              (recur ncount
-                     (cond-> npopped nrest (conj (LoopState. car car nrest :lazy-enter)))
-                     (emit1 nout car coll-type me)))))))))
 (defn go
   ([root limit]
    (go root limit nil nil))
