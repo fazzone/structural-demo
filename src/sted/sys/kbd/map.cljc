@@ -38,7 +38,7 @@
    "k" :next
    "j" :prev
    
-   "l"   :tail
+   "l" :tail
 
    " "         :insert-right
    "S- "       :insert-left
@@ -80,8 +80,10 @@
    "S-+"       :plus
    "S-M"       :multiline
    "S-O"       :oneline
+   "M-S-O"     :oneline-all
+   "M-S-I"     "No, I do not want to report a problem to Google"
    "M-l"       :clear-one-eval
-   "q" :compose
+   "q"         :compose
    })
 
 (defn kbd->keydowns

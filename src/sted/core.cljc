@@ -149,7 +149,7 @@
       (let [[mut-name & args :as mut] (async/<! ch)
             db @conn
             tx-data (apply mut-fn db args)
-            _ (prn (uniqueid bus) mut-name args)
+            _ (prn (uniqueid bus) mut-name)
             report (try (and tx-data
                              #_(assoc (d/transact! conn tx-data)
                                       :mut mut)

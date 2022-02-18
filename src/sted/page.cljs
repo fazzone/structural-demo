@@ -46,7 +46,6 @@
 (def test-form-data-bar (e/string->tx-all (m/macro-slurp "src/sted/user.clj")))
 
 (def init-tx-data
-  
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
@@ -61,7 +60,9 @@
                             ])]
                 #_[(e/->tx [^:form/highlight ()])]
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
-    [{:db/ident ::state  :state/bar "bar"}
+    [{:db/ident ::state
+      :state/bar "bar"
+      :state/limit 128}
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec
@@ -262,5 +263,13 @@
                                    (.get "title"))]
         (set! js/document.title req-title))
     (rum/unmount el)
+    
     (rum/mount (root-component @conn bus)
                el)))
+
+(defn ^:export become
+  [db]
+  (stop)
+  (reset! the-singleton-db db)
+  (init))
+

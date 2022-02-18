@@ -11,7 +11,8 @@
   (fn [db]
     (z/set-options! {:style :fast-hang
                      :map {:sort? nil}
-                     :set {:sort? nil}})
+                     :set {:sort? nil}
+                     :width 120})
     (let [_ (js/console.time "formatting")
           _ (js/console.time "preparing")
           sel (get-selected-form db)

@@ -93,17 +93,19 @@
     (go (e/seq->vec (get-selected-form db)) 2 0 [])))
 
 
-(defn recursive-oneline
-  [db]
-  (->> (get-selected-form db)
+(defn recursive-oneline-tx
+  [sel]
+  (->> sel
        (tree-seq :coll/contains :coll/contains)
        (next)
        (keep (fn [e]
-               (prn (keys e))
+               #_(prn (keys e))
                (when (:form/linebreak e)
                  (cond-> [[:db/retract (:db/id e) :form/linebreak (:form/linebreak e)]]
                    (:form/indent e) (conj [:db/retract (:db/id e) :form/indent ])))))
        (reduce into)))
+
+
 
 (defn el-bfs
   [top limit]
@@ -462,24 +464,27 @@
                    :form/edit-initial ";; "}
             (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
+(defn store-fn
+  ([] (str (d/squuid)))
+  ([v] (when (meta v) (store-fn)))
+  ([k v] (sh/store k v)))
+
+(defn node-limit
+  [db]
+  (-> db
+      (d/entity :sted.page/state)
+      :state/limit
+      (or 128)))
+
+(defn continue
+  [root limit coll spine]
+  (binding [sed/*store* store-fn]
+    (sed/continue root limit coll (:db/id spine))))
+
 (defn go
-  [data coll-eid cell-eid]
-  (binding [sed/*store* (fn s
-                          ([] (str (d/squuid)))
-                          ([v] (when (meta v) (s)))
-                          ([k v]
-                           (println "Storing" k v)
-                           (sh/store k v)))]
-    (sed/rplacd data 8 coll-eid cell-eid))
-  
-  #_(binding [sed/*store-reference!* sh/store
-              sed/*store-reference?* (fn [v]
-                                       (when-some [m (meta v)]
-                                         (str (d/squuid))))]
-      (sed/rplacd data
-                  64
-                  coll-eid
-                  cell-eid)))
+  [root limit coll spine]
+  (binding [sed/*store* store-fn]
+    (sed/go root limit (:db/id coll) (:db/id spine))))
 
 (def editing-commands
   {:float                          (comp edit/exchange-with-previous-tx get-selected-form)
@@ -544,24 +549,50 @@
    :splice                (comp edit/form-splice-tx get-selected-form)
    :offer                 (comp edit/offer-tx get-selected-form)
    :multiline             recursive-multiline
-   :oneline               recursive-oneline
+   :oneline               (comp recursive-oneline-tx get-selected-form)
+   :oneline-all (fn [db]
+                  (some->> (get-selected-form db)
+                           :coll/contains
+                           (mapcat recursive-oneline-tx)))
    :clear-one-eval        clear-one-eval
+   
    
    :eval-result (fn [db et data]
                   (let [target  (peek (nav/parents-vec et))
                         spine (edit/exactly-one (:seq/_first target))
-                        coll (edit/exactly-one (:coll/_contains target))]
+                        coll (edit/exactly-one (:coll/_contains target))
+                        nn {:db/id "ncell"
+                            :seq/_next (:db/id spine)}]
                     (when (and spine coll)
-                      (into [[:db/add (:db/id spine) :seq/next "ncell"]
+                      (into [#_[:db/add (:db/id spine) :seq/next "ncell"]
+                             nn
                              (when-let [old-next (:seq/next spine)]
-                               [:db/add "ncell" :seq/next (:db/id old-next)])]
-                            (go (list data) (:db/id coll) "ncell")))))
+                               [:db/add (:db/id nn) :seq/next (:db/id old-next)])]
+                            (go data (node-limit db) coll nn)
+                            #_(go (list data) (:db/id coll) "ncell")))))
+   #_(fn [db et data]
+     (let [target  (peek (nav/parents-vec et))
+           spine (edit/exactly-one (:seq/_first target))
+           coll (edit/exactly-one (:coll/_contains target))
+           outer {:db/id "outer"
+                  :coll/type :vec
+                  :eval/of (:db/id et)}]
+       (when (and spine coll)
+         (into [outer]
+               (concat
+                (edit/insert-after-tx et outer)
+                (go (list data) (node-limit db) outer outer)))
+         #_(into [outer
+                  [:db/add (:db/id spine) :seq/next "ncell"]
+                  (when-let [old-next (:seq/next spine)]
+                    [:db/add "ncell" :seq/next (:db/id old-next)])]
+                 (go (list data) (:db/id coll) "ncell")))))
 
    :eval-inplace (fn [db target data]
                    (let [spine (edit/exactly-one (:seq/_first target))
                          coll (edit/exactly-one (:coll/_contains target))]
                      (when (and spine coll)
-                       (let [ans (go (list data) (:db/id coll) (:db/id spine))
+                       (let [ans (go (list data) (node-limit db) coll spine)
                              id-hack (some (fn [[_ e]]
                                              (when (neg? e) e))
                                            ans)]
@@ -569,8 +600,7 @@
                                ans)))))
    
    :eval-cont (fn [db target data]
-                (println "Eval-cont"
-                         (pr-str data))
+                (js/console.log "Eval-cont" data)
                 (let [spine (edit/exactly-one (:seq/_first target))
                       coll (edit/exactly-one (:coll/_contains target))]
                   (println "Sp" (:db/id spine)
@@ -583,7 +613,8 @@
                         (let [root (if-not (:seq/next spine)
                                      sn
                                      (list sn))
-                              tx-data (go root (:db/id coll) (:db/id spine))
+                              tx-data (binding [sed/*store* store-fn]
+                                        (continue root (node-limit db) coll spine))
                               id-hack (some (fn [[_dbadd e a]]
                                               (when (and (neg? e)
                                                          (or (= a :token/type) (= a :coll/type)))

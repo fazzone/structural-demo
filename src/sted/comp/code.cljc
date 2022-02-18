@@ -56,7 +56,7 @@
                               #_(do (println "Would scroll"
                                            (core/scroll-locked?)
                                            ))
-                              #_(scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+                              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
                             (recur more true))))))))
 
 (def the-iobs (make-iobs))

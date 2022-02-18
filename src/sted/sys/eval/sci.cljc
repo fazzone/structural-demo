@@ -93,8 +93,10 @@
                 #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                 'all     (fn [a b c] (js/Promise.all a b c))}])}
    :bindings   {'send!   (fn [m]
-                           (js/setTimeout (fn [] (core/send! bus m))
-                                          0))
+                           (js/Promise.
+                            (fn [s f]
+                             (js/setTimeout (fn [] (s (core/send! bus m)))
+                                            0))))
                 '->seq   e/seq->seq
                 'datafy  p/datafy
                 'nav     p/nav
@@ -208,7 +210,7 @@
         ctx            (-> (sci-opts app #_{:bindings {'sel sel#}})
                            (sci/init)
                            (sci/merge-opts {:bindings {'sel       sel#
-                                                       'sted      app# #_ (nav-root conn unbound-prints)
+                                                       ;; 'sted      app# 
                                                        'bus       bus
                                                        'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
@@ -239,11 +241,10 @@
                      (fn [z]
                        #_(core/send! bus [:eval-cont target (list nil z)])
                        (core/send! bus [:eval-inplace target z]))))
-            
+            ;; 
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
                   res (sci/binding [sel# target] (sci/eval-string* ctx estr))]
-              (println "Rest " (type res))
               (if-not (instance? js/Promise res)
                 (core/send! bus [:eval-result top res])
                 (do

@@ -100,3 +100,25 @@ hn/stories
       (into (sorted-map)
             (concat (for [{:keys [path] :as b} (by-type "blob")] [path b])
                     rec)))))
+
+(a/let [res (get-repo "fazzone/structural-demo" "master")
+        load-all (js/Promise.all
+                  (clj->js
+                   (vec (for [{:keys [path]} (:tree (first res))
+                              :when (or (clojure.string/ends-with? path ".cljc")
+                                        (clojure.string/ends-with? path ".clj")
+                                        (clojure.string/ends-with? path ".cljs"))]
+                          (str "https://raw.githubusercontent.com/fazzone/structural-demo/master/" path)))))]
+  {:ok (count load-all)})
+
+(let [fz (d/freeze (d/entity-db sel))
+      ps (js/Object.getOwnPropertyNames fz)]
+  (doseq [p ps]
+    (.setItem js/window.localStorage p (aget fz p)))
+  (js->clj ps))
+
+(let [b (js/Blob. (clj->js [(js/JSON.stringify (d/freeze (d/entity-db sel)) nil 2)])
+                  (clj->js {:type "application/json"}))
+      u (js/URL.createObjectURL b)
+      a (js/document.createElement "a")]
+  (js/window.open u))

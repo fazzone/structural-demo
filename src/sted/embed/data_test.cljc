@@ -134,6 +134,19 @@
      "[{:a :b :xs [0 1 2]} {:a :b :xs [0 1 2 3]} {:a :b :xs [0 1 2 3 4]} {:a :b :xs [0 1 2 3 4 5]}]"])))
 
 (comment
-  (for [[n f] (ns-publics *ns*)
-        :when (:test (meta f))]
-    (do (f) n)))
+  (reset! sted.embed.common/tempid-counter 0)
+  (doall
+   (for [[n f] (ns-publics *ns*)
+         :when (:test (meta f))]
+     (do (f) n))))
+
+(comment
+  (do
+    (reset! sted.embed.common/tempid-counter 0)
+    (println (e/->string (->ingested-entity
+                          3
+                          {:a "A"
+                           :c "C"
+                           :e "E"
+                           :g "G"
+                           :i "I"})))))
