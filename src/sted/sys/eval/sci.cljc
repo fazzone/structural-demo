@@ -17,8 +17,7 @@
             [sted.sys.eval.sci.protocols :as esp]
             [goog.object :as gobj]
             [sted.sys.handle :as sh]
-            [mdast-util-from-markdown :as mdast]
-            [sted.doc.remark :as sdr]))
+            [mdast-util-from-markdown :as mdast]))
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                          :clj nil))
@@ -77,9 +76,6 @@
                            'sel (fn [s] (js/document.querySelectorAll ".selected"))}
                 'di       {'element   rdi/element
                            'interpret rdi/interpret}
-                'sdr {'go
-                      (fn [j]
-                        (sdr/go j))}
                 'mdast    {'parse
                            (fn [mdtext]
                              (mdast/fromMarkdown mdtext))}
