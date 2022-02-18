@@ -32,23 +32,15 @@
            :ok (str file "@" at)
            :error "Error"
            "")))]
-    (if text
-      (do ^:inline (cs/results db bus :token/value text rec))
-      #_nil
-      #_(stupid-symbol-search (d/entity-db sel)  :token/value text)
-      [:span.modeline-content {}
-       ^String (if-not sel
-                 "(no selection)"
-                 
-                 (str
-                  (:db/id sel)
+    
+    #_(when text ^:inline (cs/results db bus :token/value text rec))
+    
+    [:span.modeline-content {}
+     ^String (str (:db/id sel)
                   "/"
                   (:max-tx db)
                   " " (some-> sel :nav/pointer meta)
-                  " " (:handle/token sel)
-                  ;; " " (pr-str (d/touch sel))
-                  ))])
-    
+                  " " (:handle/token sel))]
     
     #_(when-some [insp (js/document.getElementById "inspector")]
         (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))

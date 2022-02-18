@@ -464,14 +464,22 @@
 
 (defn go
   [data coll-eid cell-eid]
-  (binding [sed/*store-reference!* sh/store
-            sed/*store-reference?* (fn [v]
-                                     (when-some [m (meta v)]
-                                       (str (d/squuid))))]
-    (sed/rplacd data
-                8
-                coll-eid
-                cell-eid)))
+  (binding [sed/*store* (fn s
+                          ([] (str (d/squuid)))
+                          ([v] (when (meta v) (s)))
+                          ([k v]
+                           (println "Storing" k v)
+                           (sh/store k v)))]
+    (sed/rplacd data 8 coll-eid cell-eid))
+  
+  #_(binding [sed/*store-reference!* sh/store
+              sed/*store-reference?* (fn [v]
+                                       (when-some [m (meta v)]
+                                         (str (d/squuid))))]
+      (sed/rplacd data
+                  64
+                  coll-eid
+                  cell-eid)))
 
 (def editing-commands
   {:float                          (comp edit/exchange-with-previous-tx get-selected-form)
@@ -565,6 +573,8 @@
                          (pr-str data))
                 (let [spine (edit/exactly-one (:seq/_first target))
                       coll (edit/exactly-one (:coll/_contains target))]
+                  (println "Sp" (:db/id spine)
+                           "Col" (:db/id coll))
                   (when (and spine coll)
                     (let [sn (next data)]
                       (if (nil? sn)

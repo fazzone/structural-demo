@@ -495,8 +495,9 @@ span.key-compose-echo {
     display: grid;
     grid-template-columns: 1fr 8ch 1fr;
     grid-template-rows: repeat(auto-fill, 2ex);
-    height: 16ex;
-    line-height: 2ex;
+    max-width: min-content;
+    /* height: 16ex; */
+    /* line-height: 2ex; */
 }
 
 /* .search li { */

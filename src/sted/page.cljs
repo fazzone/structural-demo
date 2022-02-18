@@ -237,9 +237,13 @@
   (fn [ev]
     (vswap! core/scroll-sequence-number inc)))
 
-
 (defn ^:dev/before-load stop []
   (js/console.log "stop")
+  (let [ls (:listeners (meta the-singleton-db))]
+    (doseq [l (vals @ls)]
+      (println "Cleaning listener" (meta l)))
+    (reset! ls {}))
+  (println "Cleared DB listeners")
   (swap! the-app
          #(-> %
               (sk/cleanup!)
@@ -248,21 +252,15 @@
 (defn ^:dev/after-load init
   []
   #_(some-> the-singleton-db meta :listeners (reset! {}))
-  (let [ls (:listeners (meta the-singleton-db))]
-    (println "Listeners:" ls)
-    (reset! ls {}))
-  
-  (println "Cleared DB listeners")
   (js/document.addEventListener "scroll" set-scroll-user true)
-  
-  (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)]
+  (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)
+        el (.getElementById js/document "root")]
     (reset! the-app app)
     (println "Created new app and reset kbdb")
     #_(when-let [req-title (some-> js/window.location.search
                                    (js/URLSearchParams.)
                                    (.get "title"))]
         (set! js/document.title req-title))
-    
-    (rum/mount #_(debug-component)
-               (root-component @conn bus)
-               (.getElementById js/document "root"))))
+    (rum/unmount el)
+    (rum/mount (root-component @conn bus)
+               el)))

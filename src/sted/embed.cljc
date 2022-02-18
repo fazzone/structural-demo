@@ -188,7 +188,7 @@
 
 #? (:cljs
    (defn seq->vec
-     [e]
+     [e] 
      (let [out #js []
            f :seq/first
            n :seq/next]

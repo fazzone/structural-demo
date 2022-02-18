@@ -20,6 +20,8 @@
    [sted.comp.keyboard :as ck]
    [sted.comp.inspect :as ci]))
 
+(def form-reductions (volatile! 0))
+
 (rum.core/set-warn-on-interpretation! true)
 
 (declare form)
@@ -135,10 +137,11 @@
 (defonce secret-chain-scroll-position-cache (atom {}))
 
 (def remember-scroll-position
+  "This is for when shadow-cljs reloads us"
   {:will-unmount (fn [state]
                    (let [st (some-> state rum/dom-node (.-scrollTop))
                          eid (-> state :rum/args first :db/id)]
-                     (when (and eid (not (zero? st)))
+                     (when eid
                        (swap! secret-chain-scroll-position-cache assoc eid st)))
                    state)
    :after-render (fn [state]
@@ -148,6 +151,37 @@
                            sp))
                    state)})
 
+(rum/defcs lazy-children
+  < rum/reactive
+  {:init (fn [state props]
+           (assoc state
+                  ::phase (atom :lazy)
+                  ::end (atom 32)
+                  ::last-e (-> state :rum/args first #?(:cljs (js/WeakRef.)))))
+   :before-render (fn [st]
+                    (when-not (some-> st ::last-e #?(:cljs (.deref))
+                                      (identical? (-> st :rum/args first)))
+                      (reset! (::phase st) nil))
+                    st)
+   :after-render (fn [st]
+                   (when (= :lazy (deref (::phase st)))
+                     (-> #(swap! (::end st) + 8)
+                         (js/requestIdleCallback #js{:timeout 10})))
+                   st)}
+  [{::keys [phase end] :as myst} e bus]
+  (let [children (e/seq->vec e)]
+    (case @phase
+      nil (for [f children]
+            (-> (top-level-form f bus nil)
+                (rum/with-key (:db/id f))))
+      :lazy (let [iend (rum/react end)]
+              (when (>= iend (count children))
+                (reset! phase nil))
+              (for [f (.slice children 0 (rum/react end))]
+                (-> (top-level-form f bus nil)
+                    (rum/with-key (:db/id f))))))))
+
+
 (rum/defc chain
   < remember-scroll-position
   [ch bus classes]
@@ -155,9 +189,7 @@
    {:key (:db/id ch)
     :class classes
     :id (str "c" (:db/id ch))}
-   (for [f (e/seq->vec ch)]
-     (-> (top-level-form f bus nil)
-         (rum/with-key (:db/id f))))])
+   (lazy-children ch bus)])
 
 (rum/defc grid
   [ch bus classes]
@@ -251,10 +283,8 @@
 
 (rum/defc mdroot
   [ch bus classes]
-  [:div
-   (cond-> {:key (:db/id ch)
-            :class (str "md-root prose-font " classes)}
-     classes (assoc :class classes))
+  [:div {:key (:db/id ch)
+         :class (str "md-root prose-font " classes)}
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
@@ -377,10 +407,12 @@
     ))
 
 
+
 (rum/defc form
   < dbrx/ereactive scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
+  (vswap! form-reductions inc)
   (let [selected? (:form/highlight e)]
     #_(when selected?
         (rum/use-effect!
@@ -390,7 +422,7 @@
      (rum/with-context [ind cc/*indenter*]
        (when ind
          ^:inline (ind (:form/linebreak e) indent-prop (:form/indent e))))
-     (cond (:form/editing e) (eb/edit-box e bus)
+     (cond (:form/editing e) (eb/edit-box e bus form)
            (:token/type e)
            (let [tt (:token/type e)
                  tv (:token/value e)
@@ -408,11 +440,11 @@
                           false)}
               ^String it
               #_(when (= :symbol tt)
-               (let [off 1
-                     tkl (count tv)
-                     len 3
-                     left (- tkl)]
-                 ))])
+                  (let [off 1
+                        tkl (count tv)
+                        len 3
+                        left (- tkl)]
+                    ))])
            
            (:coll/type e)
            (case (:coll/type e)

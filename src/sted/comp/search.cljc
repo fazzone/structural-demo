@@ -3,6 +3,7 @@
             [rum.core :as rum]
             [clojure.string :as string]
             [sted.comp.common :as cc]
+            [sted.sys.search.db :as sdb]
             [sted.core :as core]
             [sted.sys.search.dom :as s]
             #_[comp.code :as code]))
@@ -52,54 +53,48 @@
                    :left (str left "ch")}}])]
     ))
 
+(rum/defc dbsr
+  [db text rec]
+  [:div.search
+   (for [[v [[e] :as ds]] (sdb/db-prefix-search db text 32)]
+     (let [ent (d/entity db e)
+           k (* 3 e)]
+       (rum/fragment
+        {:key (- k)}
+        ;; ^:inline (rec ent core/blackhole 0 nil)
+        (rum/bind-context [cc/*indenter* nil]
+                          ^:inline (rec ent core/blackhole 0 nil))
+        [:span {:key (- 1 k)} "x" (count ds)]
+        [:span.last {:key (- 2 k)}
+         (pr-str (take 5 (map first ds)))])))])
+
 (rum/defc results
   < rum/reactive
   [db bus sa text rec]
   [:div
    {}
    (when (< 1 (count text))
-     
-     (let [results       (rum/react s/results)
-           unique-text?  (= 1 (count results))
-           unique-token? (and unique-text? (= 1 (count (val (first results)))))
-           jj            (volatile! 0)]
-       #_(println (count results) 'results)
-       #_(prn (type bus))
-       #_(clojure.pprint/pprint results)
-       
-       (for [[matched rs] results
-             [i n]        rs]
-         (do
-           #_(js/console.log matched i n)
-           #_(println (str  "[" text "]") "hlp" matched i n)
+     #_(let [results       (rum/react s/results)
+             unique-text?  (= 1 (count results))
+             unique-token? (and unique-text? (= 1 (count (val (first results)))))
+             jj            (volatile! 0)]
+         (for [[matched rs] results
+               [i n]        rs]
            (->> n
                 (rum/portal (hlp (count matched) i (count text)
                                  (vswap! jj inc)
                                  unique-text?
-                                 unique-token?)))))))])
+                                 unique-token?)))))
+     #_(dbsr db text rec)
+     [:div.search
+      (for [eid (rum/react s/results)]
+        (let [e (d/entity db eid)
+              k (* 3 eid)]
+          (rum/fragment
+           {:key (- k)}
+           (rum/bind-context [cc/*indenter* nil] ^:inline (rec e core/blackhole 0 nil))
+           [:span {:key (- 1 k)} "x" ]
+           [:span.last {:key (- 2 k)}
+            (str eid)])))]     
+     )])
 
-(rum/defc zzresults
-  [db bus sa text rec]
-  (when #_(< 1 (count text))
-        (< 0 (count text))
-        [:ul
-         {}
-         (let [tag (str  "Searching " text)
-               _ (js/console.time tag)
-               results (->> (search* db sa text)
-                            (group-by #(nth % 2))
-                            (sort-by (comp - count second))
-                            (take 8))
-               _ (js/console.timeEnd tag)]
-           
-           (for [[v [[e] :as ds]] results]
-             (let [ent (d/entity db e)
-                   k (* 3 e)]
-               (rum/fragment
-                {:key (- k)}
-                ;; ^:inline (rec ent core/blackhole 0 nil)
-                (rum/bind-context [cc/*indenter* nil]
-                                  ^:inline (rec ent core/blackhole 0 nil))
-                [:span {:key (- 1 k)} "x" (count ds)]
-                [:span.last {:key (- 2 k)}
-                 (pr-str (take 5 (map first ds)))]))))]))

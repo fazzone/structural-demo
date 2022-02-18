@@ -242,14 +242,15 @@
             
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
-                  res (sci/eval-string* ctx estr)]
+                  res (sci/binding [sel# target] (sci/eval-string* ctx estr))]
+              (println "Rest " (type res))
               (if-not (instance? js/Promise res)
                 (core/send! bus [:eval-result top res])
                 (do
                   (println "It was a promise")
                   (.then res
                          (fn [v]
-                           (core/send! bus [:eval-result top res]))))))))))))
+                           (core/send! bus [:eval-result top v]))))))))))))
 
 (comment
   (sci/binding [sci/print-newline true
