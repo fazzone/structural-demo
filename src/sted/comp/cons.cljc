@@ -5,7 +5,7 @@
    [datascript.core :as d]
    [sted.embed  :as e]
    [sted.core :as core]
-   [sted.screenshot :as screenshot]
+   #_[sted.screenshot :as screenshot]
    [rum.core :as rum]))
 
 
