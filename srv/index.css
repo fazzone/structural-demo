@@ -24,8 +24,10 @@ a {
     src: url(font/iosevka-term-ss03-light.woff2);
 }
 
-body        { font-family: iosevka-aile-light; }
-.prose-font { font-family: iosevka-aile-light; }
+body, .prose-font {
+    font-size: 16px;
+    font-family: iosevka-aile-light;
+}
 
 .form-title {
     color: #fff;
@@ -35,7 +37,7 @@ body        { font-family: iosevka-aile-light; }
 .code-font {
     /* font-family: "Iosevka Term SS03", monospace; */
     font-family: iosevka-term-ss03-light;
-    font-size: 16px;
+    
     /* line-height: 2.5; */
 }
 
@@ -171,11 +173,10 @@ span.indented {
     border-style: solid;
     border-radius: 1ex;
     padding: 0;
-}
-
-.edit-box {
     background-color: #000;
     color: #fff;
+    font-size: inherit;
+    font-family: inherit;
 }
 
 textarea.edit-box {

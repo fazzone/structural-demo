@@ -53,9 +53,9 @@
     (let [top-level (peek (parents-vec sel))
           chain (some-> top-level :coll/_contains first)]
       (when (= :chain (:coll/type chain))
-       (concat (move-selection-tx (:db/id sel) (:db/id chain))
-               [{:db/id (:db/id chain)
-                 :chain/selection (:db/id sel)}])))))
+        (concat (move-selection-tx (:db/id sel) (:db/id chain))
+                [{:db/id (:db/id chain)
+                  :chain/selection (:db/id sel)}])))))
 
 (defn restore-chain-selection-tx
   [db chain]

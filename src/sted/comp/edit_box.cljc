@@ -68,7 +68,8 @@
                    @text)
         form-eid (:db/id e)]
     (rum/fragment
-     [:input.edit-box.code-font
+     [:input.edit-box
+      #_.code-font
       #_:textarea.edit-box.code-font
       {:type        :text
        ;; :wrap :off

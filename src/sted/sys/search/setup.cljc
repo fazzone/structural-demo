@@ -29,19 +29,19 @@
       (d/listen!
        conn
        (fn [{:keys [tx-data]}]
-         (js/console.time "FTS indexing")
+         #_(js/console.time "FTS indexing")
          (doseq [^Datom dtm tx-data]
            (when (= (.-a dtm) :token/value)
              #_(prn "Indexing" dtm)
              (if (db/datom-added dtm)
                (.add index (.-e dtm) (.-v dtm))
                (.remove index (.-e dtm)))))
-         (js/console.timeEnd "FTS indexing")))
+         #_(js/console.timeEnd "FTS indexing")))
       
       
       (-> app
-          (assoc ::results results
-                 ::state state)
+          (assoc-in [:system :search]
+                    {:results results :state state})
           (core/register-mutation!
            :update-search
            (fn [[_ text] _ _]
@@ -57,6 +57,7 @@
                    (fn []
                      (let [rs (.search index text)]
                        (println "Got some results " rs )
+                       (reset! results rs)
                        (reset! sdom/results rs)
                        #_(reset! results (.search index text)
                                  #_(sdom/substring-search-all-visible-tokens text))))

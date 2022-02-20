@@ -2,6 +2,7 @@
   (:require [datascript.core :as d]
             [rum.core :as rum]
             [clojure.string :as string]
+            [sted.cmd.move :as move]
             [sted.comp.common :as cc]
             [sted.sys.search.db :as sdb]
             [sted.core :as core]
@@ -92,7 +93,12 @@
               k (* 3 eid)]
           (rum/fragment
            {:key (- k)}
-           (rum/bind-context [cc/*indenter* nil] ^:inline (rec e core/blackhole 0 nil))
+           (rum/bind-context [cc/*indenter* nil] ^:inline
+                             (rec (or #_(move/up e)
+                                      e)
+                                  core/blackhole
+                                  0
+                                  nil))
            [:span {:key (- 1 k)} "x" ]
            [:span.last {:key (- 2 k)}
             (str eid)])))]     

@@ -8,6 +8,8 @@
    [sted.db-reactive :as dbrx]
    [sted.comp.edit-box :as eb]
    [sted.comp.scroll :as scroll]
+   [sted.comp.root :as cr]
+   [sted.comp.demo :as cd]
    [sted.cmd.move :as move]
    [sted.cmd.nav :as nav]
    [sted.cmd.mut :as mut]
@@ -20,7 +22,6 @@
    [sted.comp.keyboard :as ck]
    [sted.comp.inspect :as ci]))
 
-(def form-reductions (volatile! 0))
 
 (rum.core/set-warn-on-interpretation! true)
 
@@ -33,31 +34,18 @@
        (js/IntersectionObserver.
         (fn [ents me]
           #_(js/console.log "Obs" (count ents))
-          #_(when-not (core/scroll-locked?)
-              (loop [[ioe & more] ents
-                     did-scroll nil]
-                (when ioe
-                  (js/console.log "IR" (.-intersectionRatio ioe) ioe))
-                (cond (nil? ioe) nil
-                      (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
-                      :else (do (if did-scroll
-                                  (js/console.log "What does this mean?")
-                                  (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
-                                (recur more true)))))
-          (loop [[ioe & more] ents
-                 did-scroll nil]
-            #_(when ioe
-              (js/console.log "IR" (.-intersectionRatio ioe) ioe))
-            (cond (nil? ioe) nil
-                  (nil? (.-rootBounds ioe)) (recur more did-scroll)
-                  (< 0.99 (.-intersectionRatio ioe)) (recur more did-scroll)
-                  :else (do (if did-scroll
-                              (js/console.log "What does this mean?")
-                              #_(do (println "Would scroll"
-                                           (core/scroll-locked?)
-                                           ))
-                              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
-                            (recur more true))))))))
+          (when-not (core/scroll-locked?)
+            ;; Note that this is an incorrect check because a very wide chain messes with this number
+            (let [can-see (some #(< 0.99 (.-intersectionRatio %)) ents)]
+              (when-not can-see
+                (loop [[ioe & more] ents
+                       did-scroll nil]
+                  #_(when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
+                  (when ioe
+                    (if did-scroll
+                      (js/console.log "What does this mean?")
+                      (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+                    (recur more true))))))))))
 
 (def the-iobs (make-iobs))
 
@@ -83,10 +71,7 @@
   [e indent-prop]
   (+ indent-prop
      (or (:form/indent e)
-         
-         
          0)))
-
 
 (rum/defc indenter
   [nl? ip fi]
@@ -156,7 +141,7 @@
   {:init (fn [state props]
            (assoc state
                   ::phase (atom :lazy)
-                  ::end (atom 32)
+                  ::end (atom 8)
                   ::last-e (-> state :rum/args first #?(:cljs (js/WeakRef.)))))
    :before-render (fn [st]
                     (when-not (some-> st ::last-e #?(:cljs (.deref))
@@ -177,6 +162,7 @@
       :lazy (let [iend (rum/react end)]
               (when (>= iend (count children))
                 (reset! phase nil))
+              (println "Lazy children" (:coll/type e) iend)
               (for [f (.slice children 0 (rum/react end))]
                 (-> (top-level-form f bus nil)
                     (rum/with-key (:db/id f))))))))
@@ -189,6 +175,7 @@
    {:key (:db/id ch)
     :class classes
     :id (str "c" (:db/id ch))}
+   #_(cd/demo {:form [1 2 3 4]} form)
    (lazy-children ch bus)])
 
 (rum/defc grid
@@ -203,6 +190,7 @@
   (let [ref-me (rum/create-ref)]
     [:div.bar.hide-scrollbar
      {:class classes}
+     #_(lazy-children b bus)
      (for [chain-head (e/seq->vec b)]
        (-> (form chain-head bus 0 nil)
            (rum/with-key (:db/id chain-head))))]))
@@ -212,8 +200,9 @@
   [:div.alias {:class classes}
    [:div.form-title "Alias " (str (:db/id a)) " of " (str (:db/id of))]
    [:div.alternate-reality {}
-    (when of (rum/bind-context [cc/*modeline-ref* nil]
-                               ^:inline (form of bus 0 nil)))]])
+    (when of
+      (rum/bind-context [cc/*modeline-ref* nil]
+                        ^:inline (form of bus 0 nil)))]])
 
 (rum/defc delimited-coll*
   [e bus open close cc ec classes indent proply]
@@ -336,8 +325,11 @@
     (or
      (code-coll ct e b c i p)
      (case ct
-       :chain         (chain e b c i p)
-       :inspect       (ci/inspect-portal)
+       :chain (chain e b c i p)
+       ;; :inspect       (ci/inspect-portal)
+       
+       :demo       (cd/demo {:form [1 2 3 4]} form c)
+       
        :grid          (grid e b c i p)
        :bar           (bar e b c i p)
        :hidden        (hiddenc e b c i p)
@@ -408,16 +400,13 @@
 
 
 
+
+
 (rum/defc form
   < dbrx/ereactive scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
   [e bus indent-prop proply]
-  (vswap! form-reductions inc)
   (let [selected? (:form/highlight e)]
-    #_(when selected?
-        (rum/use-effect!
-         (fn [] (println "Effect#" (:db/id e)))
-         [selected?]))
     (rum/fragment
      (rum/with-context [ind cc/*indenter*]
        (when ind
@@ -430,21 +419,15 @@
                  it (token-text tt tv)]
              [:span
               {:key (:db/id e)
-               ;; :dangerouslySetInnerHTML {:__html it}
                :class (if-not selected?
                         tc
                         (str tc " selected"))
                :onClick (fn [ev]
                           (.stopPropagation ev)
+                          (js/console.log "click" (:db/id e) bus)
                           (core/send! bus [:click (:db/id e)])
                           false)}
-              ^String it
-              #_(when (= :symbol tt)
-                  (let [off 1
-                        tkl (count tv)
-                        len 3
-                        left (- tkl)]
-                    ))])
+              ^String it])
            
            (:coll/type e)
            (case (:coll/type e)

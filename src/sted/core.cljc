@@ -13,10 +13,10 @@
 (defonce scroll-sequence-number (volatile! 0))
 (defonce scroll-snapshot (volatile! 0))
 (defn scroll-locked? []
-  #?(:cljs
-     (js/console.log "SL" @scroll-sequence-number @scroll-snapshot))
-  true
-  #_(not= @scroll-sequence-number @scroll-snapshot))
+  #_#?(:cljs
+       (js/console.log "SL" @scroll-sequence-number @scroll-snapshot))
+  #_true
+  (not= @scroll-sequence-number @scroll-snapshot))
 
 (defn get-selected-form
   [db]
@@ -42,9 +42,8 @@
   ;; hacks
   (zchan [this])
 
-  (uniqueid [this]))
-
-
+  (uniqueid [this])
+  (reset [this]))
 
 (defprotocol ICursor
   (selection [this ent])
@@ -60,57 +59,40 @@
       (set-selection! [this e] (reset! c e)))))
 
 (defn bus
-  []
-  (let [ch (async/chan)
-        pub (async/pub ch first)
-        hs (atom {})
-        #?@(:cljs [sub-map (js/Map.)]) 
-        uu (str (d/squuid))]
-    (reify IBus
-      (send! [this msg] (async/put! ch msg))
-      (connect-sub! [this topic sch]
-        (async/sub pub topic sch))
-      (disconnect-sub! [this topic sch]
-        (async/unsub pub topic sch))
+  ([] (bus nil))
+  ([last-sub-map]
+   (let [ch (async/chan)
+         pub (async/pub ch first)
+         hs (atom {})
+         #?@(:cljs [sub-map (or last-sub-map (js/Map.))]) 
+         uu (str (d/squuid))]
+     (when last-sub-map
+       (js/console.log "Re-use sub-map" last-sub-map))
+     (reify IBus
+       (send! [this msg] (async/put! ch msg))
+       (connect-sub! [this topic sch]
+         (async/sub pub topic sch))
+       (disconnect-sub! [this topic sch]
+         (async/unsub pub topic sch))
       
+       (fire-subs! [this entity]
+         #?(:cljs
+            (some-> (.get sub-map (:db/id entity))
+                    (.forEach (fn [f] (f entity))))))
+       (sub-entity [this eid func]
+         #?(:cljs
+            (let [sub-set (or (.get sub-map eid)
+                              (let [s (js/Set.)]
+                                (.set sub-map eid s)
+                                s))]
+              (.add sub-set func)
+              (fn [] (.delete sub-set func)))))
       
-      (fire-subs! [this entity]
-        #?(:cljs
-           (some-> (.get sub-map (:db/id entity))
-                   (.forEach (fn [f] (f entity))))))
-      (sub-entity [this eid func]
-        #?(:cljs
-           (let [sub-set (or (.get sub-map eid)
-                             (let [s (js/Set.)]
-                               (.set sub-map eid s)
-                               s))]
-             (.add sub-set func)
-             (fn [] (.delete sub-set func)))))
-      
-      (get-history [this txid] (get @hs txid))
-      (save-history! [this txid r] (swap! hs assoc txid r))
-      (zchan [this] ch)
-      (uniqueid [this] uu))))
-
-#_(defn context
-  []
-  (let [b (bus)
-        c (cursor)]
-    (reify
-      ICursor
-      (selection [t e] (selection c e))
-      (set-selection! [t e] (set-selection! c e))
-      (get-selection [t] (get-selection c))
-      IBus
-      (send! [t m] (send! b m))
-      (connect-sub! [t o s] (connect-sub! b o s))
-      (disconnect-sub! [t o s] (disconnect-sub! b o s))
-      (sub-entity [t o s] (sub-entity b o s))
-      (fire-subs! [t e]
-        (fire-subs! b e))
-      (get-history [t x] (get-history b x))
-      (save-history! [t x r] (save-history! b x r))
-      (zchan [t] (zchan b)))))
+       (get-history [this txid] (get @hs txid))
+       (save-history! [this txid r] (swap! hs assoc txid r))
+       (zchan [_this] ch)
+       (uniqueid [_this] uu)
+       (reset [_this] (bus sub-map))))))
 
 (def blackhole
   (reify IBus
@@ -122,7 +104,7 @@
     (save-history! [this txid r])
     (zchan [this])))
 
-(defrecord App [conn bus! history])
+(defrecord App [conn bus history system])
 
 (defn register-mutation!
   [{:keys [conn bus] :as app} topic mut-fn]
@@ -143,7 +125,7 @@
     app))
 
 (defn register-simple!
-  [{:keys [bus conn history dispatch] :as app} topic mut-fn]
+  [{:keys [bus conn history] :as app} topic mut-fn]
   (let [ch (async/chan)]
     (go-loop [last-tx nil]
       (let [[mut-name & args :as mut] (async/<! ch)
@@ -167,7 +149,6 @@
                 #_(println txid mut)
                 (reset! history (cons report @history)))
             (println "No current-tx?")))
-        
         (when-let [e (:error report)]
           (println (str "Error transacting " e (pr-str mut)) e)
           (println "Tx-data")
@@ -238,35 +219,35 @@
   app)
 
 (defn app
-  [conn]
-  (let [the-bus  (bus)  #_(context)
-        my-id (uniqueid the-bus)]
-    (-> {:bus     the-bus
-         :history (atom ())
-         :dispatch (atom {})
-         :conn    (doto conn
-                    (d/listen!
-                     (with-meta
-                       (fn [{:keys [db-after db-before tx-data tempids]}]
-                         (try
-                           (let [emax (:max-eid db-before)
-                                 es (into #{}
-                                          (keep (fn [[e]]
-                                                  (when-not (> e emax)
-                                                    e)))
-                                          tx-data)
-                                 as (into #{} (map (fn [[_ a]] a)) tx-data)]
+  ([conn] (app conn nil))
+  ([conn pbus]
+   (let [the-bus (or pbus (bus))
+         my-id (uniqueid the-bus)]
+     (-> {:bus     the-bus
+          :history (atom ())
+          :conn    (doto conn
+                     (d/listen!
+                      (with-meta
+                        (fn [{:keys [db-after db-before tx-data tempids]}]
+                          (try
+                            (let [emax (:max-eid db-before)
+                                  es (into #{}
+                                           (keep (fn [[e]]
+                                                   (when-not (> e emax)
+                                                     e)))
+                                           tx-data)
+                                  as (into #{} (map (fn [[_ a]] a)) tx-data)]
                                      
-                             (vreset! scroll-snapshot @scroll-sequence-number)
-                             #_(js/console.time "batchedUpdates")
-                             (js/ReactDOM.unstable_batchedUpdates
-                              (fn []
-                                (doseq [e es]
-                                  (when-not (empty? (d/datoms db-after :eavt e))
-                                    (fire-subs! the-bus (d/entity db-after e))))))
-                             #_(js/console.timeEnd "batchedUpdates"))
-                           (catch #? (:cljs js/Error :clj Exception) e
-                             (js/console.log "Exception in listener" e))))
-                       {:core/id my-id})))}
-        (map->App)
-        (setup-undo!))))
+                              (vreset! scroll-snapshot @scroll-sequence-number)
+                              #_(js/console.time "batchedUpdates")
+                              (js/ReactDOM.unstable_batchedUpdates
+                               (fn []
+                                 (doseq [e es]
+                                   (when-not (empty? (d/datoms db-after :eavt e))
+                                     (fire-subs! the-bus (d/entity db-after e))))))
+                              #_(js/console.timeEnd "batchedUpdates"))
+                            (catch #? (:cljs js/Error :clj Exception) e
+                              (js/console.log "Exception in listener" e))))
+                        {:core/id my-id})))}
+         (map->App)
+         (setup-undo!)))))

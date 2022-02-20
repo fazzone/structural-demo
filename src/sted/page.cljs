@@ -19,6 +19,7 @@
    [sted.comp.scroll :as csc]
    [sted.comp.common :as ccommon]
    [sted.comp.modeline :as ml]
+   [sted.comp.root :as cr]
    [sted.cmd.move :as move]
    [sted.cmd.nav :as nav]
    [sted.cmd.insert :as insert]
@@ -43,7 +44,8 @@
 
 
 
-(def test-form-data-bar (e/string->tx-all (m/macro-slurp "src/sted/user.clj")))
+(def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
+                               :chain/filename  "src/sted/user.clj"))
 
 (def init-tx-data
   (let [chains (concat
@@ -67,7 +69,10 @@
       :db/id "command-chain"
       :coll/type :vec
       :form/highlight true}
-     {:db/ident ::inspect  :db/id "inspect"  :coll/type :inspect}
+     {:db/ident ::inspect  :db/id "inspect"
+      :coll/type :demo
+      
+      }
      {:db/ident ::default-keymap
       :db/id "defaultkeymap"
       :coll/type :keyboard
@@ -130,33 +135,24 @@
 #_(defmethod display-coll :undo-preview  [c b i s p]
   (display-undo-preview c b s true))
 
-
-
-(rum/defc root-component
-  [db bus]
-  (let [state (d/entity db ::state)
-        ml-ref (rum/create-ref)]
-    
-    (println "Render root" (core/uniqueid bus))
-    [:div.bar-container {}
-     #_(csc/scroll-area-viz)
-     (rum/bind-context [ccommon/*modeline-ref* ml-ref]
-                       (code/form (:state/bar state) bus 0 nil))
-     [:div.modeline-outer {:id "modeline" :ref ml-ref}]
-     #_(ml/modeline-portal db bus)
-     #_(cc/svg-viewbox (:state/bar state) core/blackhole)]))
+(defn ask-download-file
+  [path contents]
+  (let [b (js/Blob. #js [contents])
+        u (js/URL.createObjectURL b)
+        a (js/document.createElement "a")]
+    (set! (.-href a) u)
+    (set! (.-download a) path)
+    (.click a)))
 
 (defn save*
-  [file contents]
-  (println "Write" file)
+  [path contents]
   #_(.writeFile (js/require "fs/promises") file contents)
-  (let [w (js/window.open "")]
-    (js/setTimeout
-     (fn []
-       (let [el (js/document.createElement "pre")]
-         (set! (.-innerText el) contents)
-         (.appendChild (.-body (.-document w)) el)))
-     0))
+  (or (when-let [require (aget js/window "secret_electron_require")]
+        (-> (.writeFile ^js (require "fs/promises") path contents )
+            (.then  (fn [] (swap! ml/save-status assoc :status :ok :file path)))
+            (.catch (fn [] (swap! ml/save-status assoc :status :error)))))
+      (do (ask-download-file path contents)
+          (swap! ml/save-status assoc :status :ok :file path)))
   
   #_(if-let [spit (some-> (aget js/window "my_electron_bridge")
                           (aget "spit"))]
@@ -175,13 +171,14 @@
              (.appendChild (.-body (.-document w)) el)))
          0))))
 
-
 (defonce ^:export the-app (atom nil))
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
-   (let [a (core/app conn)]
+   (let [zb (some-> the-app deref :bus (core/reset))
+         _ (js/console.log "Zbus" zb)
+         a (core/app conn zb)]
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
      (doseq [[m f] mut/editing-commands]
@@ -257,19 +254,25 @@
   (let [{:keys [conn bus] :as app} (setup-app the-singleton-db)
         el (.getElementById js/document "root")]
     (reset! the-app app)
-    (println "Created new app and reset kbdb")
+    
     #_(when-let [req-title (some-> js/window.location.search
                                    (js/URLSearchParams.)
                                    (.get "title"))]
         (set! js/document.title req-title))
-    (rum/unmount el)
-    
-    (rum/mount (root-component @conn bus)
-               el)))
+    #_(rum/unmount el)
+    (println "Created new app and reset kbdb.  Mount root...")
+    (-> (cr/root app code/form)
+        (rum/mount el))
+    (println "Done")))
+
 
 (defn ^:export become
   [db]
-  (stop)
-  (reset! the-singleton-db db)
-  (init))
+  (-> (fn []
+        (rum/unmount (.getElementById js/document "root"))
+        (stop)
+        (reset! the-singleton-db db)
+        (init))
+      (js/setTimeout 0))
+  "Goodbye")
 

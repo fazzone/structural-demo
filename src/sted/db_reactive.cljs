@@ -56,6 +56,7 @@
                           [new-e bus]     (-> new-state :rum/args)
                           old-eid         (:db/id old-e)
                           new-eid         (:db/id new-e)]
+                      
                       (if (= old-eid new-eid)
                         new-state
                         (do

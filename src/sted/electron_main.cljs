@@ -5,9 +5,10 @@
   (clj->js
    {:width 1920
     :height 1200
-    :webPreferences {:preload (str js/__dirname "/electron_preload.js")}}))
-
-
+    :webPreferences {:preload #_(str js/__dirname "/electron_preload.js")
+                     (str js/__dirname "/electron_preload_no_isolation.js")
+                     :contextIsolation false
+                     :nodeIntegration true}}))
 
 (defn init-browser
   []
@@ -31,10 +32,10 @@
       (.setWindowOpenHandler window-open-handler))
     
     #_(when dev-version?
-      (.loadURL second-window localhost-url)
-      (doto (.-webContents second-window)
-        (.setWindowOpenHandler window-open-handler)
-        (.openDevTools)))))
+        (.loadURL second-window localhost-url)
+        (doto (.-webContents second-window)
+          (.setWindowOpenHandler window-open-handler)
+          (.openDevTools)))))
 
 (defn main []
   #_(.on app "window-all-closed" #(when-not (= js/process.platform "darwin")

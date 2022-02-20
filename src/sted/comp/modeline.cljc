@@ -40,6 +40,7 @@
                   "/"
                   (:max-tx db)
                   " " (some-> sel :nav/pointer meta)
+                  " " (or (:token/type sel) (:coll/type sel))
                   " " (:handle/token sel))]
     
     #_(when-some [insp (js/document.getElementById "inspector")]

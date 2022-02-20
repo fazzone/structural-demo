@@ -412,6 +412,41 @@
     (into [new-node]
           (edit/insert-after-tx chain new-node))))
 
+(defn summon-tx
+  [db eid]
+  (let [sel      (get-selected-form db)
+        mychain  (some-> sel nav/parents-vec peek :coll/_contains edit/exactly-one)
+        mcspine  (some-> mychain :seq/_first edit/exactly-one)
+        mbar     (:db/id (edit/exactly-one (:coll/_contains mychain)))
+        summoned (d/entity db eid)
+        schain   (some-> summoned nav/parents-vec peek :coll/_contains edit/exactly-one)
+        scspine  (some-> schain :seq/_first edit/exactly-one)
+        sbar     (:db/id (edit/exactly-one (:coll/_contains schain)))]
+    (when (and mcspine scspine (= (:db/id mbar) (:db/id sbar)))
+      (into (move-selection-tx (:db/id sel) eid)
+            (when-not (= (:db/id schain) (:db/id mychain))
+              (into [[:db/add (:db/id mychain) :chain/selection (:db/id sel)]]
+                    (edit/move-sibling-after-tx mychain schain))))))
+  #_(let [sel      (get-selected-form db)
+        mychain  (some-> sel nav/parents-vec peek :coll/_contains edit/exactly-one)
+          mcspine  (some-> mychain :seq/_first edit/exactly-one)
+          mbar     (:db/id (edit/exactly-one (:coll/_contains mychain)))
+          summoned (d/entity db eid)
+          schain   (some-> summoned nav/parents-vec peek :coll/_contains edit/exactly-one)
+          scspine  (some-> schain :seq/_first edit/exactly-one)
+          sbar     (:db/id (edit/exactly-one (:coll/_contains schain)))]
+    (when (and mcspine scspine (= (:db/id mbar) (:db/id sbar)))
+      (into (move-selection-tx (:db/id sel) eid)
+            (when-not (= (:db/id schain) (:db/id mychain))
+              [[:db/add (:db/id mychain) :chain/selection (:db/id sel)]
+               [:db/add (:db/id mcspine) :seq/next (:db/id scspine)]
+               
+               
+               ]
+            
+              ))))
+  )
+
 (def movement-commands
   {:select (fn [e eid] (d/entity (d/entity-db e) eid))
    :click  (fn [sel eid]
@@ -455,19 +490,37 @@
    :m7              (partial numeric-movement 6)
    :m8              (partial numeric-movement 7)})
 
-(defn new-comment-tx
+#_(defn new-comment-tx
   [sel]
   (into [[:db/add (:db/id sel) :form/linebreak true]]
-        (edit/insert-editing-before sel sel
-          (cond-> {:token/type :comment
-                   :form/linebreak true
-                   :form/edit-initial ";; "}
-            (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
+        (edit/insert-editing*
+         edit/insert-before-tx
+         sel
+         sel
+         (cond-> {:token/type :comment
+                  :form/linebreak true
+                  :form/edit-initial ";; "}
+           (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
+(defn new-comment-tx
+  [sel]
+  (edit/edit-new-wrapped-tx sel :md/root "" {})
+  
+  #_(into [[:db/add (:db/id sel) :form/linebreak true]]
+          (edit/insert-editing*
+           edit/insert-before-tx
+           sel
+           sel
+           (cond-> {:token/type :comment
+                    :form/linebreak true
+                    :form/edit-initial ";; "}
+             (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
 (defn store-fn
   ([] (str (d/squuid)))
   ([v] (when (meta v) (store-fn)))
-  ([k v] (sh/store k v)))
+  ([k v]
+   (println "Store" k v)
+   (sh/store k v)))
 
 (defn node-limit
   [db]
@@ -571,22 +624,22 @@
                             (go data (node-limit db) coll nn)
                             #_(go (list data) (:db/id coll) "ncell")))))
    #_(fn [db et data]
-     (let [target  (peek (nav/parents-vec et))
-           spine (edit/exactly-one (:seq/_first target))
-           coll (edit/exactly-one (:coll/_contains target))
-           outer {:db/id "outer"
-                  :coll/type :vec
-                  :eval/of (:db/id et)}]
-       (when (and spine coll)
-         (into [outer]
-               (concat
-                (edit/insert-after-tx et outer)
-                (go (list data) (node-limit db) outer outer)))
-         #_(into [outer
-                  [:db/add (:db/id spine) :seq/next "ncell"]
-                  (when-let [old-next (:seq/next spine)]
-                    [:db/add "ncell" :seq/next (:db/id old-next)])]
-                 (go (list data) (:db/id coll) "ncell")))))
+       (let [target  (peek (nav/parents-vec et))
+             spine (edit/exactly-one (:seq/_first target))
+             coll (edit/exactly-one (:coll/_contains target))
+             outer {:db/id "outer"
+                    :coll/type :vec
+                    :eval/of (:db/id et)}]
+         (when (and spine coll)
+           (into [outer]
+                 (concat
+                  (edit/insert-after-tx et outer)
+                  (go (list data) (node-limit db) outer outer)))
+           #_(into [outer
+                    [:db/add (:db/id spine) :seq/next "ncell"]
+                    (when-let [old-next (:seq/next spine)]
+                      [:db/add "ncell" :seq/next (:db/id old-next)])]
+                   (go (list data) (:db/id coll) "ncell")))))
 
    :eval-inplace (fn [db target data]
                    (let [spine (edit/exactly-one (:seq/_first target))
@@ -626,13 +679,33 @@
                                                (:db/id (move/backward-up target))))
                            tx-data)))))))
    
+
+   :summon summon-tx
    :unraise (comp edit/unraise-tx get-selected-form)
    :compose (fn [db]
               (let [sel (get-selected-form db)]
                 (edit/ffff sel)))
    :ingest-markdown (fn [db md-text]
-                      (let [top-level (peek (nav/parents-vec (get-selected-form db)))
-                            txe (emd/md->tx md-text)]
-                        (into [txe]
-                              (edit/insert-before-tx top-level txe))))})
+                      (let [top-level   (peek (nav/parents-vec (get-selected-form db)))
+                            chain       (some-> top-level :coll/_contains edit/exactly-one)
+                            txe (emd/md->tx md-text)
+                            new-node {:db/id "mdchain"
+                                      :coll/type :chain
+                                      :coll/contains (:db/id txe)
+                                      :seq/first (:db/id txe)}]
+                        (prn "DBIDTXE" (:db/id txe))
+                        (into [txe
+                               new-node]
+                              (edit/insert-after-tx chain new-node))))
+
+   ;; :create-recursive-app (fn [db form]
+   ;;                         (let [sel (get-selected-form db)
+   ;;                               top-level   (peek (nav/parents-vec sel))]
+   ;;                           (into 
+   ;;                            (edit/insert-after-tx
+   ;;                             top-level
+                              
+                              
+   ;;                             ))))
+   })
 

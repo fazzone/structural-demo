@@ -144,6 +144,45 @@
        [:db/add (:db/id spine) :seq/first (:db/id (:seq/first next))]
        [:db/add (:db/id parent) :form/edited-tx :db/current-tx]])))
 
+(defn move-sibling-after-tx
+  [sel target]
+  (let [sspine  (exactly-one (:seq/_first sel))
+        snext   (some-> sspine :seq/next)
+        sparent (exactly-one (:coll/_contains sel))
+        tspine  (exactly-one (:seq/_first target))
+        tnext   (some-> tspine :seq/next)
+        tprev   (some-> tspine :seq/_next exactly-one)
+        tparent (exactly-one (:coll/_contains target))]
+    (cond
+      (not (or snext tnext))                   nil
+      (= (:db/id snext) (:db/id tspine))       nil
+      (not= (:db/id sparent) (:db/id tparent)) nil
+      
+      (= (:db/id sspine) (:db/id (:seq/next tspine)))
+      (exchange-with-next-tx target)
+      
+      (nil? tprev)
+      [[:db/add (:db/id sparent) :form/edited-tx :db/current-tx]
+       [:db/add (:db/id tspine) :seq/first (:db/id (:seq/first tnext))]
+       [:db/add (:db/id tspine) :seq/next (:db/id (:seq/next tnext))]
+       ;; reuse the cons we just unlinked
+       [:db/add (:db/id sspine) :seq/next (:db/id tnext)]
+       (if-not snext
+         [:db/retract (:db/id tnext) :seq/next]
+         [:db/add (:db/id tnext) :seq/next (:db/id snext)])
+       [:db/add (:db/id tnext) :seq/first (:db/id target)]]
+      
+      :else
+      [[:db/add (:db/id sparent) :form/edited-tx :db/current-tx]
+       [:db/add (:db/id sspine) :seq/next (:db/id tspine)]
+       (if-not tnext
+         [:db/retract (:db/id tprev) :seq/next]
+         [:db/add (:db/id tprev) :seq/next (:db/id tnext)])
+       (if-not snext
+         [:db/retract (:db/id tspine) :seq/next]
+         [:db/add (:db/id tspine) :seq/next (:db/id snext)])])))
+
+
 (def duplicated-attrs [:form/indent
                        :form/linebreak])
 

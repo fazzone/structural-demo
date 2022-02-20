@@ -24,7 +24,9 @@
     (case tt
       (:symbol :keyword) (str e)
       (:string :number) e
-      (str "?" (type e)))))
+      (str "# "
+           (or (some-> e (.-constructor ) (.-name))
+               "object")))))
 
 (defn ->coll-type
   [e]
@@ -116,11 +118,7 @@
                            (conj! {:db/id    cell
                                    :seq/next {:seq/first {:db/id       ccell
                                                           :token/type  :symbol
-                                                          :token/value "...R"}} }))))
-                 #_(-> out
-                     (conj! [:db/add cell :seq/first car])
-                     (emit1 car nil '...)
-                     (emit-cont car rest (*store*)))))
+                                                          :token/value "...R"}} }))))))
         
         ;; reduce one cons, allocate tempids for its pointers
         :else
@@ -139,8 +137,7 @@
                    (cond-> out
                      ;; vcell is a cons for the map value
                      true  (conj! [:db/add cell :seq/next vcell])
-                     ncell (conj! [:db/add vcell :seq/next ncell]))
-                   )
+                     ncell (conj! [:db/add vcell :seq/next ncell])))
             
             (let [nout (cond-> out
                          ;; vcell is a value cell for this coll/token node

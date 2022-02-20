@@ -195,7 +195,10 @@
        (loop [q e]
          (if-some [ff (f q)]
            (do (.push out ff)
-               (recur (n q)))
+               (let [ne (n q)]
+                 (if-not (= e ne )
+                   (recur ne)
+                   (throw (ex-info "Trivial cycle" {:db/id (:db/id e)})))))
            out)))))
 
 (defn seq->seq
@@ -316,7 +319,8 @@
   [s]
   (n->tx
    (n/forms-node
-    (filter (comp not #{:whitespace :newline} n/tag)
+    (filter (comp not #{:whitespace
+                        #_:newline} n/tag)
             (n/children (p/parse-string-all s)))))
   #_(n->tx (p/parse-string-all s)))
 
@@ -405,3 +409,6 @@
                           #_[(string->tx-all (slurp "src/sted/page.cljs"))]))
               :avet
               ))))
+
+
+(do 0x7374656473746564)

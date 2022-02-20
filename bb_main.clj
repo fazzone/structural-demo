@@ -211,6 +211,7 @@
 (def electron-files
   [electron-main
    "srv/electron_preload.js"
+   "srv/electron_preload_no_isolation.js"
    "srv/font/iosevka-aile-light.woff2"
    "srv/font/iosevka-term-ss03-light.woff2"
    "srv/index.html"

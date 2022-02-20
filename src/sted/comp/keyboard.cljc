@@ -25,22 +25,12 @@
     [:div {:class ["key"
                    (when (= 1 (count keycap))
                      " single-width")]}
-     (comment
-       [:div {:style {:position :relative
-                      :top "0.5ex"
-                      :left "1.5ex"}}
-        [:div {:style {:position :absolute
-                       :width "4ex"
-                       :height "2.5ex"
-                       :border "1px solid #333"}}]
-        [:div {:style {:position :absolute
-                       :margin-top "1.25ex"
-                       :width "4ex"
-                       :border-top "1px dotted #333"}}]
-        [:div {:style {:position :absolute
-                       :margin-left "2ex"
-                       :height "2.5ex"
-                       :border-left "1px dotted #333"}}]])
+     (comment ;; alignment
+       [:div {:style {:position :relative :top "0.5ex" :left "1.5ex"}}
+        [:div {:style {:position :absolute :width "4ex" :height "2.5ex" :border "1px solid #333"}}]
+        [:div {:style {:position :absolute :margin-top "1.25ex" :width "4ex" :border-top "1px dotted #333"}}]
+        [:div {:style {:position :absolute :margin-left "2ex" :height "2.5ex" :border-left "1px dotted #333"}}]])
+     
      [:div.keycap-parent [:div.keycap keycap]]
      (when symbol [:div.key-symbol-parent [:div.key-symbol symbol]])
      (when label [:div.key-label label])]))
@@ -92,8 +82,11 @@
              :symbol [:div {:style {:font-size "150%" :margin-left "0.55ex"}}
                       "◯"]}
    :select-chain {:label "chain"}
-   :m1 {:label "top"}
-   
+   :m1 {:label "top"
+        :symbol [:div {:style {:transform "rotate(225deg)"
+                               :margin-top "0.5ex"}}
+                 
+                 "==>"]}
    :slurp-right {:label "push)→"}
    :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
    :gobble {:label "gobble"}
@@ -152,10 +145,9 @@
    ;;                                 :font-size "130%"}} "->"]}
    :tail   {:label "tail"
             :symbol [:div {:style {:transform "rotate(45deg)"
-                                   :font-size "130%"
-                                   ;; :margin-top "0.25ex"
-                                   ;; :margin-left "0.15ex"
-                                   }} "->"]}
+                                   :margin-top "0.5ex"
+                                   :margin-left "-0.3ex"
+                                   }} "==>"]}
    :clone     {:label "clone"
                :symbol [:div {:style {:margin-top "0.25ex"
                                       :margin-left "0.25ex"

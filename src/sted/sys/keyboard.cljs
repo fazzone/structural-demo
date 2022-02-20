@@ -3,16 +3,22 @@
             [sted.sys.kbd.map :as skm]
             [sted.sys.kbd.evt :as ske]))
 
+
 (defonce generation-track (atom 0))
+
 
 (def my-generation (swap! generation-track inc))
 
+
 (def ^:const super "F24")
+
+
 (def ^:const hyper "F23")
+
 
 (defn keydown
   [^KeyboardEvent ev mods keymap bus]
-  (js/console.log "KBD" (core/uniqueid bus))
+  #_(js/console.log "KBD" (core/uniqueid bus))
   (if-not (identical? js/document.body js/document.activeElement)
     (do
       #_(js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement))
@@ -22,15 +28,14 @@
       (cond
         (= super (.-key ev))
         (swap! mods conj :super)
-        
         (= hyper (.-key ev))
         (swap! mods conj :hyper)
-        
         :else
         (when-some [mut (get @keymap kbd)]
           (.preventDefault ev)
           (.stopPropagation ev)
           (core/send! bus [mut]))))))
+
 
 (defn keyup
   [^KeyboardEvent ev mods keymap bus]
@@ -39,6 +44,7 @@
     (if (= super (.-key ev))
       (swap! mods disj :super))))
 
+
 (defn cleanup!
   [{::keys [listeners] :as app}]
   (doseq [[e f] listeners]
@@ -46,6 +52,7 @@
     (js/document.removeEventListener e f false))
   (println "KBD" [my-generation] "Cleanup")
   (dissoc app ::listeners))
+
 
 (defn setup!
   [{:keys [bus] :as app}]
@@ -57,8 +64,7 @@
                           #_(println "This keydown")
                           (keydown ev mods keymap bus))
               "keyup" (fn [ev]
-                        (keyup ev mods keymap bus))
-              }]
+                        (keyup ev mods keymap bus))}]
       (doseq [[e f] ls]
         (js/document.addEventListener e f true))
       (println "KBD" [my-generation] "Setup")

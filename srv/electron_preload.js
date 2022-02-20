@@ -16,6 +16,6 @@ contextBridge.exposeInMainWorld('my_electron_bridge', {
         return fs.readFile(p, {encoding: 'utf-8'});
     }),
     list_dir: function(p) {
-        return fs.readdir(p);
+        return fs.readdir(p, {withFileTypes: true});
     }
 });

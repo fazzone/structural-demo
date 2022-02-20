@@ -19,16 +19,20 @@
             [sted.sys.handle :as sh]
             [mdast-util-from-markdown :as mdast]))
 
+
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                          :clj nil))
 
+
 (def the-sci-context (atom nil))
+
 
 (defn list-dir*
   [p]
   (when-some [f (some-> electron-bridge
                         (aget "list_dir"))]
     (.then (f p) js->clj)))
+
 
 (defn transactor
   [conn]
@@ -42,6 +46,7 @@
                       :tempids (:tempids tx-report)}))
           0))))))
 
+
 (defn new-window-with-text
   [text]
   (let [w (js/window.open "")]
@@ -50,6 +55,7 @@
             (set! (.-innerText el) text)
             (.appendChild (.-body (.-document w)) el)))
         (js/setTimeout 0))))
+
 
 (defn sci-opts
   [{:keys [conn bus] :as app}]
@@ -61,6 +67,7 @@
                            'q         d/q
                            'freeze    dser/serializable
                            'thaw      dser/from-serializable}
+                'e {'->string e/->string}
                 'js       {'Promise.resolve (fn [p]
                                               (println "Resolver" p)
                                               (js/Promise.resolve p))}
@@ -91,8 +98,8 @@
    :bindings   {'send!   (fn [m]
                            (js/Promise.
                             (fn [s f]
-                             (js/setTimeout (fn [] (s (core/send! bus m)))
-                                            0))))
+                              (js/setTimeout (fn [] (s (core/send! bus m)))
+                                             0))))
                 '->seq   e/seq->seq
                 'datafy  p/datafy
                 'nav     p/nav
@@ -102,6 +109,8 @@
                 'handle (fn [k]
                           (get @sh/storage k))
                 'storage sh/storage
+                '->chain (fn [ent]
+                           (some-> ent nav/parents-vec peek :coll/_contains first))
                 #?@ (:clj ['slurp slurp
                            'spit spit]
                      :cljs ['fetch-text (fn [z]
@@ -124,6 +133,7 @@
                                            name
                                            features))])}})
 
+
 (defn failure-cont
   [eval-target bus print-output]
   (fn [ex]
@@ -133,6 +143,7 @@
                       "\n"
                       (.-stack ex))])))
 
+
 (defn coll-contains?
   [parent child?]
   (-> (d/entity-db child?)
@@ -141,6 +152,7 @@
                 (:db/id child?)
                 (:db/id parent))
       (seq)))
+
 
 #_(defn key-within-map
   [target context]
@@ -154,10 +166,12 @@
           (throw (ex-info "It was supposed to be in here" {}))
           (recur s (:seq/next s) (not in-key?)))))))
 
+
 (defn key-within-map
   [target context]
   (when (coll-contains? context target)
     (e/->form target)))
+
 
 (defn eval-action?
   [e]
@@ -171,6 +185,7 @@
       (when ea
         (into [e] ea))))
 
+
 (defn nav-root
   [conn po]
   (fn []
@@ -180,21 +195,22 @@
                   t
                   (:db/id ch)))
           nav-entity (fn nav-impl [c k v]
-               (js/console.log "At" (:max-tx @conn) "Nav you " c k v )
+               (js/console.log "At" (:max-tx @conn) "Nav you " c k v)
                (if (number? k)
                  (d/entity db k)))]
       (with-meta
         {:max-tx (:max-tx db)
-         :prints (deref po) 
+         :prints (deref po)
          :ctl '[transact!]
          :db (d/entity db :sted.page/state)}
         {`p/nav nav-entity}))))
 
-(extend-protocol p/Datafiable
+
+#_(extend-protocol p/Datafiable
   v/SciNamespace
   (datafy [n]
-    the-sci-context
-    ))
+    the-sci-context))
+
 
 (defn mutatef
   [{:keys [conn bus] :as app} app-atom-circular-ref]
@@ -206,7 +222,7 @@
         ctx            (-> (sci-opts app #_{:bindings {'sel sel#}})
                            (sci/init)
                            (sci/merge-opts {:bindings {'sel       sel#
-                                                       ;; 'sted      app# 
+                                                       'sted      app#
                                                        'bus       bus
                                                        'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
@@ -225,19 +241,16 @@
                       (cond
                         (sequential? c)
                         (datafy/nav c nil k)
-
                         (associative? c)
                         (datafy/nav c k (get c k))
-                        
                         (set? c)
                         (datafy/nav c k k)
-                        
                         :else
-                        (str "Lmao:" (type c))))
+                        (str "???" (type c))))
                      (fn [z]
                        #_(core/send! bus [:eval-cont target (list nil z)])
                        (core/send! bus [:eval-inplace target z]))))
-            ;; 
+            ;;
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
                   res (sci/binding [sel# target] (sci/eval-string* ctx estr))]
@@ -248,6 +261,7 @@
                   (.then res
                          (fn [v]
                            (core/send! bus [:eval-result top v]))))))))))))
+
 
 (comment
   (sci/binding [sci/print-newline true
