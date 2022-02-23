@@ -19,12 +19,6 @@
 (open-file "src/sted/comp/scroll.cljs")
 
 
-true
-
-
-true
-
-
 (a/let [resp (js/fetch "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/reference/global_objects/promise/index.md")
         text (.text resp)]
   (send! [:ingest-markdown text]))

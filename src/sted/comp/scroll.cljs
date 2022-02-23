@@ -2,7 +2,9 @@
   (:require [sted.comp.common :as cc]
             [rum.core :as rum]))
 
+
 (def ^:const scroll-hysteresis-px 3)
+
 
 (defn do-hysteresis
   [pos npos]
@@ -22,6 +24,10 @@
             (js/Math.abs (- pos align-end)))
        align-start
        align-end))))
+
+(defn visible?
+  [outer-size inner-size pos off]
+  (<= 0 (- off pos) (- outer-size inner-size)))
 
 
 (defn scroll-to-selected*
@@ -47,7 +53,7 @@
         hpos     (some-> bar (.-scrollLeft))
         hoff     (some-> chain (.-offsetLeft))
         new-chain-top (and tl chain (scroll-1d chh h vpos voff))
-        new-bar-left  (and bar (scroll-1d barw w hpos hoff))]
+        new-bar-left  (and bar (not (visible? barw w hpos hoff)) (scroll-1d barw w hpos hoff))]
     (when new-chain-top
       (.scrollTo chain #js {:top new-chain-top}))
     (when new-bar-left

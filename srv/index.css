@@ -236,7 +236,7 @@ textarea.edit-box {
     padding-left: 1ch;
     overflow-y: scroll;
     white-space: pre;
-    min-width: min-content;
+    /* min-width: min-content; */
     padding-top: 2px;
     padding-bottom: 2px;
     /* width: 100%; */

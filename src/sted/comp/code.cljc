@@ -1,8 +1,8 @@
 (ns sted.comp.code
   (:require
    [sted.embed :as e]
-   [sted.schema :as s] 
-   [datascript.core :as d] 
+   [sted.schema :as s]
+   [datascript.core :as d]
    [clojure.string :as string]
    [rum.core :as rum]
    [sted.db-reactive :as dbrx]
@@ -25,29 +25,35 @@
 
 (rum.core/set-warn-on-interpretation! true)
 
+
 (declare form)
+
+(defn iobs-callback
+  [ents me]
+  (when-not (core/scroll-locked?)
+    (let [can-see (some (fn [e]
+                          (> 1 (js/Math.abs (- (.-height (.-intersectionRect e)) (.-height (.-boundingClientRect e))))))
+                        ents)]
+      (when-not can-see
+        (loop [[ioe & more] ents
+               did-scroll nil]
+          #_(when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
+          (when ioe
+            (if did-scroll
+              (js/console.log "What does this mean?")
+              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+            (recur more true)))))))
+
 
 (defn make-iobs
   []
   ;; hack - must specify these in px, ex/em not allowed
-  (->> #js {:rootMargin "0px 0px -20px 0px" :threshold #js [0]}
-       (js/IntersectionObserver.
-        (fn [ents me]
-          #_(js/console.log "Obs" (count ents))
-          (when-not (core/scroll-locked?)
-            ;; Note that this is an incorrect check because a very wide chain messes with this number
-            (let [can-see (some #(< 0.99 (.-intersectionRatio %)) ents)]
-              (when-not can-see
-                (loop [[ioe & more] ents
-                       did-scroll nil]
-                  #_(when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
-                  (when ioe
-                    (if did-scroll
-                      (js/console.log "What does this mean?")
-                      (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
-                    (recur more true))))))))))
+  (->> #js {:rootMargin "0px 0px -20px 0px"  :threshold #js [0]}
+       (js/IntersectionObserver. iobs-callback)))
+
 
 (def the-iobs (make-iobs))
+
 
 (def scroll-selected
   {:did-update
@@ -58,7 +64,7 @@
          (if-not (or sel? prev-sel?)
            state
            (let [el (rum/dom-node state)
-                 real-el (if-not (= "S" (.-tagName el) )
+                 real-el (if-not (= "S" (.-tagName el))
                            el
                            (.-nextElementSibling el))]
              (if sel?
@@ -67,11 +73,13 @@
                (do (.unobserve the-iobs real-el)
                    (assoc state ::prev-sel? nil))))))))})
 
+
 (defn computed-indent
   [e indent-prop]
   (+ indent-prop
      (or (:form/indent e)
          0)))
+
 
 (rum/defc indenter
   [nl? ip fi]
@@ -84,6 +92,7 @@
           {:style {:color "cadetblue"}}
           (apply str (repeat fi "-"))]
        [:span.indenter {:style {:margin-left (str fi "ch")}}])]))
+
 
 (rum/defc top-level-form
   ;; < dbrx/ereactive
@@ -101,10 +110,11 @@
       (rum/bind-context
        [cc/*indenter* indenter]
        ^:inline (form e bus 0 p))]
-     
-     #_[:div.modeline-outer {:ref ml-ref }]]))
+     #_[:div.modeline-outer {:ref ml-ref}]]))
+
 
 (def render-counter (atom 0))
+
 
 (rum/defc erc
   < rum/reactive
@@ -117,24 +127,35 @@
        {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
        (str "#" (:db/id (:eval/of e)))]]]))
 
+
 #_(def inhibit-scroll? (volatile! false))
 
+
 (defonce secret-chain-scroll-position-cache (atom {}))
+
 
 (def remember-scroll-position
   "This is for when shadow-cljs reloads us"
   {:will-unmount (fn [state]
-                   (let [st (some-> state rum/dom-node (.-scrollTop))
-                         eid (-> state :rum/args first :db/id)]
+                   (let [el (rum/dom-node state)
+                         eid (-> state
+                                 :rum/args
+                                 first
+                                 :db/id)]
                      (when eid
-                       (swap! secret-chain-scroll-position-cache assoc eid st)))
+                       (swap! secret-chain-scroll-position-cache assoc
+                         eid
+                         {:top (.-scrollTop el)  :left (.-scrollLeft el)})))
                    state)
    :after-render (fn [state]
-                   (if-some [sp (some->> state :rum/args first :db/id
-                                         (get @secret-chain-scroll-position-cache))]
-                     (set! (.-scrollTop (rum/dom-node state))
-                           sp))
+                   (if-some [{:keys [top left]} (some->> state
+                                                         :rum/args first
+                                                         :db/id (get @secret-chain-scroll-position-cache))]
+                     (let [el (rum/dom-node state)]
+                       (set! (.-scrollTop el) top)
+                       (set! (.-scrollLeft el) left)))
                    state)})
+
 
 (rum/defcs lazy-children
   < rum/reactive
@@ -142,16 +163,16 @@
            (assoc state
                   ::phase (atom :lazy)
                   ::end (atom 8)
-                  ::last-e (-> state :rum/args first #?(:cljs (js/WeakRef.)))))
+                  ::last-e (-> state :rum/args first #? (:cljs (js/WeakRef.)))))
    :before-render (fn [st]
-                    (when-not (some-> st ::last-e #?(:cljs (.deref))
+                    (when-not (some-> st ::last-e #? (:cljs (.deref))
                                       (identical? (-> st :rum/args first)))
                       (reset! (::phase st) nil))
                     st)
    :after-render (fn [st]
                    (when (= :lazy (deref (::phase st)))
                      (-> #(swap! (::end st) + 8)
-                         (js/requestIdleCallback #js{:timeout 10})))
+                         (js/requestIdleCallback #js {:timeout 10})))
                    st)}
   [{::keys [phase end] :as myst} e bus]
   (let [children (e/seq->vec e)]
@@ -176,7 +197,11 @@
     :class classes
     :id (str "c" (:db/id ch))}
    #_(cd/demo {:form [1 2 3 4]} form)
-   (lazy-children ch bus)])
+   #_(lazy-children ch bus)
+   (for [f (e/seq->vec ch)]
+     (-> (top-level-form f bus nil)
+         (rum/with-key (:db/id f))))])
+
 
 (rum/defc grid
   [ch bus classes]
@@ -186,11 +211,12 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
-(rum/defc bar [b bus classes]
+
+(rum/defc bar
+  < remember-scroll-position
+  [b bus classes]
   (let [ref-me (rum/create-ref)]
-    [:div.bar.hide-scrollbar
-     {:class classes}
-     #_(lazy-children b bus)
+    [:div.bar.hide-scrollbar {:class classes} #_(lazy-children b bus)
      (for [chain-head (e/seq->vec b)]
        (-> (form chain-head bus 0 nil)
            (rum/with-key (:db/id chain-head))))]))
@@ -203,6 +229,7 @@
     (when of
       (rum/bind-context [cc/*modeline-ref* nil]
                         ^:inline (form of bus 0 nil)))]])
+
 
 (rum/defc delimited-coll*
   [e bus open close cc ec classes indent proply]
@@ -220,6 +247,7 @@
      (for [c children] ^:inline (form c bus indent proply))
      (when close [:span.d ^String close])]))
 
+
 (defn code-coll
   [ct e b c i p]
   (case ct
@@ -228,7 +256,7 @@
     :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
     :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
     :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
-    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
+    :tear             (delimited-coll* e b "�"  "�" "dl" nil c i p)
     :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
     :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
     :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)
@@ -239,29 +267,27 @@
     :uneval           (delimited-coll* e b "#_" nil  nil "unev" c i p)
     nil))
 
+
 (rum/defc hiddenc [{:hidden/keys [coll-type] :as e} bus classes]
   [:div.hidden
    {:class classes}
    [:div {}
-    
     ^:inline (code-coll coll-type e bus classes 0 nil)]
    [:div {:style {:width "1500px"}}
     #_(ccons/testing e core/blackhole)
     (ccons/testing e bus (fn [n] (form n bus 0 nil)))
     #_[:div {:style {:width "800px"}}
      (ccons/svg-viewbox e core/blackhole)]
-
     #_(cnext/test-image)]
    [:pre
     (with-out-str
       (ccons/my-traversal e)
       #_(ccons/asdf-layout e))]
-   
-   
    [:span {}
     #_(e/open-delim coll-type)
     #_(for [c children] ^:inline (form c bus indent proply))
     #_(e/close-delim coll-type)]])
+
 
 (rum/defc para
   [ch bus classes]
@@ -270,12 +296,14 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc mdroot
   [ch bus classes]
   [:div {:key (:db/id ch)
          :class (str "md-root prose-font " classes)}
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
+
 
 (rum/defc mdlist
   [ch bus classes]
@@ -284,12 +312,14 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc mdli
   [ch bus classes]
   [:li {:key (:db/id ch)
         :class (str "md-li " classes)}
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
+
 
 (rum/defc mdh
   [ch bus classes]
@@ -298,12 +328,14 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc mdem
   [ch bus classes]
   [:em {:key (:db/id ch)
         :class (str "md-em " classes)}
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
+
 
 (rum/defc mda
   [a bus classes]
@@ -312,12 +344,14 @@
    (for [f (e/seq->vec a)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc mdbq
   [a bus classes]
   [:span {:key (:db/id a)
           :class (str "md-blockquote " classes)}
    (for [f (e/seq->vec a)]
      ^:inline (form f bus 0 nil))])
+
 
 (defn any-coll
   [e b c i p]
@@ -327,9 +361,7 @@
      (case ct
        :chain (chain e b c i p)
        ;; :inspect       (ci/inspect-portal)
-       
        :demo       (cd/demo {:form [1 2 3 4]} form c)
-       
        :grid          (grid e b c i p)
        :bar           (bar e b c i p)
        :hidden        (hiddenc e b c i p)
@@ -348,6 +380,7 @@
        (do
          (prn "???????????" ct)
          (str "What are you? " ct))))))
+
 
 (defn token-class
   [t v]
@@ -374,6 +407,7 @@
     :md/code        "md-code code-font"
     :md/inline-code "md-inline-code code-font"))
 
+
 (defn token-text
   [t v]
   #_(subs xxx 0 (if (number? v)
@@ -393,13 +427,7 @@
     :comment v
     :char v
     :regex (str "REGEX:" v)
-    (:md/text :md/code :md/inline-code) v
-
-    
-    ))
-
-
-
+    (:md/text :md/code :md/inline-code) v))
 
 
 (rum/defc form
@@ -428,7 +456,6 @@
                           (core/send! bus [:click (:db/id e)])
                           false)}
               ^String it])
-           
            (:coll/type e)
            (case (:coll/type e)
              nil (comment
@@ -443,5 +470,4 @@
                                     (zipmap (map :db/id
                                                  (next (mut/get-numeric-movement-vec e)))
                                             (range 2 9))))))
-     
      (when selected? (ml/modeline-nest-next e bus form)))))
