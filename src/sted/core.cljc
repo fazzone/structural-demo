@@ -130,7 +130,8 @@
     (go-loop [last-tx nil]
       (let [[mut-name & args :as mut] (async/<! ch)
             db @conn
-            tx-data (apply mut-fn db args)
+            sel (get-selected-form db)
+            tx-data (apply mut-fn sel args)
             _ (prn (uniqueid bus) mut-name)
             report (try (and tx-data
                              #_(assoc (d/transact! conn tx-data)
@@ -160,9 +161,8 @@
 
 (defn movement->mutation
   [mover]
-  (fn [db & args]
-    (let [sel (get-selected-form db)
-          nf  (apply mover sel args)]
+  (fn [sel & args]
+    (let [nf  (apply mover sel args)]
       (when nf
         (move-selection-tx (:db/id sel) (:db/id nf))))))
 

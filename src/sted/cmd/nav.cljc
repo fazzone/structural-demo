@@ -24,19 +24,18 @@
   (or (:chain/selection chain) chain))
 
 (defn hop*
-  [mover db]
-  (let [sel (get-selected-form db)]
-    (if (= :chain (:coll/type sel))
-      (do #_(println "Hop from chain")
-          (when-let [hop-chain (mover sel)]
-            (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))))
-      (let [chain (some-> sel parents-vec peek :coll/_contains first)]
-        #_(println "The chain is" (d/touch chain))
-        (when-let [hop-chain (mover chain)]
-          #_(println "The hop-chain is" (d/touch hop-chain) "The tarrget is " (hop-target hop-chain))
-          (concat (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
-                  [{:db/id (:db/id chain)
-                    :chain/selection (:db/id sel)}]))))))
+  [mover sel]
+  (if (= :chain (:coll/type sel))
+    (do #_(println "Hop from chain")
+        (when-let [hop-chain (mover sel)]
+          (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))))
+    (let [chain (some-> sel parents-vec peek :coll/_contains first)]
+      #_(println "The chain is" (d/touch chain))
+      (when-let [hop-chain (mover chain)]
+        #_(println "The hop-chain is" (d/touch hop-chain) "The tarrget is " (hop-target hop-chain))
+        (concat (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
+                [{:db/id (:db/id chain)
+                  :chain/selection (:db/id sel)}])))))
 
 (defn seq-prev [e] (some-> e :seq/_first first :seq/_next first :seq/first))
 
