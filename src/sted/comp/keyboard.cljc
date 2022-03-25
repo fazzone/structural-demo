@@ -97,12 +97,12 @@
                                  :margin-top "0.15ex"
                                  :margin-left "-0.15ex"}}
                    "«⋯»"]}
-   :hop-left  {:label "<-hop"
+   :hop-left  {:label "<-weft"
                :symbol [:div {:style {:font-size "130%"
                                       :margin-top "0.15ex"
                                       :margin-left "-0.15ex"}}
                         "<|"]}
-   :hop-right {:label "hop->"
+   :hop-right {:label "weft->"
                :symbol [:div {:style {:font-size "130%"
                                       :margin-top "0.15ex"
                                       :margin-left "-0.15ex"}}

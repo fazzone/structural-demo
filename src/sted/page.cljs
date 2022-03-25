@@ -35,6 +35,7 @@
    [sted.sys.mouse :as sm]
    [sted.sys.handle :as sh]
    [sted.sys.keyboard :as sk]
+   [goog.object :as gobj]
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form]])
   (:require-macros
@@ -43,6 +44,7 @@
    [sted.macros :as m]))
 
 
+(def ^js pdfjs (gobj/get js/window "pdfjs-dist/build/pdf"))
 
 (def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
                                :chain/filename  "src/sted/user.clj"))
@@ -64,7 +66,7 @@
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state
       :state/bar "bar"
-      :state/limit 128}
+      :state/limit 512}
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec
@@ -247,6 +249,12 @@
               (sk/cleanup!)
               (sm/cleanup!))))
 
+(rum/defc fakeroot
+  []
+  (let [pdfurl "https://datasheet.octopart.com/24AA02T-I/OT-Microchip-datasheet-7546411.pdf"]
+    
+    [:div {} [:span pdfurl]]))
+
 (defn ^:dev/after-load init
   []
   #_(some-> the-singleton-db meta :listeners (reset! {}))
@@ -262,6 +270,7 @@
     #_(rum/unmount el)
     (println "Created new app and reset kbdb.  Mount root...")
     (-> (cr/root app code/form)
+        #_(fakeroot)
         (rum/mount el))
     (println "Done")))
 

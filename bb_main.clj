@@ -217,6 +217,8 @@
    "srv/index.html"
    "srv/index.css"
    "srv/js/main.js"
+   "srv/pdf.min.js"
+   "srv/pdf.worker.min.js"
    #_"package.json"
    ])
 

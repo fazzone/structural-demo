@@ -179,6 +179,10 @@ span.indented {
     font-family: inherit;
 }
 
+.edit-box[value=""] {
+    caret-color: transparent;
+}
+
 textarea.edit-box {
     resize: none;
     height: 2ex;
@@ -236,7 +240,7 @@ textarea.edit-box {
     padding-left: 1ch;
     overflow-y: scroll;
     white-space: pre;
-    /* min-width: min-content; */
+    min-width: max-content;
     padding-top: 2px;
     padding-bottom: 2px;
     /* width: 100%; */

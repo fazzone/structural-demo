@@ -8,14 +8,17 @@
 
 (defn mutatef
   [app]
-  (fn [db]
+  (fn [sel]
     (z/set-options! {:style :fast-hang
-                     :map {:sort? nil}
-                     :set {:sort? nil}
+                     :map {:sort? nil
+                           :respect-nl? true}
+                     :set {:sort? nil
+                           :respect-nl? true}
+                     :list {:respect-nl? true}
+                     :vector {:respect-nl? true}
                      :width 120})
     (let [_ (js/console.time "formatting")
           _ (js/console.time "preparing")
-          sel (get-selected-form db)
           q (if (= :chain (:coll/type sel))
               sel
               (peek (nav/parents-vec  sel)))
