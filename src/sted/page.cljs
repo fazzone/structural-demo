@@ -524,7 +524,7 @@
                      (str padname)]])
                  nil))
        
-         (do (println "Default " f) nil)))]]])
+         nil))]]])
 
 (rum/defc elk-node-svg
   [{:keys [id width height x y ports children labels]}]
@@ -849,6 +849,7 @@
                 )]]]
            [:div {:style {:overflow-wrap :anywhere :width "100%"}} (str imgid)]]))]]))
 
+
 (rum/defc dsn-structure
   [structure]
   (let [cellsize "200px"
@@ -884,22 +885,32 @@
         [:path {:stroke-width 1000
                 :d (pts->d boundary-pts)}]]]]
      [:h2 "Plane"]
-     [:div {:style {:display :grid
+     [:div {:style {:display :flex
                     :grid-template-columns gtc
                     :grid-gap "1em"}}
-      (for [[_plane plane-name [ty layer _unk & coords]] (get structure 'plane)]
+      (for [[_plane plane-name [ty layer _unk & coords] & windows]
+            (get structure 'plane)]
         (let [points (partition-all 2 coords)
               [px py pw ph] (aabb 1000 points)
-              markup (case ty
-                       'polygon
-                       [:path {:fill "#fff"
-                               :opacity "0.2"
-                               :d (pts->d points)}])]
+              markup [:g (case ty
+                           'polygon
+                           [:path {:fill "#fff"
+                                   :opacity "0.2"
+                                   :d (pts->d points)}]
+                           nil)
+                      (for [[_window [ty layer aw & coords]] windows]
+                        (case ty
+                           'polygon
+                           [:path {:stroke "#fff"
+                                   :stroke-width 999
+                                   :fill "none"
+                                   :d (pts->d (partition-all 2 coords))}]))]]
           [:div {}
            [:h4 {} [:span {} plane-name]
             " - "
             [:span {} layer]]
-           [:svg {:viewBox (gstring/format "%f %f %f %f" px py pw ph)
+           #_[:div [:code [:pre (pr-str windows)]]]
+           #_[:svg {:viewBox (gstring/format "%f %f %f %f" px py pw ph)
                   :width cellsize
                   :height cellsize}
             [:g {:fill "none"
@@ -922,38 +933,9 @@
 
 
 
-(rum/defcs dsnroot < (rum/local nil ::result)  
-  [{::keys [result]}]
-  (let [[[_pcb dsnfile & body]] (dsn/dsnparse dsn/dsnstr)
-        toplevel (group-by first body)
-        structure (group-by first (mapcat next (get toplevel 'structure)))
-        boundary (group-by first (mapcat next (get structure 'boundary)))
-        bpath (group-by second (get boundary 'path ))
-        
-        [[_path _pcb _unk & coords ]] (get bpath "pcb")
-        boundary-pts (partition-all 2 coords)
-        [bx by bw bh] (aabb 0 boundary-pts)
-        
-        library (group-by first (mapcat next (get toplevel 'library )))
-        id->image (group-by second (get library 'image))
-        [_placement & plcbody] (toplevel 'placement)]
-    [:div {:style {:margin-left "1ex"}}
-     [:span
-      {}
-      (pr-str
-       (let [[xmin ymin w h] [74000 -121000 (* 9 52000) 101000]]
-         [xmin ymin
-          (+ w xmin) ymin
-          (+ w xmin) (+ ymin h)
-          xmin (+ ymin h)]))]
-     [:div
-      [:div {:style {:width "100px"}} (kicadsvg nil kicadedn)]
-      [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
-             :width "2000px"
-             :height "1000px"
-             :style {:border "1px solid cadetblue"}}
-       [:foreignObject {:x bx :y by :width bw :height bh}
-        (let [major 1000
+(rum/defc hruler
+  [bx by bw bh]
+  (let [major 1000
               fs (/ major 2.5)
               nfh (* -3 fs)
               pad (* 0.1 nfh)
@@ -989,7 +971,41 @@
                     :when (not= 0 s)]
                 [:g {:stroke-width (* 0.01 major)}
                  [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh)
-                                 " L" (+ bx (* d i))  " " (+ by (- rh fs fs)))}]]))]]])
+                                 " L" (+ bx (* d i))  " " (+ by (- rh fs fs)))}]]))]]]))
+
+
+(rum/defcs dsnroot < (rum/local nil ::result)  
+  [{::keys [result]}]
+  (let [[[_pcb dsnfile & body]] (dsn/dsnparse dsn/dsnstr)
+        toplevel (group-by first body)
+        structure (group-by first (mapcat next (get toplevel 'structure)))
+        boundary (group-by first (mapcat next (get structure 'boundary)))
+        bpath (group-by second (get boundary 'path ))
+        
+        [[_path _pcb _unk & coords ]] (get bpath "pcb")
+        boundary-pts (partition-all 2 coords)
+        [bx by bw bh] (aabb 0 boundary-pts)
+        
+        library (group-by first (mapcat next (get toplevel 'library )))
+        id->image (group-by second (get library 'image))
+        [_placement & plcbody] (toplevel 'placement)]
+    [:div {:style {:margin-left "1ex"}}
+     [:span
+      {}
+      (pr-str
+       (let [[xmin ymin w h] [74000 -121000 (* 9 52000) 101000]]
+         [xmin ymin
+          (+ w xmin) ymin
+          (+ w xmin) (+ ymin h)
+          xmin (+ ymin h)]))]
+     [:div
+      [:div {:style {:width "100px"}} (kicadsvg nil kicadedn)]
+      [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
+             :width "1000px"
+             :height "1000px"
+             :style {:border "1px solid cadetblue"}}
+       [:foreignObject {:x bx :y by :width bw :height bh}
+        (hruler bx by bw bh)
         #_[:div
          {:style {:width (str bw "px")
                   :height (str bh "px")
@@ -1017,11 +1033,11 @@
                :fill "none"
                :stroke-width 100
                :d (pts->d boundary-pts)}]
-       ;;            74000 -121000 178000 -121000 178000 -70000 74000 -70000
        [:g {:transform (str "translate(" 0 "," (+ by by bh) ")"
                             " scale(1,-1)")
             :fill "none"
             :stroke "#fff"}
+        
         ;; placements
         (for [[_placement & comps] (get toplevel 'placement)
               [_comp cclass & places] comps
@@ -1042,82 +1058,43 @@
                      props (into {} body)]]
            
            [:path {:stroke-width thk
+                   :stroke (case layer
+                             "F.Cu" "tomato"
+                             "blue")
                    :d (pts->d (partition-all 2 pts))
                    :data-net (props 'net)}])]
+        
         ;; vias
         (for [[_wiring & wires] (toplevel 'wiring)
               [via & args] wires
               :when (= 'via via)
               :let [[vianame x y & props] args]]
           [:use.via {:transform (str "translate(" x " " y ")")
-                     :href (str "#" vianame)}])]]]
+                     :href (str "#" vianame)}])
+
+        ;; planes
+        (for [[_plane plane-name [ty layer _unk & coords] & windows] (structure 'plane)
+              :let [_ (prn [plane-name layer])]
+              :when (case [plane-name layer]
+                      [ "GND" "B.Cu"] nil true)]
+          [:g (case ty
+                'polygon
+                
+                [:path {:fill "#fff"
+                        :opacity "0.2"
+                        :d (pts->d (partition-all 2 coords))}]
+                nil)
+           (for [[_window [ty layer aw & coords]] windows]
+             (case ty
+               'polygon
+               [:path {:stroke "none"
+
+                       :fill "cyan"
+                       :d (pts->d (partition-all 2 coords))}]))]
+          )]]]
      
      (dsn-structure structure)
-     (dsn-library library)
-     #_(gridsvg
-        {:width "800px"
-         :grid-template-columns "repeat(auto-fill, minmax(4em, 1fr) ) "
-         :grid-gap "1em"}
-        (for [i (range 99)]
-          [:div {:key (str "ge" i)
-                 :style {:background-color "tomato"
-                         :border-radius "1ex"}
-                 }
-           (str i)])
-        )
-     
-     #_[:div {:style {:display :grid
-                      :grid-template-columns "repeat(auto-fill, minmax(4em, 1fr) ) "
-                      :grid-gap "1em"
-                      :width "800px"}}
-        (for [i (range 99)]
-          [:div {:key (str "ge" i)
-                 :style {:background-color "tomato"
-                         :border-radius "1ex"}
-                 }
-           (str i)])]
-     
-     #_[:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
-              :width "1000px"
-              :height "1000px"
-              :style {:border "1px solid cadetblue"}}
-        [:path {:stroke "#fff"
-                :fill "none"
-                :stroke-width 999
-                :d (pts->d boundary-pts)}]
-        (for [[_plane plane-name [ty layer _unk & coords]] (get structure 'plane)]
-          (case ty
-            'polygon [:path {:fill "#fff"
-                             :opacity "0.2"
-                             :data-layer layer
-                             :data-plane plane-name
-                             :d (pts->d (partition-all 2 coords))}]
-            nil))
-
-        (for [[_placement & comps] (get toplevel 'placement)
-              [_comp cclass & places] comps
-              [_place cname x y layer unk & pn] places]
-          (do (println "PLacetment cname" cclass)
-              #_(println (get id->image cclass))
-              [:g {:transform (str "translate(" x "," y ")")
-                   :fill "none"
-                   :stroke "#fff"}
-             
-               ]))]
-     
-
-     
-     #_[:code [:pre
-               (with-out-str
-                 (cljs.pprint/pprint
-                  (get structure 'plane)
-                  ))
-               ]]
-     #_[:code [:pre (with-out-str
-                      (cljs.pprint/pprint
-                       body)) ]]]
-    
-    #_[:code [:pre (pr-str (clojure.edn/read-string dsn)) ]]))
+     (dsn-library library)]))
 
 (defn dsn->elk
   [pcb]
