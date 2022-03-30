@@ -4,9 +4,9 @@
    [sted.macros :as m]))
 
 (def dsnstr
-  #_(m/macro-slurp "srv/eda/RP2040_minimal.dsn")
+  (m/macro-slurp "srv/eda/RP2040_minimal.dsn")
   
-  (m/macro-slurp "srv/eda/hacked.dsn")
+  #_(m/macro-slurp "srv/eda/hacked.dsn")
   #_(m/macro-slurp "srv/eda/graebert.dsn")
   #_(m/macro-slurp "srv/eda/kit-dev-coldfire-xilinx_5213.dsn"))
 

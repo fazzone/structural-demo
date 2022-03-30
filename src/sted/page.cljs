@@ -43,7 +43,12 @@
    ["svgo/plugins/_applyTransforms" :as svgo-applytransforms]
    ["svgo/plugins/_transforms" :as svgo-transforms]
    ["svgo/plugins/_path" :as svgo-path]
-   [sted.eda.dsn :as dsn])
+   ["greiner-hormann" :as gh]
+   ["martinez-polygon-clipping" :as mpc]
+   [sted.eda.dsn :as dsn]
+   ["jsts/org/locationtech/jts/io" :as jts-io]
+   ["jsts/org/locationtech/jts/operation/buffer" :as jts-buf])
+
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
@@ -456,7 +461,7 @@
                       radians (* angle js/Math.PI (/ 1 180.0))
                       dx (* r (js/Math.sin radians))
                       dy (* -1 r (js/Math.cos radians))]
-                  (println "Angle " angle
+                  #_(println "Angle " angle
                            "Sine" (js/Math.sin radians)
                            "Cosine " (js/Math.cos radians))
                   [:g {:data-layer layer}
@@ -699,10 +704,10 @@
 
 (defn pts->d
   [[[sx sy] & pts]]
-  (str "M" sx " " sy
+  (str "M " sx " " sy
        (apply str
               (for [[x y] pts]
-                (str "L " x " " y)))))
+                (str " L " x "," y)))))
 
 (rum/defc gridsvg
   [grid-style elems]
@@ -730,6 +735,8 @@
                               nil))
     (for [e elems]
       e)]))
+
+
 
 (rum/defc padstack-svg
   [args [[_padstk psid [_shape [shtype shlayer & shpts]] :as stk]]]
@@ -825,8 +832,9 @@
                  :fill "none"
                  :stroke "#fff"}
              (for [[_outline & body] (get img 'outline)
-                   [_path _pathtype thk & coords] body]
-               [:path {:stroke-width thk
+                   [_path pathtype thk & coords] body]
+               [:path {:class pathtype
+                       :stroke-width thk
                        :d (pts->d (partition-all 2 coords))}])
              (for [[_pin padstack & args] (get img 'pin)
                    :let [rot? (and (vector? (first args)) (= 'rotate (ffirst args)))
@@ -834,12 +842,10 @@
                                         args
                                         (next args))
                          deg (when rot? (second (first args)))]]
-               [:g {:stroke "#fff"
-                    :stroke-width 444
-                    :transform (str
-                                "translate(" x " " y ")"
-                                (when rot? (str " rotate(" deg ")")))}
-                [:use {:href (str "#" padstack)}]])
+               [:use {:data-pin pin-id
+                      :href (str "#" padstack)
+                      :transform (str "translate(" x " " y ")"
+                                      (when rot? (str " rotate(" deg ")")))}])
              [:g {:stroke "tomato"
                   :stroke-width 100}
               (for [[_ko koname & args] (get img 'keepout)
@@ -902,7 +908,7 @@
                         (case ty
                            'polygon
                            [:path {:stroke "#fff"
-                                   :stroke-width 999
+                                   :stroke-width 333
                                    :fill "none"
                                    :d (pts->d (partition-all 2 coords))}]))]]
           [:div {}
@@ -974,6 +980,46 @@
                                  " L" (+ bx (* d i))  " " (+ by (- rh fs fs)))}]]))]]]))
 
 
+(rum/defc polygondiffc
+  []
+  [:div
+      (let [r->p (fn [x y w h]
+                   [[x y]
+                    [(+ x w) y]
+                    [(+ x w) (+ y h)]
+                    [x (+ y h)]
+                    [x y]])
+            apts (r->p 0 0 10 4)
+            bpts (r->p 3 1 2 2)
+            ]
+        [:div
+         [:svg {:viewBox "-10 -10 20 20"
+                :width "400px"
+                :height "400px"}
+          [:g {:stroke "#fff"
+               :stroke-width 0.1}
+           [:path {:d (pts->d apts)}]
+           [:path {:d (pts->d bpts)}]]]
+         (let [ghr (mpc/diff (clj->js [apts])
+                             (clj->js [bpts
+                                       (r->p 6 1 1 1)]))
+               gd (if (number? (-> ghr (nth 0) (nth 0)))
+                    (pts->d ghr)
+                    (apply str
+                     (for [poly ghr
+                           ring poly]
+                       (pts->d ring))))]
+           [:div {}
+            "Diff"
+            [:code [:pre (js/JSON.stringify ghr)]]
+            [:code [:pre gd]]
+            [:div {}
+             [:svg {:viewBox "-10 -10 20 20"
+                    :width "500px"
+                    :height "300px"}
+              [:g {:fill "#fff"}
+               [:path {:d gd :fill-rule "evenodd"}]]]]])])])
+
 (rum/defcs dsnroot < (rum/local nil ::result)  
   [{::keys [result]}]
   (let [[[_pcb dsnfile & body]] (dsn/dsnparse dsn/dsnstr)
@@ -988,6 +1034,7 @@
         
         library (group-by first (mapcat next (get toplevel 'library )))
         id->image (group-by second (get library 'image))
+        id->padstack (group-by second (get library 'padstack))
         [_placement & plcbody] (toplevel 'placement)]
     [:div {:style {:margin-left "1ex"}}
      [:span
@@ -998,6 +1045,7 @@
           (+ w xmin) ymin
           (+ w xmin) (+ ymin h)
           xmin (+ ymin h)]))]
+     
      [:div
       [:div {:style {:width "100px"}} (kicadsvg nil kicadedn)]
       [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
@@ -1007,28 +1055,28 @@
        [:foreignObject {:x bx :y by :width bw :height bh}
         (hruler bx by bw bh)
         #_[:div
-         {:style {:width (str bw "px")
-                  :height (str bh "px")
-                  :position :absolute
-                  :display :grid
-                  :grid-template-columns "repeat(8, 20000px)"
-                  :grid-template-rows "repeat(auto-fill, 20000px)"
-                  :grid-gap "1em"
-                  :opacity "90%"
-                  :font-size "1000px"
-                  :top "10000px"
-                  :left "50000px"}}
-         (for [i (range 24)]
-           (let [[sx sy sw sh] [-10000 -9000 20000 20000]]
-             [:div {:key (str "dge" i)
-                    :style {:width (str sw "px")
-                            :height (str sh "px")
-                            :border-radius "1ex"}}
-              [:svg {:viewBox (gstring/format "%f %f %f %f" sx sy sw sh)}
-               [:use {:stroke-width 1
-                      :transform "scale(1000,1000)"
-                      :font-size 1
-                      :href "#Kailh_socket_MX"}]]]))]]
+           {:style {:width (str bw "px")
+                    :height (str bh "px")
+                    :position :absolute
+                    :display :grid
+                    :grid-template-columns "repeat(8, 20000px)"
+                    :grid-template-rows "repeat(auto-fill, 20000px)"
+                    :grid-gap "1em"
+                    :opacity "90%"
+                    :font-size "1000px"
+                    :top "10000px"
+                    :left "50000px"}}
+           (for [i (range 24)]
+             (let [[sx sy sw sh] [-10000 -9000 20000 20000]]
+               [:div {:key (str "dge" i)
+                      :style {:width (str sw "px")
+                              :height (str sh "px")
+                              :border-radius "1ex"}}
+                [:svg {:viewBox (gstring/format "%f %f %f %f" sx sy sw sh)}
+                 [:use {:stroke-width 1
+                        :transform "scale(1000,1000)"
+                        :font-size 1
+                        :href "#Kailh_socket_MX"}]]]))]]
        [:path {:stroke "green"
                :fill "none"
                :stroke-width 100
@@ -1039,7 +1087,7 @@
             :stroke "#fff"}
         
         ;; placements
-        (for [[_placement & comps] (get toplevel 'placement)
+        (for [[_placement & comps] (toplevel 'placement)
               [_comp cclass & places] comps
               [_place cname x y layer rot [_pn pn]] places]
           [:use.comp {:transform (str
@@ -1074,24 +1122,105 @@
 
         ;; planes
         (for [[_plane plane-name [ty layer _unk & coords] & windows] (structure 'plane)
-              :let [_ (prn [plane-name layer])]
+              :let [planepts (partition-all 2 coords)]
               :when (case [plane-name layer]
                       [ "GND" "B.Cu"] nil true)]
           [:g (case ty
                 'polygon
                 
-                [:path {:fill "#fff"
-                        :opacity "0.2"
-                        :d (pts->d (partition-all 2 coords))}]
+                [:path { ;; :fill "#fff"
+                        :fill "none"
+                        ;; :opacity "0.2"
+                        :stroke "cadetblue"
+                        :stroke-width 99
+                        :d (pts->d planepts)}]
                 nil)
-           (for [[_window [ty layer aw & coords]] windows]
-             (case ty
-               'polygon
-               [:path {:stroke "none"
-
-                       :fill "cyan"
-                       :d (pts->d (partition-all 2 coords))}]))]
-          )]]]
+           
+           (when-some [window-pts (not-empty
+                                   (for [[_window [ty layer aw & coords]] windows]
+                                     (partition-all 2 coords)))]
+             (let [comprects (for [[_placement & comps] (toplevel 'placement)
+                                   [_comp cclass & places] comps
+                                   [_place cname x y layer rot [_pn pn]] places
+                                   [_image imgid & body] (id->image cclass)
+                                   [pin padstack & args] body
+                                   :when (= pin 'pin)
+                                   :let [rot? (and (vector? (first args)) (= 'rotate (ffirst args)))
+                                         [pin-id px py] (if-not rot?
+                                                          args
+                                                          (next args))
+                                         deg (when rot? (second (first args)))]
+                                   [_padstack _ps & psbody] (id->padstack padstack)
+                                   [shape [shtype layer & shpts]] psbody
+                                   :when (= [shape layer] ['shape "F.Cu"])
+                                   :when (#{'rect 'polygon} shtype)]
+                               (let [pathdata (case shtype
+                                                rect (let [[xa ya xb yb] shpts]
+                                                       (str (pts->d [[xa ya] [xa yb] [xb yb] [xb ya]]) "z"))
+                                                polygon (pts->d (partition-all 2 (next shpts))))
+                                     pdjs (svgo-path/path2js #js {:attributes #js {:d pathdata}})
+                                     xfpts (svgo-applytransforms/applyTransforms
+                                            #js {:attributes #js {:transform (str "translate(" x " " y ")" 
+                                                                                  "rotate(" rot ")"
+                                                                                  "translate(" px " " py ")")}
+                                                 :computedAttr (fn [] nil)}
+                                            pdjs
+                                            #js {:transformPrecision 99})]
+                                 (loop [i 0
+                                        acc []]
+                                   (if (= i (count pdjs))
+                                     acc
+                                     (let [p (nth pdjs i)]
+                                       (recur (inc i)
+                                              (case (.-command p)
+                                                ("L" "M") (conj acc (.-args p))
+                                                "z" (conj acc (nth acc 0))))))))
+                               #_(println (str "#" cclass padstack xa ya xb yb)))
+                   diff-subj (clj->js [planepts])
+                   diff-arg (clj->js [window-pts])
+                   _ (js/console.time "Geo")
+                   buffered (.-coordinates
+                             (.write
+                              (jts-io/GeoJSONWriter.)
+                              (jts-buf/BufferOp.bufferOp
+                               (.read (jts-io/GeoJSONReader.)
+                                      #js {:type "MultiPolygon"
+                                           :coordinates (clj->js (for [c comprects] [c]))})
+                               350)))
+                   mpcr (mpc/diff
+                         (mpc/diff diff-subj (do diff-arg))
+                         buffered)
+                   
+                   pathdata (cond
+                              (empty? mpcr) nil
+                              
+                              (number? (-> mpcr (nth 0) (nth 0)))
+                              (pts->d mpcr)
+                              
+                              :else
+                              (apply str
+                                     (for [poly mpcr
+                                           ring poly]
+                                       (str (pts->d ring) "  "))))
+                   _ (js/console.timeEnd "Geo")]
+               
+               #_(js/console.log "Subj" (js/JSON.stringify diff-subj))
+               #_(js/console.log "Argu" (js/JSON.stringify diff-arg))
+               #_(js/console.log "Resu" (js/JSON.stringify mpcr))
+               #_(js/console.log "Pthd" pathdata)
+               [:g.allwin
+                [:g.punch
+                 [:path {:fill "red"
+                         :opacity 0.4
+                         :fill-rule "evenodd"
+                         :stroke-width 999
+                         :stroke "none"
+                         :d pathdata}]]
+                (for [c comprects]
+                  [:path.dink
+                   {:stroke-width 99
+                    :stroke "#fff"
+                    :d (pts->d c)}])]))])]]]
      
      (dsn-structure structure)
      (dsn-library library)]))
