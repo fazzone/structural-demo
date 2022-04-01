@@ -46,17 +46,43 @@
    ["greiner-hormann" :as gh]
    ["martinez-polygon-clipping" :as mpc]
    [sted.eda.dsn :as dsn]
+   [sted.eda.kicad-footprint :as kcfp]
+   [sted.eda.schema :as edaschema]
    ["jsts/org/locationtech/jts/io" :as jts-io]
    ["jsts/org/locationtech/jts/operation/buffer" :as jts-buf]
    
    ["spl.js" :default spl]
-
+   
+   
+   
    )
 
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
    [sted.macros :as m]))
+
+(def siquery
+  "with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) 
+, q as (
+select layer, assvg(geom) as svg, geom as viewbox 
+, assvg(collect(geom, st_buffer(geom, 0.5))) as svg2
+, st_expand(geom, 10) as viewbox2
+from data
+)
+, tq as(
+select 
+collect(st_translate(geom, 2*i.value*(mbrmaxx(geom) - mbrminx(geom)), 2*j.value*(mbrmaxy(geom) - mbrminy(geom)), 0)) as tiled
+from generate_series(1,5) i
+join generate_series(1,5) j
+join data group by layer
+)
+select assvg(tiled) as svg, tiled as viewbox from tq"
+  
+  #_"with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) select layer, assvg(geom) as svg, geom as viewbox from data"
+  #_"select layer, assvg(collect(geomfromtext(wkt)))  as svg1, '-100 -100 200 200' as viewbox1 from kicad_footprint_draw group by layer"
+  #_"select , wkt, assvg(geomfromtext(wkt)) from kicad_footprint_draw"
+  #_"select json_group_array(json_object('d',d_mm,'stroke', case when layer = 'F.Cu' then 'red' else '#fff' end )) as svg_agg_dmm from kicad_footprint_draw")
 
 
 (def ^js pdfjs (gobj/get js/window "pdfjs-dist/build/pdf"))
@@ -323,7 +349,7 @@
   (fp_line (start -3.81 -6.985) (end 5.08 -6.985) (layer B.SilkS) (width 0.15))
   (fp_line (start 5.08 -6.985) (end 5.08 -6.604) (layer B.SilkS) (width 0.15))
   (fp_arc (start -3.81 -4.445) (end -3.81 -6.985) (angle -90) (layer B.Fab) (width 0.12))
-  (fp_arc (start 0 0) (end 0 -2.54) (angle -75.96375653) (layer B.Fab) (width 0.12))
+  (fp_arc (start 0 0) (end 0 -2.54) (angle -74.5) (layer B.Fab) (width 0.12))
   (fp_line (start -6.35 -0.635) (end -2.54 -0.635) (layer B.Fab) (width 0.12))
   (fp_line (start -6.35 -0.635) (end -6.35 -4.445) (layer B.Fab) (width 0.12))
   (fp_line (start -3.81 -6.985) (end 5.08 -6.985) (layer B.Fab) (width 0.12))
@@ -535,174 +561,18 @@
        
          nil))]]])
 
-(defn kicad-footprint-inserts
-  [[_footprint fpname & body :as kc-edn]]
-  (for [[f & args] body]
-    (case f
-      fp_line (let [[[_start sx sy] [_end ex ey] [_layer layer] [_width w]] args]
-                #js ["insert into fpe(layer, width, geom) values ?, ?, makeline(makepoint(?,?), makepoint(?,?))"
-                     layer w sx sy ex ey]
-                )
-      nil)))
 
 (rum/defc kicad-footprint-debug
   [[_footprint fpname & body :as kc-edn]]
-  (let [w 100]
+  (let [w 200]
     [:div {:style {:display        "flex"
                    :flex-direction "row"}}
      [:code {:style {:width (str w "ex")}}
       [:pre {}
        (do
          (zp-hacks/set-options! {:style :fast-hang :width w})
-         (zp-hacks/zprint-file-str (pr-str kc-edn ) fpname))
-       ]]
-     [:textarea.code-font  {:style {:height "200px"
-                                    :width "500px"}
-                            :value
-                            (js/JSON.stringify
-                             (into-array 
-                              (for [[f & args] body]
-                                (case f
-                                  fp_line (let [[[_start sx sy] [_end ex ey] [_layer layer] [_width w]] args]
-                                            #js {:type       "Feature"
-                                                 :geometry   #js {:type "LineString" :coordinates #js [#js [sx sy] #js [ex ey]]}
-                                                 :properties #js {:layer (str layer) :stroke_width w}})
-                                  ;; fp_text (let [[vu text [_at x y] [_layer layer]
-                                  ;;                [_effects [_font [_size sx sy] [_thickness thk]]]] args]
-                                  ;;           [:text x y text])
-                                  fp_arc  (let [[[_start sx sy] [_end ex ey] [_angle angle] [_layer layer] [_width w]] args
-                                                r                                                                      (js/Math.hypot (- ex sx) (- ey sy))
-                                                radians                                                                (* angle js/Math.PI (/ 1 180.0))
-                                                dx                                                                     (* r (js/Math.sin radians))
-                                                dy                                                                     (* -1 r (js/Math.cos radians))]
-                                            nil)
-                                  pad     (let [[padname padtype padshape & attrs]       args
-                                                [[_at x y] [_size sx sy] [_drill drill]] attrs
-                                                halfw                                    (* 0.5 sx)
-                                                halfh                                    (* 0.5 sy)
-                                                prop                                     (kicad->map attrs)]
-                                            (case padshape
-                                              circle nil #_ (gstring/format "makecircle(%f,%f,%f)" x y halfw)
-                                              oval   nil #_ (gstring/format "makeellipse(%f,%f,%f,%f)" x y halfw halfh)
-                                              (rect roundrect)
-                                              (let [minor    (min halfh halfw)
-                                                    [rratio] (prop 'roundrect_rratio)
-                                                    rxy      (* minor (or rratio 0))]
-                                                #js {:type       "Feature"
-                                                     :geometry   #js {:type "Polygon"
-                                                                      :coordinates #js [#js [x y]
-                                                                                        #js [(+ x sx) y]
-                                                                                        #js [(+ x sx) (+ y sy)]
-                                                                                        #js [x (+ y sy)]
-                                                                                        #js [x y]]}
-                                                     :properties #js {:pad_name (str padname)
-                                                                      :pad_type (str padtype)}})
-                                              nil))
-                                         
-                                  nil))))}]
-    
-     #_[:svg
-        {:xmlns   "http://www.w3.org/2000/svg" 
-         :viewBox (str "-8 -8 16 16")
-         :style   {:border "1px solid aliceblue"}
-         :width   "100px"
-         :height  "100px"}
-        [:g {:id (str fpname)}
-         (for [[f & args] body]
-           (case f
-             fp_line (let [[[_start sx sy] [_end ex ey] [_layer layer] [_width w]] args]
-                       [:line {:x1           sx :y1 sy :x2 ex :y2 ey
-                               :data-layer   layer
-                               :stroke       (case layer
-                                               "F.SilkS" "#fff"
-                                               "F.CrtYd" "cadetblue"
-                                               "F.Fab"   "#ae81ff"
-                                               "tomato")
-                               :stroke-width w}])
-             fp_text (let [[vu text [_at x y] [_layer layer]
-                            [_effects [_font [_size sx sy] [_thickness thk]]]] args]
-                       [:text
-                        {:x            x :y y
-                         :stroke       "#fff"
-                         :stroke-width 0.1
-                         :fill         "none"
-                         :font-size    sx
-                         :text-anchor  "middle"}
-                        (str text)])
-             fp_arc  (let [[[_start sx sy] [_end ex ey] [_angle angle] [_layer layer] [_width w]] args
-                           r                                                                      (js/Math.hypot (- ex sx) (- ey sy))
-                           radians                                                                (* angle js/Math.PI (/ 1 180.0))
-                           dx                                                                     (* r (js/Math.sin radians))
-                           dy                                                                     (* -1 r (js/Math.cos radians))]
-                      #_(println "Angle " angle
-                                 "Sine" (js/Math.sin radians)
-                                 "Cosine " (js/Math.cos radians))
-                      [:g {:data-layer layer}
-                       [:circle {:stroke-width w :stroke "green" :cx sx :cy sy :r w}]
-                       [:circle {:stroke-width w :stroke "blue" :cx ex :cy ey :r w}]
-                       
-                       [:circle {:stroke-width w :stroke "aliceblue"
-                                 :cx           (+ sx (* r (js/Math.sin radians)))
-                                 :cy           (- sy (* r (js/Math.cos radians)))
-                                 :r            w}]]
-                      [:path
-                       {:stroke-width w
-                        :stroke       "yellow"
-                        :fill         "none"
-                        :d
-                        (gstring/format "M %f %f A %f %f 0 0 1 %f %f"
-                                        (+ sx dx)
-                                        (+ sy dy)
-                                        r r ex ey)}])
-             pad (let [[padname padtype padshape & attrs]       args
-                       [[_at x y] [_size sx sy] [_drill drill]] attrs
-                       halfw                                    (* 0.5 sx)
-                       halfh                                    (* 0.5 sy)
-                       prop                                     (kicad->map attrs)]
-                   (case padshape
-                     circle [:g [:circle {:cx      x :cy y :r halfw
-                                          :fill    "#fff"
-                                          :opacity "0.2"
-                                          :stroke  "none"}]
-                             [:text
-                              {:x            x :y (+ y (* 0.5 halfh))
-                               :fill         "none"
-                               :stroke-width 0.1
-                               :stroke       "blue"
-                               :font-size    halfh
-                               :text-anchor  "middle"}
-                              (str padname)]]
-                     oval   [:ellipse {:cx      x :cy y :rx halfw :ry halfh
-                                       :fill    "#fff"
-                                       :opacity "0.2"
-                                       :stroke  "none"}]
-                     
-                     (rect roundrect)
-                     (let [minor    (min halfh halfw)
-                           [rratio] (prop 'roundrect_rratio)
-                           rxy      (* minor
-                                  (or rratio 0))]
-                       [:g
-                        [:rect {:x       (- x halfw)
-                                :y       (- y halfh)
-                                :width   sx
-                                :height  sy
-                                :rx      rxy
-                                :ry      rxy
-                                :fill    "#fff"
-                                :opacity "0.2"
-                                :stroke  "none"}]
-                        [:text
-                         {:x            x :y (+ y (* 0.5 minor))
-                          :fill         "none"
-                          :stroke       "#fff"
-                          :stroke-width 0.1
-                          :font-size    minor
-                          :text-anchor  "middle"}
-                         (str padname)]])
-                     nil))
-             
-             nil))]]]))
+         (zp-hacks/zprint-file-str (pr-str kc-edn ) fpname))]
+      [:pre {} (string/join "\n\n" edaschema/schema-statements)]]]))
 
 (rum/defc elk-node-svg
   [{:keys [id width height x y ports children labels]}]
@@ -1198,70 +1068,211 @@
     [:input {:value value
              :on-change #(set-value! (.. % -target -value))}]))
 
+(defn gaia->viewbox
+  [^ArrayBuffer gaia]
+  (let [dv (js/DataView. gaia)
+        xmin (.getFloat64 dv 6 true)
+        ymin (.getFloat64 dv 14 true)
+        xmax (.getFloat64 dv 22 true)
+        ymax (.getFloat64 dv 30 true)]
+    [xmin ymin (- xmax xmin) (- ymax ymin)]))
+
+(defn classify-result-column
+  [c]
+  (if-some [[_ ident] (->> c (re-find #"(?i)^svg_agg(.*)"))]
+    [:svg_agg ident]
+    (if-some [[_ _ ident] (->> c (re-find #"(?i)^(as)?svg(.*)"))]
+      [:svg ident]
+      (if-some [[_ ident] (->> c (re-find #"(?i)^viewbox(.*)"))]
+        [:viewbox ident])))) 
+
+
+(defn qr->viewbox
+  [v]
+  (cond
+    (string? v) v
+    (instance? js/ArrayBuffer v) (gaia->viewbox v)
+    :else nil))
+
+(rum/defc qr-svgview
+  [rowdata col-index id cfunc]
+  (let [r (get rowdata col-index)
+        [x y w h :as vbox] (or (some->> (get cfunc [:viewbox id])
+                                        (aget rowdata)
+                                        qr->viewbox)
+                               [-10 -10 20 20])
+        mmpx 10]
+    #_(println "id" (pr-str id) "Cfunc" (pr-str cfunc) )
+    #_(println "vbox " vbox (some->>
+                           (get cfunc [:viewbox id])
+                           (aget rowdata)))
+    [:div
+     [:svg {:viewBox (string/join " "vbox)
+            :width (str (* w mmpx) "px")
+            :height (str (* h mmpx) "px")}
+      [:g {:stroke-width 0.12
+           :stroke "#fff"
+           :fill "none"
+           :stroke-linecap "round"
+           :transform  "scale(1,-1)"}
+       (for [sp (string/split r ";")]
+         [:path {:d sp}])]]
+     [:span (str "Scale: " mmpx) ]
+     ]))
+
+(rum/defc fancy-results < rum/static
+  [cols rows]
+  (let [idx->cc (into-array (map classify-result-column cols))
+        cfunc (into {}
+                    (for [i (range (count idx->cc))
+                          :when (some? (aget idx->cc i))]
+                      [(aget idx->cc i) i]))]
+    (println "Re-render the fancy results")
+    [:table {:style {:width "100%" }}
+     [:tbody
+      [:tr {} (for [i (range (count cols))
+                    :let [c (aget cols i)]]
+                (case (aget idx->cc i)
+                  nil [:th {:scope "col"} c]
+                   
+                  (:svg :svg_agg)
+                  [:th {:scope "col"}
+                   [:span {} [:span {:style {:background-color "blue"
+                                             :border-radius "1ex"
+                                             :margin "0 1ex 0 0"}} "SVG"] c]]
+                  nil))]
+      (for [i (range (count rows))
+            :let [rs (aget rows i)]]
+        [:tr {:key i}
+         (for [j (range (count rs))
+               :let [r (aget rs j)
+                     cc (aget idx->cc j)]
+               :when (case (first cc) :viewbox nil true)]
+           [:td {:style {:max-width "25em" :overflow-wrap :anywhere}
+                 :key (str "r" i "c" j)}
+            (if (nil? cc)
+              (if (nil? r)
+                "NULL"
+                (str r))
+              (let [[f id] cc]
+                (case f
+                  :svg_agg
+                  [:svg {:viewBox "-10 -10 20 20"
+                         :width "400px"
+                         :height "400px"}
+                   (for [pd (js/JSON.parse r)]
+                     (cond
+                       (nil? pd) nil
+                       (string? pd) [:path {:stroke-width 0.1
+                                            :stroke "#fff"
+                                            :fill "none"
+                                            :d pd}]
+                       (object? pd) [:path {:d (aget pd "d")
+                                            :fill "none"
+                                            :stroke (or (aget pd "stroke") "#fff")
+                                            :stroke-width (or (aget pd "stroke-width") 0.1)}]))]
+                  :svg
+                  (qr-svgview rs j id cfunc)
+                  
+                  [:code [:pre "??" (str r)]]
+                  )))])])]]))
+
+
+
+(defn create-schema!
+  [db]
+  (js/Promise.all
+   (into-array (for [stmt edaschema/schema-statements]
+                 (.exec db stmt)))))
+
+(defn setup-db!
+  [db]
+  (a/let [_sch (create-schema! db)
+          fpir (kcfp/insert-footprint! db
+                                       (first (dsn/dsnparse kicadstr-kailhsocket)))]
+    fpir))
+
 (rum/defc spltest
   []
   (let [ref (rum/create-ref)
         [db set-db!] (rum/use-state nil)
-        [query set-query!] (rum/use-state
-                            (string/join "\n"
-                                         ["create table fpe(layer string, width integer, geom blob);"
-                                          "create table jafong(a string, b integer);"]))
-        [[cols rows] set-results!] (rum/use-state [[] []])]
+        [query set-query!] (rum/use-state siquery)
+        [[cols rows qdur] set-results!] (rum/use-state [[] []])
+        spl-options #js {:autoGeoJSON false
+                         :autoJSON false}]
     (rum/use-effect!
      (fn []
-       (println "My effect")
-       (a/let [s (spl.)
+       (a/let [s (spl. #js [] spl-options)
                the-db (.db s)
+               spr (setup-db! the-db)
                result (-> (.exec the-db query)
                           (.-get))]
          (set-db! the-db)
+         #_(println "SPR" spr)
          (a/let [cols (.-cols result)
                  rows (.-rows result)]
-           (println "SR" cols rows)
+           #_(println "SR" cols rows)
            (set-results! [cols rows])))
        nil)
      [])
-    [:div {}
+    [:div {:style {:display :grid
+                   :grid-template-columns "1fr"
+                   :width "90%"}}
      [:textarea.code-font {:value query
-                           :on-change (fn [ev] (set-query! (.-value (.-target ev))))}]
-     [:button {:on-click (fn []
-                           (println "I clicky the butterlogh")
-                           (a/let [result (-> (.exec db query)
-                                              (.-get))
-                                   cols (.-cols result)
-                                   rows (.-rows result)]
-                             (println "I setty the resulties" cols rows)
-                             (js/console.log result)
-                             (.free result)
-                             (set-results! [cols rows])))}
-      "Go"]
-     [:div {}
-      "Results"
-      (let [svgcol? (make-array (count cols))]
-       [:table
-        [:tr {} (for [i (range (count cols))
-                      :let [c (aget cols i)]]
-                  [:th {:scope "col"}
-                   (cond (re-find #"(?i)^(as)?svg" c)
-                         (do (aset svgcol? i true)
-                             (str "SVG:" c))
-                         :else c)])]
-        (for [i (range (count rows))
-              :let [rs (aget rows i)]]
-          [:tr {:key i}
-           (for [j (range (count rs))
-                 :let [r (aget rs j)]]
-             [:td {:style {:max-width "20em"}
-                   :key (str "r" i "c" j )}
-              (if-not (aget svgcol? j)
-                (str r)
-                [:svg {:viewBox "-10 -10 20 20"
-                       :width "400px"
-                       :height "400px"}
-                 [:path {:stroke-width 0.1
-                         :stroke "#fff"
-                         :d r}]])])])])
-      #_[:code [:pre (pr-str results)]]]]))
+                           :spellcheck "false"
+                           :style {:background-color "#000"
+                                   :color "#fff"
+                                   :height "40ex"
+                                   :margin-top "0.5ex"}
+                           :on-change (fn [ev] (set-query! (.-value (.-target ev))))
+                           :on-key-down (fn [ev]
+                                          (when (and (.-ctrlKey ev)
+                                                     (= "Enter" (.-key ev)))
+                                            (set-query! (.-value (.-target ev)))))}]
+     [:div {:style {:display :flex}}
+      [:button {:style {:width "10ex" :margin-right "4ex"}
+                :on-click (fn []
+                            (let [tqs (js/performance.now)]
+                              (a/let [result (-> (.exec db query)
+                                                 (.-get))
+                                      cols (.-cols result)
+                                      rows (.-rows result)]
+                                (.free result)
+                                (set-results! [cols rows (- (js/performance.now) tqs)]))))}
+       "Go"]
+      (str (count rows) " rows"
+           (when qdur (str " in " (.toFixed qdur 1) "ms")))
+      
+      [:label {:style {:margin-left "4ex"}}
+       ".kicad_mod"
+       [:input {:type "file"
+                :style {:width "50ex"}
+                :multiple true
+                :on-change (fn [ev]
+                             (js/console.log "Change File" ev)
+                             (js/console.log "Change File" (first (seq (.-files (.-target ev)))))
+                             (let [ps (for [file (seq (.-files (.-target ev)))
+                                            :let [fr (js/FileReader.)
+                                                  rfp (js/Promise.
+                                                       (fn [resolve reject]
+                                                         (set! (.-onload fr) (fn [ev]
+                                                                               (js/console.log "Resolve" ev)
+                                                                               (resolve (.-result (.-target ev)))))
+                                                         (set! (.-onerror fr) reject)
+                                                         (println "I read the text " (.-name file))
+                                                         (.readAsText fr file)))]]
+                                        (a/let [content rfp]
+                                          (js/Promise.all
+                                           (for [top (dsn/dsnparse content)]
+                                             (do (js/console.log "The db is" db )
+                                                 (kcfp/insert-footprint! db top)))))
+                                        #_(kcfp/insert-footprint! db (first (dsn/dsnparse (vec (.-files (.-target ev)))))))
+                                   ]
+                               (a/let [done (js/Promise.all ps)]
+                                 (js/console.log "Done" done))))
+
+                }]]]
+     (fancy-results cols rows)]))
 
 (rum/defcs dsnroot < (rum/local nil ::result)  
   [{::keys [result]}]
@@ -1280,9 +1291,10 @@
         id->padstack (group-by second (get library 'padstack))
         [_placement & plcbody] (toplevel 'placement)]
     [:div {:style {:margin-left "1ex"}}
+     #_(kicad-footprint-debug
+      (first (dsn/dsnparse kicadstr-kailhsocket))
+      #_(kicad->edn kicadstr-kailhsocket))
      (spltest)
-     (kicad-footprint-debug
-      (kicad->edn kicadstr-kailhsocket))
      #_[:span
         {}
         (pr-str

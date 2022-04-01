@@ -1,5 +1,6 @@
 (ns sted.eda.dsn
-  (:require [clojure.string :as string])
+  (:require
+   [clojure.string :as string])
   (:require-macros
    [sted.macros :as m]))
 
@@ -89,4 +90,15 @@
                 
                 (recur (conj acc quoted) stack (subs s (count parsed)))
                 (prn "IUknnown" s)))))))))
+
+
+
+;;-- pcb boundary (abs, ref)
+;;-- plane poly (abs)
+;;-- window poly (abs)
+;;-- wire (abs)
+
+;;-- pad shape (rel)
+;;-- comp outline (rel)
+;; keepout (rel)
 

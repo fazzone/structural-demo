@@ -605,6 +605,7 @@ s { text-decoration: none; }
     padding-left: 1ex;
 }
 
-g.wire:hover {
-    stroke-width: 200%;
+g.wire > path:hover {
+    stroke: #fff;
 }
+
