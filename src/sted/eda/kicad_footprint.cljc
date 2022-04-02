@@ -171,6 +171,46 @@
               :kicad_footprint_id footprint-id
               (aget dcs (name d)))))]))
 
+(defn fp->pad-cols
+  [[f & args]]
+  (reduce
+   (fn [acc [f & args]]
+     (case f
+       at (let [[_ x y] args]
+            (aset acc "at_x_mm" x)
+            (aset acc "at_y_mm" y))
+       size (let [[_ w h] args]
+              (aset acc "width_mm" w)
+              (aset acc "height_mm" h))
+       drill (let [[_ ds] args]
+               (aset acc "drill_mm" ds))
+       layers (let [[_ & ls] args]
+                (aset acc "layers_json" (js/JSON.stringify ls)))
+       nil))
+   #js {}))
+
+(defn pad-inserts*
+  [footprint-id attrs]
+  (println "A T T R S")
+  (run! prn attrs)
+  (for [[_pad padname padtype padshape [_at atx aty] [_size w h] [a1 :as av1] [a2 :as av2] :as dink] (attrs :pad)]
+    (do (prn "Dink:" dink)
+        (prn "A1" a1)
+        (prn "A2" a2)
+        (run! (comp prn (juxt type identity) first) (drop 4 dink))
+        (println "Type of a1??" (type a1) (pr-str a1) ) 
+        #js [(str "insert into kicad_footprint_pad"
+                  "\n       (kicad_footprint_id, name, type, shape, x_mm, y_mm, width_mm, height_mm, d_mm, drill_mm, layers_json)"
+                  "\nvalues (?,                  ?,    ?,    ?,     ?,    ?,    ?,        ?,         ?,    ?,         ?)")
+             #js [footprint-id (case padname "" nil padname) padtype padshape atx aty w h
+                  "no"
+                  (case a1 drill (nth av1 1) nil)
+                  (-> (case a1 drill av2 av1)
+                      (next)
+                      (into-array)
+                      (.sort)
+                      js/JSON.stringify) ]])))
+
 (defn classify-attrs*
   [body]
   (->> body
@@ -190,8 +230,12 @@
     (a/let [result (-> (.exec db insq insp)
                        (.-get))
             [[fpid] :as rows] (.-rows result)
-            idraws (do (.free result)
-                       (js/Promise.all (for [[dq dp] (draw-inserts* fpid attrs)]
-                                         (.exec db dq dp))))]
+            _ (.free result)
+            idraws (js/Promise.all (for [[q p] (draw-inserts* fpid attrs)]
+                                     (.exec db q p)))
+            ipads (js/Promise.all (for [[q p] (pad-inserts* fpid attrs)]
+                                    (do
+                                      (println "PI" q p)
+                                      (.exec db q p))))]
       (println "Ok"))))
 

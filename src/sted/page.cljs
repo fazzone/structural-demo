@@ -63,7 +63,8 @@
    [sted.macros :as m]))
 
 (def siquery
-  "with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) 
+  "select * from kicad_footprint_pad"
+  #_"with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) 
 , q as (
 select layer, assvg(geom) as svg, geom as viewbox 
 , assvg(collect(geom, st_buffer(geom, 0.5))) as svg2
