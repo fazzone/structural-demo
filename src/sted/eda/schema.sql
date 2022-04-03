@@ -14,7 +14,7 @@ create table kicad_footprint(
        , layer string
        , tedit string
        , descr string
-       , tags string
+       , tags_json string
        , attr string
        , version string
        , generator string
@@ -30,24 +30,33 @@ create table kicad_footprint_draw(
        , text string
        , font_size_w_mm real
        , font_size_h_mm real
-
        , wkt string
+);
+
+create table kicad_pad(
+       id integer primary key
+       , type string
+       , shape string
+       , width_mm real
+       , height_mm real
+       , d_mm string
+       , wkt string
+       , refcount integer default 1
+);
+
+create unique index kicad_pad_unique on kicad_pad(
+       type, shape, width_mm, height_mm, d_mm
 );
 
 create table kicad_footprint_pad(
        id integer primary key
        , kicad_footprint_id integer not null
+       , kicad_pad_id integer not null
        , name string
-       , type string
-       , shape string
        , x_mm real
        , y_mm real
-       , width_mm real
-       , height_mm real
-       , d_mm string
        , drill_mm real
        , layers_json string
-       , wkt string
 );
 
 create table specctra_dsn(

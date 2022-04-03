@@ -36,26 +36,133 @@
        (apply str
               (for [[x y] pts]
                 (str " L " x "," y)))))
+
+(defn ellipse->d
+  [x y rx ry]
+  (let [dx (+ rx rx)]
+    (str "M" (- x rx) "," y
+         " a" rx "," ry ",0,1,0," (+ dx) "," 0
+         " a" rx "," ry ",0,1,0," (- dx) "," 0)))
+
+(defn arc*
+  [cx cy r t1 t2]
+  (println "T1" (/ t1 (/ js/Math.PI 180.0)) "deg"
+           " T2 " (/ t2 (/ js/Math.PI 180.0)) "deg"
+           ) 
+  (let [
+        ;; start is [r,0] rotated t1
+        sx (+ cx (* r (js/Math.cos t1)))
+        sy (+ cx (* r (js/Math.sin t1)))
+        
+        ex (+ cx (* r (js/Math.cos t2)))
+        ey (+ cx (* r (js/Math.sin t2)))
+        
+        theta1 (cond-> t1
+                 (neg? t1) (+ (* 2 js/Math.PI)))
+        theta2 (cond-> t2
+                 (neg? t2) (+ (* 2 js/Math.PI)))
+        large-arc? (< (js/Math.abs (- theta2 theta1))
+                      js/Math.PI)
+        laf (if large-arc? (do "1") "0")]
+    (str
+     (ellipse->d cx cy 1 1)
+     ";M" cx "," cy
+     " L" sx "," sy
+     ";M" cx "," cy
+     " L" ex "," ey) 
+    
+    #_(str
+       "M " ex "," ey
+       " A" r "," r "," laf ",0,0," sx "," sy)))
+
+(defn arc-sme-center
+  [sx sy mx my ex ey]
+  (let [ma (/ (- my sy)
+              (- mx sx))
+        mb (/ (- ey my)
+              (- ex mx))
+        cx (/ (+ (* ma mb (- sy ey))
+                 (* mb (+ sx mx))
+                 (* -1 ma (+ sx ex)))
+              (* 2 (- mb ma)))
+        cy (+ sy (* ma (- cx sx)))]
+    [cx cy]))
+
+
 (defn fp->d
   [[f & args]]
   (case f
     fp_line (let [[[_start sx sy] [_end ex ey]] args]
               (str "M" sx "," sy " L" ex "," ey))
     
-    fp_arc (let [[[_start sx sy] [_end ex ey] [_angle angle]] args
-                 r (js/Math.hypot (- ex sx) (- ey sy))
-                 radians (* angle js/Math.PI (/ 1 180.0))
-                 dx (* r (js/Math.sin radians))
-                 dy (* -1 r (js/Math.cos radians))
-                 end-radians (js/Math.atan2 (- ex sx) (- sy ey))]
-             (str "M" (+ sx dx) "," (+ sy dy)
+    fp_arc #_(let [[[_start sx sy] [_end ex ey] [_angle angle]] args
+                   r (js/Math.hypot (- ex sx) (- ey sy))
+                   radians (* angle js/Math.PI (/ 1 180.0))
+                   dx (* r (js/Math.sin radians))
+                   dy (* -1 r (js/Math.cos radians))
+                   end-radians (js/Math.atan2 (- ex sx) (- sy ey))]
+               (str "M" (+ sx dx) "," (+ sy dy)
                     " A" r "," r ",0,0,1," ex "," ey ""))
+    (let [[[a] [b] :as arc-args] args]
+      (case b
+        end (println "Arrc Start End")
+        mid (let [[[ss x1 y1] [sm x2 y2] [se x3 y3]] args
+                  ma (/ (- y2 y1)
+                        (- x2 x1))
+                  mb (/ (- y3 y2)
+                        (- x3 x2))
+                  x (/ (+ (* ma mb (- y1 y3))
+                          (* mb (+ x1 x2))
+                          (- (* ma (+ x2 x3))))
+                       (* 2 (- mb ma)))
+                  y (+ (* (/ -1 ma)
+                          (- x (/ (+ x1 x2) 2)))
+                       (/ (+ y1 y2) 2))
+                  r (js/Math.hypot (- x x1) (- y y1))
+                  xrot "0"
+                  laf "0"
+                  sweep "1"]
+              (str
+                 "M " x1 "," y1
+                 " A" r "," r "," xrot "," laf "," sweep "," x3 "," y3)
+              
+              
+              #_(ellipse->d
+                 x ya
+                 0.1 0.1)
+              )
+        )
+      )
+    
+    #_(let [[[_ sx sy] _ [_ cx cy] [_angle angle]] args
+            r (js/Math.hypot (- cx sx) (- cy sy))
+            start-angle (js/Math.atan2 (- cy sy) (- cx sx))
+            radians (* angle (/ js/Math.PI 180.0))]
+      
+        (println "What?"
+                 (/ start-angle (/ js/Math.PI 180.0))
+                 (/ radians (/ js/Math.PI 180.0)))
+      
+        (str
+         (ellipse->d cx cy 1 1)
+         ";"
+         (ellipse->d sx sy 2 2)
+
+         #_(arc* cx cy r start-angle radians)
+         )
+        #_(str "M" ex "," ey
+               ;; " L" (+ cx dx) "," (+ cy dy)
+           
+               " a" r "," r ",0,1,0," dx "," dy ""
+               ))
     fp_circle (let [[[_center cx cy] [_end ex ey]] args
                     r (js/Math.hypot (- ex cx) (- ey cy))]
-                (str "M" cx "," cy
-                     " A" r "," r ",0,1,0" cx (+ cy r)
-                     " A" r "," r ",0,1,0" cx (- cy r)
-                     " z"))
+                
+                (ellipse->d cx cy r r)
+                #_(str "M" cx "," cy
+                       " A" r "," r ",0,1,0" cx (+ cy r)
+                       " A" r "," r ",0,1,0" cx (- cy r)
+                       " z"))
     fp_poly (let [[[_pts [[sx sy] & more :as pts]]] args]
               (str "M" sy "," sy
                    (apply str (for [[x y] more]
@@ -139,18 +246,29 @@
 (def draw (quote #{fp_text fp_line fp_circle fp_arc fp_poly fp_curve}))
 (def pad (quote #{pad}))
 
-(def ins-fp (str "insert into kicad_footprint(name,"
-                  (string/join "," simple)
-                  ")\n values (" (string/join "," (repeat (inc (count simple)) "?"))
-                  ")\nreturning id"))
+      
+;; #js [ins-fp
+;;      (into-array
+;;       (cons fpname
+;;             (for [[[_k v :as t]] (map (group-by first (attrs :simple)) simple)]
+;;               v)))]
 
 (defn footprint-insert*
   [fpname attrs]
-  #js [ins-fp
-       (into-array
-        (cons fpname
-              (for [[[_k v :as t]] (map (group-by first (attrs :simple)) simple)]
-                v)))])
+  (let [s (into {}
+                (attrs :simple))]
+    #js [(str "insert into kicad_footprint"
+              "        (name, layer, tedit, descr, tags_json, attr, version, generator)"
+              "\nvalues(?,    ?,     ?,     ?,     ?,         ?,    ?,       ?)"
+              "\nreturning id")
+         #js [fpname
+              (s 'layer)
+              (s 'tedit)
+              (s 'descr)
+              (some-> (s 'tags) (.split " ") (.sort) js/JSON.stringify)
+              (s 'attr)
+              (s 'version)
+              (s 'generator)]]))
 
 (def ins-draw
   (str "insert into kicad_footprint_draw("
@@ -171,45 +289,130 @@
               :kicad_footprint_id footprint-id
               (aget dcs (name d)))))]))
 
-(defn fp->pad-cols
-  [[f & args]]
-  (reduce
-   (fn [acc [f & args]]
-     (case f
-       at (let [[_ x y] args]
-            (aset acc "at_x_mm" x)
-            (aset acc "at_y_mm" y))
-       size (let [[_ w h] args]
-              (aset acc "width_mm" w)
-              (aset acc "height_mm" h))
-       drill (let [[_ ds] args]
-               (aset acc "drill_mm" ds))
-       layers (let [[_ & ls] args]
-                (aset acc "layers_json" (js/JSON.stringify ls)))
-       nil))
-   #js {}))
+(defn kicad->map
+  [attrs]
+  (into {}
+        (for [[a & body] attrs]
+          [a (vec body)])))
 
-(defn pad-inserts*
-  [footprint-id attrs]
-  (println "A T T R S")
-  (run! prn attrs)
-  (for [[_pad padname padtype padshape [_at atx aty] [_size w h] [a1 :as av1] [a2 :as av2] :as dink] (attrs :pad)]
-    (do (prn "Dink:" dink)
-        (prn "A1" a1)
-        (prn "A2" a2)
-        (run! (comp prn (juxt type identity) first) (drop 4 dink))
-        (println "Type of a1??" (type a1) (pr-str a1) ) 
-        #js [(str "insert into kicad_footprint_pad"
-                  "\n       (kicad_footprint_id, name, type, shape, x_mm, y_mm, width_mm, height_mm, d_mm, drill_mm, layers_json)"
-                  "\nvalues (?,                  ?,    ?,    ?,     ?,    ?,    ?,        ?,         ?,    ?,         ?)")
-             #js [footprint-id (case padname "" nil padname) padtype padshape atx aty w h
-                  "no"
-                  (case a1 drill (nth av1 1) nil)
-                  (-> (case a1 drill av2 av1)
-                      (next)
-                      (into-array)
-                      (.sort)
-                      js/JSON.stringify) ]])))
+(def ^:dynamic *places* 5)
+(defn n [x] (.toFixed x *places*))
+
+(defn rect->d
+  [x y w h]
+  (str "M" (n x) "," (n y)
+       " L" (+ x w) "," y
+       " L" (+ x w) "," (+ y h)
+       " L" x "," (+ y h)
+       " z"))
+
+(defn circle->d
+  [x y r]
+  (let [d (+ r r)]
+    (str "M" (- x r) "," y
+         " a" r "," r ",0,1,0," (+ d) "," 0
+         " a" r "," r ",0,1,0," (- d) "," 0)))
+
+(defn roundrect->d
+  [x y w h rx ry]
+  (str "M" x "," y
+       " h" (+ w)
+       " a" rx "," ry ",0,0,1," (+ rx) "," (+ ry)
+       " v" (+ h)
+       " a" rx "," ry ",0,0,1," (- rx) "," (+ ry)
+       " h" (- w)
+       " a" rx "," ry ",0,0,1," (- rx) "," (- ry)
+       " v" (- h)
+       " a" rx "," ry ",0,0,1," (+ rx) "," (- ry)
+       " z"))
+
+(defn pad->d
+  [[_ padname padtype padshape & attrs :as args]]
+  #_(println "P->D" args )
+  (let [[[_at x y] [_size sx sy] [_drill drill]] attrs
+        halfw (* 0.5 sx)
+        halfh (* 0.5 sy)
+        prop (kicad->map attrs)]
+    
+    (case padshape
+      "rect"  (rect->d (- halfw) (- halfh) sx sy)
+      "circle" (ellipse->d 0 0 halfw halfw)
+      "oval"   (ellipse->d 0 0 halfw halfh)
+      
+      "roundrect"
+      (let [minor (min halfh halfw)
+            [rratio] (prop 'roundrect_rratio)
+            rxy (* minor
+                   (or rratio 0))]
+        (roundrect->d (- halfw) (- halfh) sx sy rxy rxy))
+      nil)))
+
+#_(defn find-or-create-pad!
+  [db [_pad _name type shape [_at x y] [_size width_mm height_mm ] [a1 :as av1] [a2 :as av2] :as pad]]
+  (let [d_mm (pad->d pad)
+        drill_mm (case a1 drill (nth av1 1) nil)
+        layers_json (-> (case a1 drill av2 av1)
+                        (next)
+                        (into-array)
+                        (.sort)
+                        js/JSON.stringify)
+        fpq (str "select id from kicad_pad where"
+                 " d_mm = ? and type = ? and shape = ? and drill_mm = ? and layers_json = ?")
+        fpp (do #js [d_mm  type shape drill_mm layers_json])
+        
+        ipq (str "insert into kicad_pad"
+                 "\n       (type, shape, width_mm, height_mm, d_mm, drill_mm, layers_json)"
+                 "\nvalues (?,    ?,     ?,        ?,         ?,    ?,        ?)"
+                 "\n returning id")
+        ipp (do #_____ #js [type  shape  width_mm  height_mm  d_mm  drill_mm  layers_json])]
+    
+    (a/let [_ (println "Exec" fpq)
+            fr (-> (.exec db fpq fpp)
+                   (.-get))
+            [[found-id]] (.-rows fr)]
+      (.free fr)
+      (or found-id
+          (a/let [_ (println "Exec" ipq)
+                  ir (-> (.exec db ipq ipp)
+                         (.-get))
+                  [[inserted-id]] (.-rows ir)]
+            (.free ir)
+            inserted-id)))))
+
+
+(defn find-or-create-pad!
+  [db [_pad _name type shape [_at x y] [_size width_mm height_mm] :as pad]]
+  (let [d_mm (pad->d pad)
+        ipq (str "insert into kicad_pad"
+                 "\n           (type, shape, width_mm, height_mm, d_mm)"
+                 "\nvalues     (?,    ?,     ?,        ?,         ?)"
+                 "\non conflict(type, shape, width_mm, height_mm, d_mm)"
+                 "\ndo update set refcount = 1+refcount"
+                 "\nreturning id")
+        ipp (do #_____ #js [type  shape  width_mm  height_mm  d_mm])]
+    
+    
+    (a/let [ir (-> (.exec db ipq ipp)
+                   (.-get))
+            [[inserted-id]] (.-rows ir)]
+      (.free ir)
+      inserted-id)))
+
+(defn footprint-pad-insert
+  [kicad-footprint-id kicad-pad-id
+   [_pad padname _t _s [_at x y] _size [a1 :as av1] [a2 :as av2]]]
+  (let [name        (case padname "" nil padname)
+        drill_mm    (case a1 drill (nth av1 1) nil)
+        layers_json (-> (case a1 drill av2 av1)
+                        (next)
+                        (into-array)
+                        (.sort)
+                        js/JSON.stringify)]
+    (do #js [(str "insert into kicad_footprint_pad"
+                  "\n       (x_mm, y_mm, name, drill_mm, layers_json, kicad_pad_id, kicad_footprint_id)"
+                  "\nvalues (?,    ?,    ?,    ?,        ?,           ?,            ?)")
+             #js [           x     y     name  drill_mm  layers_json  kicad-pad-id  kicad-footprint-id]])))
+
 
 (defn classify-attrs*
   [body]
@@ -221,8 +424,6 @@
                      pad    :pad
                      nil)))))
 
-
-
 (defn insert-footprint!
   [db [_footprint fpname & body]]
   (let [attrs (classify-attrs* body)
@@ -233,9 +434,15 @@
             _ (.free result)
             idraws (js/Promise.all (for [[q p] (draw-inserts* fpid attrs)]
                                      (.exec db q p)))
-            ipads (js/Promise.all (for [[q p] (pad-inserts* fpid attrs)]
-                                    (do
-                                      (println "PI" q p)
-                                      (.exec db q p))))]
+            ipads (reduce
+                   (fn [pr pad]
+                     (a/let [rp pr
+                             pad-id (find-or-create-pad! db pad)]
+                       (if-not pad-id
+                         (println "NO PAD ID111" pad))
+                       (let [[q p] (footprint-pad-insert fpid pad-id pad)]
+                         (.exec db q p))))
+                   nil
+                   (attrs :pad))]
       (println "Ok"))))
 

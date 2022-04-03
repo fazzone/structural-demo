@@ -39,6 +39,8 @@
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form]]
    
+   [shadow.resource :as rc]
+   
    ["svgo/dist/svgo.browser" :as svgo]
    ["svgo/plugins/_applyTransforms" :as svgo-applytransforms]
    ["svgo/plugins/_transforms" :as svgo-transforms]
@@ -63,7 +65,37 @@
    [sted.macros :as m]))
 
 (def siquery
-  "select * from kicad_footprint_pad"
+  (rc/inline "sted/eda/honker.sql")
+  #_"
+  select
+  fp.name as footprint
+  , fpp.name as pad
+  , astext(makepoint(fpp.x_mm, fpp.y_mm)) as placexy
+  , d.d_mm is not null as has_draw_d
+  , kp.d_mm is not null as had_pad_d
+
+  from kicad_footprint fp
+  left join kicad_footprint_draw d on d.kicad_footprint_id = fp.id
+  left join kicad_footprint_pad fpp on fpp.kicad_footprint_id = fp.id
+  left join kicad_pad kp on kp.id = fpp.kicad_pad_id
+  
+  "
+  
+  #_"select 
+  kicad_footprint_id
+  , kf.name
+  , group_concat(d_mm, ' ; ') as svg1
+  , group_concat(d_mm, ' ; ') as svg3
+  , assvg(extent(geomfromtext(wkt))) as svg2
+  , extent(geomfromtext(wkt)) as viewbox3
+  --, (wkt) as viewbox
+from kicad_footprint_draw kfd
+left join kicad_footprint kf on kfd.kicad_footprint_id = kf.id
+where d_mm is not null
+group by 1,2
+limit 1000
+"
+  #_"select * from kicad_pad"
   #_"with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) 
 , q as (
 select layer, assvg(geom) as svg, geom as viewbox 
@@ -313,70 +345,41 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                   :cy (+ tly (* vpitch r))}]))]))
 
 (def kicadstr-kailhsocket
-  "(module Kailh_socket_MX (layer F.Cu) (tedit 5DD4FB17)
-  (descr \"MX-style keyswitch with Kailh socket mount\")
-  (tags MX,cherry,gateron,kailh,pg1511,socket)
-  (attr smd)
-  (fp_text reference REF** (at 0 -8.255) (layer B.SilkS)
-    (effects (font (size 1 1) (thickness 0.15)) (justify mirror))
-  )
-  (fp_text value Kailh_socket_MX (at 0 8.255) (layer F.Fab)
+  "(footprint \"LED_D20.0mm\" (version 20211014) (generator pcbnew)
+  (layer \"F.Cu\")
+  (tedit 587A3A7B)
+  (descr \"LED, diameter 20.0mm, 2 pins, http://cdn-reichelt.de/documents/datenblatt/A500/DLC2-6GD%28V6%29.pdf\")
+  (tags \"LED diameter 20.0mm 2 pins\")
+  (attr through_hole)
+  (fp_text reference \"REF**\" (at 1.27 -12.56) (layer \"F.SilkS\")
     (effects (font (size 1 1) (thickness 0.15)))
+    (tstamp 62b18998-4251-49ed-9bb4-b1c6ed2095ff)
   )
-  (fp_line (start -7 -6) (end -7 -7) (layer F.SilkS) (width 0.15))
-  (fp_line (start -7 7) (end -6 7) (layer F.SilkS) (width 0.15))
-  (fp_line (start -6 -7) (end -7 -7) (layer F.SilkS) (width 0.15))
-  (fp_line (start -7 7) (end -7 6) (layer F.SilkS) (width 0.15))
-  (fp_line (start 7 6) (end 7 7) (layer F.SilkS) (width 0.15))
-  (fp_line (start 7 -7) (end 6 -7) (layer F.SilkS) (width 0.15))
-  (fp_line (start 6 7) (end 7 7) (layer F.SilkS) (width 0.15))
-  (fp_line (start 7 -7) (end 7 -6) (layer F.SilkS) (width 0.15))
-  (fp_line (start -6.9 6.9) (end 6.9 6.9) (layer Eco2.User) (width 0.15))
-  (fp_line (start 6.9 -6.9) (end -6.9 -6.9) (layer Eco2.User) (width 0.15))
-  (fp_line (start 6.9 -6.9) (end 6.9 6.9) (layer Eco2.User) (width 0.15))
-  (fp_line (start -6.9 6.9) (end -6.9 -6.9) (layer Eco2.User) (width 0.15))
-  (fp_line (start -7.5 -7.5) (end 7.5 -7.5) (layer F.Fab) (width 0.15))
-  (fp_line (start 7.5 -7.5) (end 7.5 7.5) (layer F.Fab) (width 0.15))
-  (fp_line (start 7.5 7.5) (end -7.5 7.5) (layer F.Fab) (width 0.15))
-  (fp_line (start -7.5 7.5) (end -7.5 -7.5) (layer F.Fab) (width 0.15))
-  (fp_arc (start -3.81 -4.445) (end -3.81 -6.985) (angle -90) (layer B.SilkS) (width 0.15))
-  (fp_line (start -6.35 -1.016) (end -6.35 -0.635) (layer B.SilkS) (width 0.15))
-  (fp_arc (start 0 0) (end 0 -2.54) (angle -75.96375653) (layer B.SilkS) (width 0.15))
-  (fp_line (start 5.08 -3.556) (end 5.08 -2.54) (layer B.SilkS) (width 0.15))
-  (fp_line (start 5.08 -2.54) (end 0 -2.54) (layer B.SilkS) (width 0.15))
-  (fp_line (start -2.464162 -0.635) (end -4.191 -0.635) (layer B.SilkS) (width 0.15))
-  (fp_line (start -5.969 -0.635) (end -6.35 -0.635) (layer B.SilkS) (width 0.15))
-  (fp_line (start -6.35 -4.445) (end -6.35 -4.064) (layer B.SilkS) (width 0.15))
-  (fp_line (start -3.81 -6.985) (end 5.08 -6.985) (layer B.SilkS) (width 0.15))
-  (fp_line (start 5.08 -6.985) (end 5.08 -6.604) (layer B.SilkS) (width 0.15))
-  (fp_arc (start -3.81 -4.445) (end -3.81 -6.985) (angle -90) (layer B.Fab) (width 0.12))
-  (fp_arc (start 0 0) (end 0 -2.54) (angle -74.5) (layer B.Fab) (width 0.12))
-  (fp_line (start -6.35 -0.635) (end -2.54 -0.635) (layer B.Fab) (width 0.12))
-  (fp_line (start -6.35 -0.635) (end -6.35 -4.445) (layer B.Fab) (width 0.12))
-  (fp_line (start -3.81 -6.985) (end 5.08 -6.985) (layer B.Fab) (width 0.12))
-  (fp_line (start 5.08 -6.985) (end 5.08 -2.54) (layer B.Fab) (width 0.12))
-  (fp_line (start 5.08 -2.54) (end 0 -2.54) (layer B.Fab) (width 0.12))
-  (fp_line (start 5.08 -6.35) (end 7.62 -6.35) (layer B.Fab) (width 0.12))
-  (fp_line (start 7.62 -6.35) (end 7.62 -3.81) (layer B.Fab) (width 0.12))
-  (fp_line (start 7.62 -3.81) (end 5.08 -3.81) (layer B.Fab) (width 0.12))
-  (fp_line (start -6.35 -1.27) (end -8.89 -1.27) (layer B.Fab) (width 0.12))
-  (fp_line (start -8.89 -1.27) (end -8.89 -3.81) (layer B.Fab) (width 0.12))
-  (fp_line (start -8.89 -3.81) (end -6.35 -3.81) (layer B.Fab) (width 0.12))
-  (fp_text user %R (at -0.635 -4.445) (layer B.Fab)
-    (effects (font (size 1 1) (thickness 0.15)) (justify mirror))
+  (fp_text value \"LED_D20.0mm\" (at 1.27 12.56) (layer \"F.Fab\")
+    (effects (font (size 1 1) (thickness 0.15)))
+    (tstamp 214de94a-ad8d-4639-b6dc-3458270fe4df)
   )
-  (fp_text user %V (at -0.635 0.635) (layer B.Fab)
-    (effects (font (size 1 1) (thickness 0.15)) (justify mirror))
+  (fp_line (start -8.79 -5.756) (end -8.79 5.756) (layer \"F.SilkS\") (width 0.12) (tstamp d7c2f829-2706-45f1-be0b-cf411ab5a601))
+  (fp_arc (start 12.859999 0.00523) (mid 4.245115 11.201643) (end -8.79 5.755389) (layer \"F.SilkS\") (width 0.12) (tstamp 40a4ee58-4850-48f3-832a-b3b91a78b623))
+  (fp_arc (start -8.79 -5.755389) (mid 4.245115 -11.201643) (end 12.859999 -0.00523) (layer \"F.SilkS\") (width 0.12) (tstamp ea92fd82-0576-40ad-a40d-2b72b4be19be))
+  (fp_circle (center 1.27 0) (end 11.27 0) (layer \"F.SilkS\") (width 0.12) (fill none) (tstamp ef7859e6-dfb7-461a-9d2c-fbc52059e1b4))
+  (fp_line (start -10.55 -11.85) (end -10.55 11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp 5e5c4ff0-96fd-48a6-83da-586fabe7aad3))
+  (fp_line (start -10.55 11.85) (end 13.1 11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp a2197449-1ef4-4daf-a66f-75c2e45d17cb))
+  (fp_line (start 13.1 -11.85) (end -10.55 -11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp ccc5a736-5691-41e7-87c1-ec6f7e6ffd0c))
+  (fp_line (start 13.1 11.85) (end 13.1 -11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp ee7a635e-9e0c-430c-9c9d-b0a72bb2d3b3))
+  (fp_line (start -8.73 -5.678908) (end -8.73 5.678908) (layer \"F.Fab\") (width 0.1) (tstamp fffb63d0-5afb-4a5c-9bb3-47b89682fee7))
+  (fp_arc (start -8.73 -5.678908) (mid 12.77 -0.001637) (end -8.728383 5.681755) (layer \"F.Fab\") (width 0.1) (tstamp 0514a3a2-1ca4-48d2-80b7-a22ceec785b7))
+  (fp_circle (center 1.27 0) (end 11.27 0) (layer \"F.Fab\") (width 0.1) (fill none) (tstamp 67231003-3557-4985-9231-9b5854e8f844))
+  (pad \"1\" thru_hole rect (at 0 0) (size 1.8 1.8) (drill 0.9) (layers *.Cu *.Mask) (tstamp 491ecf7f-b973-47aa-a7bc-1e5730e2fe79))
+  (pad \"2\" thru_hole circle (at 2.54 0) (size 1.8 1.8) (drill 0.9) (layers *.Cu *.Mask) (tstamp 580086f1-1a14-4868-a6f5-bc02720d2968))
+  (model \"${KICAD6_3DMODEL_DIR}/LED_THT.3dshapes/LED_D20.0mm.wrl\"
+    (offset (xyz 0 0 0))
+    (scale (xyz 1 1 1))
+    (rotate (xyz 0 0 0))
   )
-  (pad 1 smd rect (at 6.29 -5.08) (size 2.55 2.5) (layers B.Cu B.Paste B.Mask))
-  (pad \"\" np_thru_hole circle (at 2.54 -5.08) (size 3 3) (drill 3) (layers *.Cu *.Mask))
-  (pad \"\" np_thru_hole circle (at -3.81 -2.54) (size 3 3) (drill 3) (layers *.Cu *.Mask))
-  (pad \"\" np_thru_hole circle (at 0 0) (size 3.9878 3.9878) (drill 3.9878) (layers *.Cu *.Mask))
-  (pad \"\" np_thru_hole circle (at 5.08 0) (size 1.7018 1.7018) (drill 1.7018) (layers *.Cu *.Mask))
-  (pad \"\" np_thru_hole circle (at -5.08 0) (size 1.7018 1.7018) (drill 1.7018) (layers *.Cu *.Mask))
-  (pad 2 smd rect (at -7.56 -2.54) (size 2.55 2.5) (layers B.Cu B.Paste B.Mask))
 )
 "
+  
   )
 
 
@@ -1069,14 +1072,33 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
     [:input {:value value
              :on-change #(set-value! (.. % -target -value))}]))
 
-(defn gaia->viewbox
+#_(defn gaia->viewbox
   [^ArrayBuffer gaia]
   (let [dv (js/DataView. gaia)
         xmin (.getFloat64 dv 6 true)
         ymin (.getFloat64 dv 14 true)
         xmax (.getFloat64 dv 22 true)
         ymax (.getFloat64 dv 30 true)]
+    (println "Viewbox"
+             xmin ymin
+             xmax ymax)
     [xmin ymin (- xmax xmin) (- ymax ymin)]))
+
+(defn gaia->viewbox
+  [^ArrayBuffer gaia]
+  (let [dv (js/DataView. gaia)
+        xmin (.getFloat64 dv 6 true)
+        rymin (.getFloat64 dv 14 true)
+        xmax (.getFloat64 dv 22 true)
+        rymax (.getFloat64 dv 30 true)
+        ;; ymin (min (- rymin) (- rymax))
+        ;; ymax (max (- rymin) (- rymax))
+        ]
+    #_(println "Viewbox"
+             xmin ymin
+             xmax ymax)
+    #_[xmin ymin (- xmax xmin) (- ymax ymin)]
+    [xmin rymin (- xmax xmin) (- rymax rymin)]))
 
 (defn classify-result-column
   [c]
@@ -1091,7 +1113,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 (defn qr->viewbox
   [v]
   (cond
-    (string? v) v
+    (string? v) (string/split v " ")
     (instance? js/ArrayBuffer v) (gaia->viewbox v)
     :else nil))
 
@@ -1101,25 +1123,80 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         [x y w h :as vbox] (or (some->> (get cfunc [:viewbox id])
                                         (aget rowdata)
                                         qr->viewbox)
-                               [-10 -10 20 20])
+                               [-8 -8 16 16]
+                               #_[-20 -20 40 40])
         mmpx 10]
     #_(println "id" (pr-str id) "Cfunc" (pr-str cfunc) )
     #_(println "vbox " vbox (some->>
                            (get cfunc [:viewbox id])
                            (aget rowdata)))
-    [:div
-     [:svg {:viewBox (string/join " "vbox)
-            :width (str (* w mmpx) "px")
-            :height (str (* h mmpx) "px")}
-      [:g {:stroke-width 0.12
-           :stroke "#fff"
-           :fill "none"
-           :stroke-linecap "round"
-           :transform  "scale(1,-1)"}
-       (for [sp (string/split r ";")]
-         [:path {:d sp}])]]
-     [:span (str "Scale: " mmpx) ]
-     ]))
+    [:svg {:viewBox (string/join " "vbox)
+           :width (str (* w mmpx) "px")
+           :height (str (* h mmpx) "px")}
+     [:g {:stroke-width 0.12
+          :stroke "#fff"
+          :fill "none"
+          :stroke-linecap "round"
+          ;; flipsies
+          :transform  "scale(1,1)"}
+      (for [sp (string/split r ";")]
+        [:path {:d sp}])]]))
+
+(rum/defc tabular-svg-item
+  [idef iuse ixf iclass isw itext ipathd]
+  (cond
+    iuse [:use (cond-> {:href (str "#" iuse)}
+                 ixf (assoc :transform ixf)
+                 iclass (assoc :class iclass)
+                 isw (assoc :stroke-width isw))]
+    itext [:text (cond-> {:stroke "none" :fill "#fff"}
+                   ixf (assoc :transform ixf)
+                   iclass (assoc :class iclass)
+                   isw (assoc :stroke-width isw)
+                   idef (assoc :id idef))
+           itext]
+    
+    (nil? ipathd)
+    (do (println "Don't understand this tsvg row"))
+    
+    #_(string/includes? ipathd ";")
+    #_[:g (cond-> {}
+            idef (assoc :id idef)
+            ixf (assoc :transform ixf)
+            iclass (assoc :class class))
+       (for [p (string/split ipathd ";")]
+         (tabular-svg-item nil nil nil nil)
+         )
+       ]
+    
+    :else [:path (cond-> {:d ipathd}
+                   ixf (assoc :transform ixf)
+                   iclass (assoc :class iclass)
+                   isw (assoc :stroke-width isw)
+                   idef (assoc :id idef))]
+    ))
+
+(rum/defc tabular-svg < rum/static
+  [col->idx rows]
+  (let [idef   (col->idx "def")
+        iuse   (col->idx "use")
+        ixf    (col->idx "transform")
+        iclass (col->idx "class")
+        isw    (col->idx "stroke_width")
+        itext  (col->idx "text")
+        ipathd (col->idx "d")]
+    [:svg {:viewBox "-10 -10 20 20"
+           :width "100px"
+           :height "100px"}
+     [:g {:stroke "#fff" :fill "none"
+          :stroke-width "0.1"
+          :font-size "2"}
+      (for [irow (range (count rows))
+            :let [r (aget rows irow)]]
+        (rum/with-key
+          (tabular-svg-item (aget r idef) (aget r iuse) (aget r ixf) (aget r iclass) (aget r isw) (aget r itext) (aget r ipathd))
+          irow
+          ))]]))
 
 (rum/defc fancy-results < rum/static
   [cols rows]
@@ -1188,10 +1265,24 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 
 (defn setup-db!
   [db]
-  (a/let [_sch (create-schema! db)
+  (a/let [_ (println "Creating schema")
+          _sch (create-schema! db)
+          _ (println "Schema created")
           fpir (kcfp/insert-footprint! db
-                                       (first (dsn/dsnparse kicadstr-kailhsocket)))]
+                                       (first (dsn/dsnparse
+                                               kicadstr-kailhsocket)))]
     fpir))
+
+
+
+(defn promise-chain
+  [ps]
+  (reduce
+   (fn [acc-pr next-pr]
+     (a/let [pval acc-pr]
+       next-pr))
+   nil
+   ps))
 
 (rum/defc spltest
   []
@@ -1199,6 +1290,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         [db set-db!] (rum/use-state nil)
         [query set-query!] (rum/use-state siquery)
         [[cols rows qdur] set-results!] (rum/use-state [[] []])
+        [display-mode set-display-mode!] (rum/use-state :tabular-svg)
         spl-options #js {:autoGeoJSON false
                          :autoJSON false}]
     (rum/use-effect!
@@ -1234,7 +1326,8 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
       [:button {:style {:width "10ex" :margin-right "4ex"}
                 :on-click (fn []
                             (let [tqs (js/performance.now)]
-                              (a/let [result (-> (.exec db query)
+                              (a/let [_ (println "Exec" query)
+                                      result (-> (.exec db query)
                                                  (.-get))
                                       cols (.-cols result)
                                       rows (.-rows result)]
@@ -1263,17 +1356,21 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                                                          (println "I read the text " (.-name file))
                                                          (.readAsText fr file)))]]
                                         (a/let [content rfp]
-                                          (js/Promise.all
+                                          (promise-chain
                                            (for [top (dsn/dsnparse content)]
                                              (do (js/console.log "The db is" db )
                                                  (kcfp/insert-footprint! db top)))))
                                         #_(kcfp/insert-footprint! db (first (dsn/dsnparse (vec (.-files (.-target ev)))))))
                                    ]
-                               (a/let [done (js/Promise.all ps)]
-                                 (js/console.log "Done" done))))
-
-                }]]]
-     (fancy-results cols rows)]))
+                               (a/let [done (promise-chain ps)]
+                                 (js/console.log "Done" done))))}]]]
+     
+     (case display-mode
+       :table (fancy-results cols rows)
+       :tabular-svg (tabular-svg
+                     (into {} (for [i (range (count cols))]
+                                [(aget cols i) i]))
+                     rows))]))
 
 (rum/defcs dsnroot < (rum/local nil ::result)  
   [{::keys [result]}]
