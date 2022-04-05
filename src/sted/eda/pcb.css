@@ -1,0 +1,15 @@
+.pad.smd {
+    stroke: none;
+    fill: #d30303;
+    opacity: 0.6;
+}
+
+/* path.SilkS { stroke: #e7c547; } */
+/* text.SilkS { fill: #e7c547; } */
+
+path.Fab { stroke: #7e7e7e; }
+text.Fab { fill: #7e7e7e; }
+
+path.CrtYd { stroke: #c397d8; }
+
+

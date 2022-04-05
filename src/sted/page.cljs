@@ -345,7 +345,8 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                   :cy (+ tly (* vpitch r))}]))]))
 
 (def kicadstr-kailhsocket
-  "(footprint \"LED_D20.0mm\" (version 20211014) (generator pcbnew)
+  (rc/inline "sted/eda/qfn.kicad_mod")
+  #_"(footprint \"LED_D20.0mm\" (version 20211014) (generator pcbnew)
   (layer \"F.Cu\")
   (tedit 587A3A7B)
   (descr \"LED, diameter 20.0mm, 2 pins, http://cdn-reichelt.de/documents/datenblatt/A500/DLC2-6GD%28V6%29.pdf\")
@@ -1132,7 +1133,8 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                            (aget rowdata)))
     [:svg {:viewBox (string/join " "vbox)
            :width (str (* w mmpx) "px")
-           :height (str (* h mmpx) "px")}
+           :height (str (* h mmpx) "px")
+           }
      [:g {:stroke-width 0.12
           :stroke "#fff"
           :fill "none"
@@ -1145,34 +1147,40 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 (rum/defc tabular-svg-item
   [idef iuse ixf iclass isw itext ipathd]
   (cond
-    iuse [:use (cond-> {:href (str "#" iuse)}
+    iuse [:use (cond-> {:xlinkHref (str "#" iuse)}
                  ixf (assoc :transform ixf)
                  iclass (assoc :class iclass)
                  isw (assoc :stroke-width isw))]
-    itext [:text (cond-> {:stroke "none" :fill "#fff"}
-                   ixf (assoc :transform ixf)
-                   iclass (assoc :class iclass)
-                   isw (assoc :stroke-width isw)
-                   idef (assoc :id idef))
-           itext]
+    
+    itext (let [fs 1
+                tw (*  0.62 fs (count itext))
+                th fs]
+            [:text (cond-> {:stroke "none"
+                            :fill "#fff"
+                            :text-anchor "middle"
+                            :dominant-baseline "middle"
+                            :font-size fs}
+                     ixf (assoc :transform ixf)
+                     iclass (assoc :class iclass)
+                     isw (assoc :stroke-width isw)
+                     idef (assoc :id idef))
+             itext]
+            #_[:rect {:x (- (* 0.5 tw))
+                      :y (* -0.5 fs)
+                      :width tw
+                      :height th
+                      :transform ixf
+                      :vector-effect "non-scaling-stroke"
+                      :stroke-width 1}])
     
     (nil? ipathd)
     (do (println "Don't understand this tsvg row"))
     
-    #_(string/includes? ipathd ";")
-    #_[:g (cond-> {}
-            idef (assoc :id idef)
-            ixf (assoc :transform ixf)
-            iclass (assoc :class class))
-       (for [p (string/split ipathd ";")]
-         (tabular-svg-item nil nil nil nil)
-         )
-       ]
-    
-    :else [:path (cond-> {:d ipathd}
+    :else [:path (cond-> {:d ipathd :stroke-linecap "round"}
                    ixf (assoc :transform ixf)
                    iclass (assoc :class iclass)
                    isw (assoc :stroke-width isw)
+                   (nil? isw) (assoc :vector-effect "non-scaling-stroke" :stroke-width 1)
                    idef (assoc :id idef))]
     ))
 
@@ -1184,19 +1192,34 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         iclass (col->idx "class")
         isw    (col->idx "stroke_width")
         itext  (col->idx "text")
-        ipathd (col->idx "d")]
-    [:svg {:viewBox "-10 -10 20 20"
-           :width "100px"
-           :height "100px"}
-     [:g {:stroke "#fff" :fill "none"
-          :stroke-width "0.1"
-          :font-size "2"}
-      (for [irow (range (count rows))
-            :let [r (aget rows irow)]]
-        (rum/with-key
-          (tabular-svg-item (aget r idef) (aget r iuse) (aget r ixf) (aget r iclass) (aget r isw) (aget r itext) (aget r ipathd))
-          irow
-          ))]]))
+        ipathd (col->idx "d")
+        
+        svgref (rum/create-ref)]
+    [:div
+     [:button {:style {:width "10ex"}
+               :on-click (fn []
+                           (->> (doto (.cloneNode (rum/deref svgref) true)
+                                  (.setAttribute "xmlns:sodipodi" "http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd")
+                                  (.prepend (doto (js/document.createElement "sodipodi:namedview")
+                                              (.setAttribute "pagecolor" "#000"))))
+                                (.serializeToString (js/XMLSerializer.))
+                                (ask-download-file "image.svg")))}
+      "save svg"]
+     [:svg {:ref svgref
+            :viewBox "-12 -8 16 24"
+            :xmlnsXlink "http://www.w3.org/1999/xlink"
+            :width "1300px"
+            :height "1300px"}
+      [:style {} (rc/inline "sted/eda/pcb.css")]
+      [:g {:stroke "#fff" :fill "none"
+           :stroke-width "0.1"
+           :font-size "2"}
+       (for [irow (range (count rows))
+             :let [r (aget rows irow)]]
+         (rum/with-key
+           (tabular-svg-item (aget r idef) (aget r iuse) (aget r ixf) (aget r iclass) (aget r isw) (aget r itext) (aget r ipathd))
+           irow
+           ))]]]))
 
 (rum/defc fancy-results < rum/static
   [cols rows]
@@ -1290,7 +1313,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         [db set-db!] (rum/use-state nil)
         [query set-query!] (rum/use-state siquery)
         [[cols rows qdur] set-results!] (rum/use-state [[] []])
-        [display-mode set-display-mode!] (rum/use-state :tabular-svg)
+        [display-mode set-display-mode!] (rum/use-state #_:table :tabular-svg)
         spl-options #js {:autoGeoJSON false
                          :autoJSON false}]
     (rum/use-effect!
@@ -1343,8 +1366,6 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                 :style {:width "50ex"}
                 :multiple true
                 :on-change (fn [ev]
-                             (js/console.log "Change File" ev)
-                             (js/console.log "Change File" (first (seq (.-files (.-target ev)))))
                              (let [ps (for [file (seq (.-files (.-target ev)))
                                             :let [fr (js/FileReader.)
                                                   rfp (js/Promise.
@@ -1363,7 +1384,18 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                                         #_(kcfp/insert-footprint! db (first (dsn/dsnparse (vec (.-files (.-target ev)))))))
                                    ]
                                (a/let [done (promise-chain ps)]
-                                 (js/console.log "Done" done))))}]]]
+                                 (js/console.log "Done" done))))}]]
+      (println "Displaymode " display-mode)
+      [:label
+       "display mode"
+       [:select {:on-change (fn [ev]
+                              (prn "SETDM" (keyword (.-value (.-target ev))))
+                              (set-display-mode! (keyword (.-value (.-target ev)))))}
+        (for [o [:table :tabular-svg]]
+          [:option {:key (name o)
+                    :value (name o)
+                    :selected (= o display-mode)}
+           (name o)])]]]
      
      (case display-mode
        :table (fancy-results cols rows)

@@ -1,7 +1,8 @@
 (ns sted.eda.schema
   (:require [clojure.string :as string])
-  (:require-macros
-   [sted.macros :as m]))
+  (:require  [shadow.resource :as rc]))
+
 (def schema-statements
-  (string/split (string/trim (m/macro-slurp "src/sted/eda/schema.sql"))
+  (string/split (string/trim
+                 (rc/inline "sted/eda/schema.sql"))
                 #";\s*\n\s*"))

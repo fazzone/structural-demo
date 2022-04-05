@@ -5,7 +5,9 @@
    [sted.df.async :as a]))
 
 (def fp-draw-cols [:kicad_footprint_id :layer :d_mm :width_mm :text_type :text :font_size_w_mm :font_size_h_mm
-                    :wkt
+                   :text_x_mm
+                   :text_y_mm
+                   :wkt
                    ])
 
 (defn fp->draw-cols
@@ -18,7 +20,9 @@
                    :text           text
                    :text_type      ttype
                    :font_size_w_mm w
-                   :font_size_h_mm h})
+                   :font_size_h_mm h
+                   :text_x_mm x
+                   :text_y_mm y})
     fp_arc    (let [[[_start] [_end] [_angle] [_layer l] [_width w]] args]
                 #js {:layer l :width_mm w})
     fp_circle (let [[[_center] [_end] [_layer l] [_width w]] args]
@@ -75,86 +79,37 @@
        "M " ex "," ey
        " A" r "," r "," laf ",0,0," sx "," sy)))
 
-(defn arc-sme-center
-  [sx sy mx my ex ey]
-  (let [ma (/ (- my sy)
-              (- mx sx))
-        mb (/ (- ey my)
-              (- ex mx))
-        cx (/ (+ (* ma mb (- sy ey))
-                 (* mb (+ sx mx))
-                 (* -1 ma (+ sx ex)))
-              (* 2 (- mb ma)))
-        cy (+ sy (* ma (- cx sx)))]
-    [cx cy]))
-
-
 (defn fp->d
   [[f & args]]
   (case f
     fp_line (let [[[_start sx sy] [_end ex ey]] args]
               (str "M" sx "," sy " L" ex "," ey))
     
-    fp_arc #_(let [[[_start sx sy] [_end ex ey] [_angle angle]] args
-                   r (js/Math.hypot (- ex sx) (- ey sy))
-                   radians (* angle js/Math.PI (/ 1 180.0))
-                   dx (* r (js/Math.sin radians))
-                   dy (* -1 r (js/Math.cos radians))
-                   end-radians (js/Math.atan2 (- ex sx) (- sy ey))]
-               (str "M" (+ sx dx) "," (+ sy dy)
-                    " A" r "," r ",0,0,1," ex "," ey ""))
-    (let [[[a] [b] :as arc-args] args]
-      (case b
-        end (println "Arrc Start End")
-        mid (let [[[ss x1 y1] [sm x2 y2] [se x3 y3]] args
-                  ma (/ (- y2 y1)
-                        (- x2 x1))
-                  mb (/ (- y3 y2)
-                        (- x3 x2))
-                  x (/ (+ (* ma mb (- y1 y3))
-                          (* mb (+ x1 x2))
-                          (- (* ma (+ x2 x3))))
-                       (* 2 (- mb ma)))
-                  y (+ (* (/ -1 ma)
-                          (- x (/ (+ x1 x2) 2)))
-                       (/ (+ y1 y2) 2))
-                  r (js/Math.hypot (- x x1) (- y y1))
-                  xrot "0"
-                  laf "0"
-                  sweep "1"]
-              (str
-                 "M " x1 "," y1
-                 " A" r "," r "," xrot "," laf "," sweep "," x3 "," y3)
-              
-              
-              #_(ellipse->d
-                 x ya
-                 0.1 0.1)
-              )
-        )
-      )
-    
-    #_(let [[[_ sx sy] _ [_ cx cy] [_angle angle]] args
-            r (js/Math.hypot (- cx sx) (- cy sy))
-            start-angle (js/Math.atan2 (- cy sy) (- cx sx))
-            radians (* angle (/ js/Math.PI 180.0))]
-      
-        (println "What?"
-                 (/ start-angle (/ js/Math.PI 180.0))
-                 (/ radians (/ js/Math.PI 180.0)))
-      
-        (str
-         (ellipse->d cx cy 1 1)
-         ";"
-         (ellipse->d sx sy 2 2)
+    fp_arc (let [[[a] [b] :as arc-args] args]
+             (case b
+               end (println "Arrc Start End")
+               mid (let [[[ss x1 y1] [sm x2 y2] [se x3 y3]] args
+                         ;; TODO handle x1y1 == x3y3 (a circle)
+                         ma (/ (- y2 y1)
+                               (- x2 x1))
+                         mb (/ (- y3 y2)
+                               (- x3 x2))
+                         x (/ (+ (* ma mb (- y1 y3))
+                                 (* mb (+ x1 x2))
+                                 (- (* ma (+ x2 x3))))
+                              (* 2 (- mb ma)))
+                         y (+ (* (/ -1 ma)
+                                 (- x (/ (+ x1 x2) 2)))
+                              (/ (+ y1 y2) 2))
+                         r (js/Math.hypot (- x x1) (- y y1))
+                         xrot "0"
+                         laf "0"
+                         sweep "1"]
 
-         #_(arc* cx cy r start-angle radians)
-         )
-        #_(str "M" ex "," ey
-               ;; " L" (+ cx dx) "," (+ cy dy)
-           
-               " a" r "," r ",0,1,0," dx "," dy ""
-               ))
+                     (str
+                      "M " x1 "," y1
+                      " A" r "," r "," xrot "," laf "," sweep "," x3 "," y3))))
+    
     fp_circle (let [[[_center cx cy] [_end ex ey]] args
                     r (js/Math.hypot (- ex cx) (- ey cy))]
                 
@@ -315,14 +270,14 @@
 
 (defn roundrect->d
   [x y w h rx ry]
-  (str "M" x "," y
-       " h" (+ w)
+  (str "M" (+ x rx ) "," y
+       " h" (- w rx rx)
        " a" rx "," ry ",0,0,1," (+ rx) "," (+ ry)
-       " v" (+ h)
+       " v" (- h ry ry)
        " a" rx "," ry ",0,0,1," (- rx) "," (+ ry)
-       " h" (- w)
+       " h" (- (- w rx rx))
        " a" rx "," ry ",0,0,1," (- rx) "," (- ry)
-       " v" (- h)
+       " v" (- (- h ry ry))
        " a" rx "," ry ",0,0,1," (+ rx) "," (- ry)
        " z"))
 
@@ -333,18 +288,25 @@
         halfw (* 0.5 sx)
         halfh (* 0.5 sy)
         prop (kicad->map attrs)]
-    
+    (println "Proppy" prop)
     (case padshape
       "rect"  (rect->d (- halfw) (- halfh) sx sy)
       "circle" (ellipse->d 0 0 halfw halfw)
       "oval"   (ellipse->d 0 0 halfw halfh)
       
       "roundrect"
-      (let [minor (min halfh halfw)
+      (let [minor (min sx sy)
             [rratio] (prop 'roundrect_rratio)
             rxy (* minor
                    (or rratio 0))]
-        (roundrect->d (- halfw) (- halfh) sx sy rxy rxy))
+        #_(roundrect->d (- halfw (- rxy)) (- halfh (- rxy)) (- sx rxy) (- sy rxy) rxy rxy)
+        #_(roundrect->d (- halfw) (- halfh) (- sx rxy) (- sy rxy) rxy rxy)
+        (roundrect->d (- halfw) (- halfh) sx sy rxy rxy)
+        #_(roundrect->d (- halfw) (- halfh)
+                        sx
+                        sy
+                        rxy
+                        rxy))
       nil)))
 
 #_(defn find-or-create-pad!
