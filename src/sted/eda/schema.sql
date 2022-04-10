@@ -74,43 +74,8 @@ create table kicad_footprint_pad(
        , y_mm real
        , drill_mm real
        , layers_json string
+       , transform string
 );
-
-create table specctra_dsn(
-       id integer primary key
-       , pcb_id string
-       , host_cad string
-       , host_version string
-       , resolution_unit string
-       , resolution real
-       , unit string
-
-       , pcb_boundary_shape blob
-);
-
-create table dsn_layer(
-       id integer primary key
-       , dsn_id integer
-       , type string
-       , idx integer
-);
-
-create table dsn_plane(
-       id integer primary key
-       , dsn_id integer
-       , name string
-       , aperture_width real
-       , dsn_layer_id integer
-       , plane_shape blob
-);
-
-create table specctra_window(
-       id integer primary key
-       , dsn_id integer
-       , dsn_plane_id integer
-       , window_shape blob
-);
-
 
 create table svg_atlas(
        def string
@@ -130,39 +95,59 @@ with padshapes as (
 select
   printf('kcp%d', kp.id) as def
   , NULL as use
-  , printf('pad %s', kp.type) as class
+  , NULL as class
+--  , printf('pad %s', kp.type) as class
   , NULL as transform
   , NULL as text
-  , case when shape = 'oval' then width_mm
-         else NULL end as stroke_width
+  -- , case when shape = 'oval' then min(height_mm, width_mm)
+  --        else NULL end as stroke_width
+  , NULL as stroke_width
   , d_mm as d
 from kicad_pad kp
 ) , pads as (
 select
   printf('kcf%d', fp.id) as def
   , printf('kcp%d', fpp.kicad_pad_id) as use
-  , NULL as class
-  , printf('translate(%f,%f)', x_mm, y_mm) as transform
+--  , printf('pad %s %s', kp.type, replace(lj.value, '.', ' ')) as class
+  , printf('pad %s', kp.type) as class
+  , printf('translate(%f,%f)%s', x_mm, y_mm, fpp.transform) as transform
   , NULL as text
   , NULL as stroke_width
   , NULL as d
 from kicad_footprint fp
 left join kicad_footprint_pad fpp on fpp.kicad_footprint_id = fp.id
+left join kicad_pad kp on kp.id = fpp.kicad_pad_id
+-- , json_each(fpp.layers_json) lj 
 ) , draws as (
 select
   printf('kcf%d', fp.id) as def
   , NULL as use
-  , d.layer as class
-  , NULL as transform
+  , printf('%s %s',
+           case when width_mm is not null and d.text is null then 'stroked' else null end,
+           replace(d.layer, '.', ' ')) as class
+  , case when text is not null then printf('translate(%f,%f)', text_x_mm, text_y_mm)
+    end as transform
   , d.text as text
   , width_mm as stroke_width
   , group_concat(d_mm, ' ') as d
 from kicad_footprint fp
 left join kicad_footprint_draw d on fp.id = d.kicad_footprint_id
 group by d.text, d.layer, width_mm, fp.id
+) , padlabels as (
+select
+  printf('kcf%d',  fp.id) as def
+  , NULL as use
+  , 'pad-label' as class
+  , printf('translate(%f,%f)%s', x_mm, y_mm, fpp.transform) as transform
+  , fpp.name as text
+  , NULL as stroke_width
+  , NULL as d
+from kicad_footprint fp
+left join kicad_footprint_pad fpp on fpp.kicad_footprint_id = fp.id
 )
 
 select * from padshapes
 union all select * from pads
 union all select * from draws
+--union all select * from padlabels
 ;

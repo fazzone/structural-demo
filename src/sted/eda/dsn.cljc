@@ -39,17 +39,6 @@
 
 (defn dsnparse
   [s]
-  ( println
-   "Re-find"
-   (pr-str
-    (re-find
-     #"\(([a-z]+)\s+"
-     "(a (b (c x y)))"
-                       
-     )))
-  #_(or (when-some [[parsed func] (re-find #"\(([a-z]+)\s+" s) ]
-          (into [(symbol func)]
-                [(subs s (count parsed))])))
   (loop [acc []
          stack []
          s s]

@@ -45,10 +45,12 @@
    ["svgo/plugins/_applyTransforms" :as svgo-applytransforms]
    ["svgo/plugins/_transforms" :as svgo-transforms]
    ["svgo/plugins/_path" :as svgo-path]
+   ["svgo/lib/path" :as svgo-lib-path]
    ["greiner-hormann" :as gh]
    ["martinez-polygon-clipping" :as mpc]
    [sted.eda.dsn :as dsn]
    [sted.eda.kicad-footprint :as kcfp]
+   [sted.eda.path-d :as path-d]
    [sted.eda.schema :as edaschema]
    ["jsts/org/locationtech/jts/io" :as jts-io]
    ["jsts/org/locationtech/jts/operation/buffer" :as jts-buf]
@@ -345,45 +347,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                   :cy (+ tly (* vpitch r))}]))]))
 
 (def kicadstr-kailhsocket
-  (rc/inline "sted/eda/qfn.kicad_mod")
-  #_"(footprint \"LED_D20.0mm\" (version 20211014) (generator pcbnew)
-  (layer \"F.Cu\")
-  (tedit 587A3A7B)
-  (descr \"LED, diameter 20.0mm, 2 pins, http://cdn-reichelt.de/documents/datenblatt/A500/DLC2-6GD%28V6%29.pdf\")
-  (tags \"LED diameter 20.0mm 2 pins\")
-  (attr through_hole)
-  (fp_text reference \"REF**\" (at 1.27 -12.56) (layer \"F.SilkS\")
-    (effects (font (size 1 1) (thickness 0.15)))
-    (tstamp 62b18998-4251-49ed-9bb4-b1c6ed2095ff)
-  )
-  (fp_text value \"LED_D20.0mm\" (at 1.27 12.56) (layer \"F.Fab\")
-    (effects (font (size 1 1) (thickness 0.15)))
-    (tstamp 214de94a-ad8d-4639-b6dc-3458270fe4df)
-  )
-  (fp_line (start -8.79 -5.756) (end -8.79 5.756) (layer \"F.SilkS\") (width 0.12) (tstamp d7c2f829-2706-45f1-be0b-cf411ab5a601))
-  (fp_arc (start 12.859999 0.00523) (mid 4.245115 11.201643) (end -8.79 5.755389) (layer \"F.SilkS\") (width 0.12) (tstamp 40a4ee58-4850-48f3-832a-b3b91a78b623))
-  (fp_arc (start -8.79 -5.755389) (mid 4.245115 -11.201643) (end 12.859999 -0.00523) (layer \"F.SilkS\") (width 0.12) (tstamp ea92fd82-0576-40ad-a40d-2b72b4be19be))
-  (fp_circle (center 1.27 0) (end 11.27 0) (layer \"F.SilkS\") (width 0.12) (fill none) (tstamp ef7859e6-dfb7-461a-9d2c-fbc52059e1b4))
-  (fp_line (start -10.55 -11.85) (end -10.55 11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp 5e5c4ff0-96fd-48a6-83da-586fabe7aad3))
-  (fp_line (start -10.55 11.85) (end 13.1 11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp a2197449-1ef4-4daf-a66f-75c2e45d17cb))
-  (fp_line (start 13.1 -11.85) (end -10.55 -11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp ccc5a736-5691-41e7-87c1-ec6f7e6ffd0c))
-  (fp_line (start 13.1 11.85) (end 13.1 -11.85) (layer \"F.CrtYd\") (width 0.05) (tstamp ee7a635e-9e0c-430c-9c9d-b0a72bb2d3b3))
-  (fp_line (start -8.73 -5.678908) (end -8.73 5.678908) (layer \"F.Fab\") (width 0.1) (tstamp fffb63d0-5afb-4a5c-9bb3-47b89682fee7))
-  (fp_arc (start -8.73 -5.678908) (mid 12.77 -0.001637) (end -8.728383 5.681755) (layer \"F.Fab\") (width 0.1) (tstamp 0514a3a2-1ca4-48d2-80b7-a22ceec785b7))
-  (fp_circle (center 1.27 0) (end 11.27 0) (layer \"F.Fab\") (width 0.1) (fill none) (tstamp 67231003-3557-4985-9231-9b5854e8f844))
-  (pad \"1\" thru_hole rect (at 0 0) (size 1.8 1.8) (drill 0.9) (layers *.Cu *.Mask) (tstamp 491ecf7f-b973-47aa-a7bc-1e5730e2fe79))
-  (pad \"2\" thru_hole circle (at 2.54 0) (size 1.8 1.8) (drill 0.9) (layers *.Cu *.Mask) (tstamp 580086f1-1a14-4868-a6f5-bc02720d2968))
-  (model \"${KICAD6_3DMODEL_DIR}/LED_THT.3dshapes/LED_D20.0mm.wrl\"
-    (offset (xyz 0 0 0))
-    (scale (xyz 1 1 1))
-    (rotate (xyz 0 0 0))
-  )
-)
-"
-  
-  )
-
-
+  (rc/inline "sted/eda/qfn.kicad_mod"))
 
 (defn kicad->edn
   [kstr]
@@ -420,25 +384,6 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                      :height sy}))
             nil)))
        (vec)))
-
-#_(defn kicad->elk
-  [props [_footprint fpname & body]]
-  (let [pads (kicad->pads (:id props) body)
-        xmin (apply min (map :x pads))
-        xmax (apply max (map #(+ (:x %) (:width %)) pads))
-        ymin  (apply min (map :y pads))
-        ymax  (apply max (map #(+ (:y %) (:height %)) pads))]
-    (merge props
-     {:properties {:algorithm "org.eclipse.elk.fixed"
-                   
-                   #_ #_:org.eclipse.elk.noLayout true}
-      :width 100 #_(- xmax xmin)
-      :height (- ymax ymin)
-      :children (for [p pads]
-                  (-> p
-                      (update :x - xmin)
-                      (update :y - ymin)))})))
-
 (defn kicad->elk
   [props [_footprint fpname & body]]
   (let [pads (kicad->pads (:id props) body)
@@ -987,45 +932,91 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 
 
 
-(rum/defc hruler
+#_(rum/defc hruler
   [bx by bw bh]
   (let [major 1000
-              fs (/ major 2.5)
-              nfh (* -3 fs)
-              pad (* 0.1 nfh)
-              rh (* 5 fs)]
-         [:div
-          {:style {:width "100%"
-                   :height (str rh "px") 
-                   :position "relative"
-                   :top "46900px"
-                   :left "219px"
-                   :border "100px solid blue"}}
-          [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)}
-           [:g {:stroke "#fff"
-                :fill "none"}
-            (let [h 10000
-                  d major]
-              (for [i (range (/ bw d))]
-                [:g {:stroke-width (* 0.03 major)}
-                 [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh nfh)
-                                 " L" (+ bx (* d i))  " " (+ by rh))} ]
-                 [:text
-                  {:x (+ bx (* d i))  :y (+ by rh nfh pad)
-                   :fill "#fff"
-                   :stroke "none"
-                   :font-size fs
-                   :letter-spacing -1
-                   :text-anchor (if-not (zero? i) "middle" "left")}
-                  (str i (when (zero? i) "mm"))]]))
-            (let [sub 5
-                  d (/ major sub)]
-              (for [i (range (/ bw d))
-                    :let [s (rem i sub)]
-                    :when (not= 0 s)]
-                [:g {:stroke-width (* 0.01 major)}
-                 [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh)
-                                 " L" (+ bx (* d i))  " " (+ by (- rh fs fs)))}]]))]]]))
+        fs (/ major 2.5)
+        nfh (* -3 fs)
+        pad (* 0.1 nfh)
+        rh (* 5 fs)]
+    [:div
+     {:style {:width "100%"
+              :height (str rh "px") 
+              :position "relative"
+              :top "46900px"
+              :left "219px"
+              :border "100px solid blue"}}
+     [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)}
+      [:g {:stroke "#fff"
+           :fill "none"}
+       (let [h 10000
+             d major]
+         (for [i (range (/ bw d))]
+           [:g {:stroke-width (* 0.03 major)}
+            [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh nfh)
+                            " L" (+ bx (* d i))  " " (+ by rh))} ]
+            [:text
+             {:x (+ bx (* d i))  :y (+ by rh nfh pad)
+              :fill "#fff"
+              :stroke "none"
+              :font-size fs
+              :letter-spacing -1
+              :text-anchor (if-not (zero? i) "middle" "left")}
+             (str i (when (zero? i) "mm"))]]))
+       (let [sub 5
+             d (/ major sub)]
+         (for [i (range (/ bw d))
+               :let [s (rem i sub)]
+               :when (not= 0 s)]
+           [:g {:stroke-width (* 0.01 major)}
+            [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh)
+                            " L" (+ bx (* d i))  " " (+ by (- rh fs fs)))}]]))]]]))
+
+(rum/defc hruler
+  [major bw]
+  (let [bx  0
+        fs (/ major 2.5)
+        nfh (* -3 fs)
+        pad (* 0.1 nfh)
+        rh (* 5 fs)
+        by (- rh)
+        maj-stroke (* 0.03 major)
+        min-stroke (* 0.01 major)]
+    [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw rh)
+           :width "300mm"
+           :height "20mm"
+           :preserveAspectRatio "xMinYMin slice"
+           }
+     [:g {:stroke "#fff"
+          :fill "none"}
+      (let [d major]
+        (for [i (range (/ bw d))]
+          [:g {:stroke-width maj-stroke }
+           [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh nfh)
+                           " L" (+ bx (* d i))  " " (+ by rh))} ]
+           [:text
+            {:x (+ bx (* d i)
+                   (if (zero? i)
+                     0
+                     (* -0.5 maj-stroke)))
+             :y (+ by rh nfh pad)
+             :fill "#fff"
+             :stroke "none"
+             :font-size fs
+             ;; :letter-spacing -1.5
+             :text-anchor (if-not (zero? i) "middle" "left")}
+            (if (zero? i)
+              "0mm"
+              (str i))]]))
+      (let [sub 5
+            d (/ major sub)]
+        (for [i (range (/ bw d))
+              :let [s (rem i sub)]
+              :when (not= 0 s)]
+          [:g {:stroke-width min-stroke}
+           [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh)
+                           " L" (+ bx (* d i))  " "
+                           (+ by (- rh fs fs)))}]]))]]))
 
 
 (rum/defc polygondiffc
@@ -1147,7 +1138,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 (rum/defc tabular-svg-item
   [idef iuse ixf iclass isw itext ipathd]
   (cond
-    iuse [:use (cond-> {:xlinkHref (str "#" iuse)}
+    iuse [:use (cond-> {:href (str "#" iuse)}
                  ixf (assoc :transform ixf)
                  iclass (assoc :class iclass)
                  isw (assoc :stroke-width isw))]
@@ -1174,7 +1165,10 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                       :stroke-width 1}])
     
     (nil? ipathd)
-    (do (println "Don't understand this tsvg row"))
+    (do (println "Don't understand this tsvg row (no path)"
+                 {:idef idef
+                  :iuse iuse
+                  :itext itext}))
     
     :else [:path (cond-> {:d ipathd :stroke-linecap "round"}
                    ixf (assoc :transform ixf)
@@ -1184,7 +1178,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                    idef (assoc :id idef))]
     ))
 
-(rum/defc tabular-svg < rum/static
+#_(rum/defc tabular-svg < rum/static
   [col->idx rows]
   (let [idef   (col->idx "def")
         iuse   (col->idx "use")
@@ -1194,7 +1188,9 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         itext  (col->idx "text")
         ipathd (col->idx "d")
         
-        svgref (rum/create-ref)]
+        svgref (rum/create-ref)
+        
+        def-groups (group-by (fn [r] (aget r "def")) rows)]
     [:div
      [:button {:style {:width "10ex"}
                :on-click (fn []
@@ -1221,7 +1217,116 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
            irow
            ))]]]))
 
-(rum/defc fancy-results < rum/static
+
+(rum/defc tabular-svg < rum/static
+  [col->idx rows]
+  (let [idef   (col->idx "def")
+        iuse   (col->idx "use")
+        ixf    (col->idx "transform")
+        iclass (col->idx "class")
+        isw    (col->idx "stroke_width")
+        itext  (col->idx "text")
+        ipathd (col->idx "d")
+        
+        svgref (rum/create-ref)
+        
+        def-groups (into (sorted-map) (group-by (fn [r] (aget r idef)) rows))
+        srefs (volatile! [])]
+    #_(rum/use-layout-effect! (fn []
+                                (doseq [s @srefs]
+                                  (let [el (rum/deref s)
+                                        bbox (.getBBox el)]
+                                    (js/console.log el)
+                                    (js/console.log bbox)
+                                    (.setAttribute el "viewBox"
+                                                   (gstring/format "%f %f %f %f"
+                                                                   (.-x bbox) (.-y bbox)
+                                                                   (.-width bbox) (.-height bbox)))))
+                                nil))
+    [:div
+     #_[:style {} (rc/inline "sted/eda/pcb.css")]
+     [:svg {:ref svgref :style {:display :none}}
+      (for [[dname [r & more :as drows]] def-groups]
+        (if-not more
+          (tabular-svg-item (aget r idef) (aget r iuse) (aget r ixf) (aget r iclass) (aget r isw) (some-> (aget r itext) str) (aget r ipathd))
+          [:g {:id dname}
+           (for [z drows]
+             (tabular-svg-item nil (aget z iuse) (aget z ixf) (aget z iclass) (aget z isw) (some-> (aget z itext) str) (aget z ipathd)))]))]
+     [:div {:style {:display "grid"
+                    :grid-template-columns "repeat(auto-fill, minmax(100mm, 1fr) ) "
+                    :grid-gap "1em"}}
+      (for [d (keys def-groups)
+            :let [dref (rum/create-ref)
+                  _ (vswap! srefs conj dref)]]
+        [:div {:style {:width "100%" :border "1px solid cadetblue"}}
+         (str d)
+         [:svg {:ref dref
+                :viewBox "-20 -20 40 40"}
+          [:g {:stroke "#fff" :fill "none"
+               :stroke-width "0.1"
+               :font-size "2"}
+           [:use {:href (str "#" d)}]]]])]]))
+
+(def svg-atlas-cache (atom (sorted-map)))
+
+(rum/defc svg-atlas < rum/reactive
+  []
+  (let [idef 0
+        iuse 1
+        iclass 2
+        ixf 3
+        itext 4
+        isw 5
+        ipathd 6
+        
+        def-groups (rum/react svg-atlas-cache)]
+    (println "Re-prendder atlas11111")
+    [:div
+     (str "svg atlas size: "
+          (count def-groups) )
+     #_[:code [:pre (pr-str (keys def-groups))]]
+     [:svg {:style {:display :none}}
+      (for [[dname [r & more :as drows]] def-groups]
+        (if-not more
+          (rum/with-key (tabular-svg-item (aget r idef) (aget r iuse) (aget r ixf) (aget r iclass) (aget r isw) (some-> (aget r itext) str) (aget r ipathd))
+            dname)
+          [:g {:id dname :key dname}
+           (for [z drows]
+             (tabular-svg-item nil (aget z iuse) (aget z ixf) (aget z iclass) (aget z isw) (some-> (aget z itext) str) (aget z ipathd)))])) ]]))
+
+(defn ensure-svg-deps!
+  [db svg-def-ids]
+  #_(println "Ensure svg deps" svg-def-ids)
+  (a/let [rs (-> (.exec db (rc/inline "sted/eda/svg_deps.sql") #js [(js/JSON.stringify (into-array svg-def-ids))])
+                 (.-get)
+                 (.-sync))]
+    (let [cols       (.-cols rs)
+          rows       (.-rows rs)
+          my-defs    (into #{} (map (fn [r] (aget r 0))) rows)
+          known-defs (keys @svg-atlas-cache)
+          new-defs   (reduce disj my-defs known-defs)]
+      (.free rs)
+      #_(println "My-defs" my-defs)
+      #_(println "Known" known-defs)
+      #_(println "New" new-defs)
+      (a/let [ars (-> (.exec db (str "select a.*"
+                                     "\nfrom json_each(?) je"
+                                     "\n, svg_atlas a where a.def = je.value")
+                             #js [(js/JSON.stringify (into-array new-defs))])
+                      (.-get)
+                      (.-sync))]
+        (->> (.-rows ars)
+             (group-by (fn [r] (aget r 0)))
+             (swap! svg-atlas-cache merge)))
+      
+      #_(let [new-groups (group-by (fn [r] (aget r 0)) rows)]
+          (println "New-groups for" svg-def-ids (keys new-groups))
+          (swap! svg-atlas-cache merge new-groups)))))
+
+
+
+
+#_(rum/defc fancy-results < rum/static
   [cols rows]
   (let [idx->cc (into-array (map classify-result-column cols))
         cfunc (into {}
@@ -1278,25 +1383,54 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                   [:code [:pre "??" (str r)]]
                   )))])])]]))
 
-
-
-(defn create-schema!
-  [db]
-  (js/Promise.all
-   (into-array (for [stmt edaschema/schema-statements]
-                 (.exec db stmt)))))
-
-(defn setup-db!
-  [db]
-  (a/let [_ (println "Creating schema")
-          _sch (create-schema! db)
-          _ (println "Schema created")
-          fpir (kcfp/insert-footprint! db
-                                       (first (dsn/dsnparse
-                                               kicadstr-kailhsocket)))]
-    fpir))
-
-
+(rum/defc fancy-results < rum/static
+  [db cols rows]
+  (let [idx->cc (into-array (map classify-result-column cols))
+        cfunc (reduce 
+               (fn [a i]
+                 (cond-> a
+                   (some? (aget idx->cc i))
+                   (assoc-in (aget idx->cc i) i)))
+               {}
+               (range (count idx->cc)))
+        svgcols (into-array (vals (cfunc :svg)))
+        allsvg (set (for [r rows
+                          sci svgcols]
+                      (aget r sci)))]
+    #_(println "Cols" cols)
+    #_(println "Cfunc" cfunc)
+    #_(println "Svgcols" svgcols)
+    
+    #_(println "Allsvg" allsvg)
+    
+    (if-not db
+      (println "No db?????????")
+      (ensure-svg-deps! db allsvg))
+    [:table {:style {:width "100%" }}
+     [:tbody
+      [:tr {}
+       (for [i (range (count cols))
+             :let [c (aget cols i)]]
+         [:th {:key c :scope "col"} c])]
+      (for [i (range (count rows))
+            :let [rs (aget rows i)]]
+        [:tr {:key i}
+         (for [j (range (count rs))
+               :let [r (aget rs j)
+                     cc (aget idx->cc j)]
+               :when (case (first cc) :viewbox nil true)]
+           [:td {:style {:max-width "25em" :overflow-wrap :anywhere}
+                 :key (str "r" i "c" j)}
+            (if (nil? cc)
+              (if (nil? r) "NULL" (str r))
+              (let [[f id] cc]
+                (case f
+                  :svg [:svg {:viewBox "-10 -10 20 20"
+                              :width "500px"
+                              :height "300px"}
+                        [:g {:fill "none"}
+                         [:use {:href (str "#" r)}]]]
+                  [:code [:pre "??" (str r)]])))])])]]))
 
 (defn promise-chain
   [ps]
@@ -1307,13 +1441,39 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
    nil
    ps))
 
+(defn create-schema!
+  [db]
+  (promise-chain
+   (for [stmt edaschema/schema-statements]
+     (.exec db stmt))))
+
+(defn setup-db!
+  [db]
+  (a/let [_ (println "Creating schema")
+          _sch (create-schema! db)
+          _ (println "Schema created")
+          a (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/qfn.kicad_mod"))))
+          b (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/gauge.kicad_mod"))))
+          c (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/Kailh_socket_MX_6.kicad_mod"))))
+          d (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/ovaltest.kicad_mod"))))
+          e (.exec db "insert into svg_atlas select * from svg_atlas_view")]
+    :ok))
+
+(defn regen-svg-atlas!
+  [db]
+  (let [ts (js/performance.now)]
+    (a/let [d (.exec db "delete from svg_atlas")
+            e (.exec db "insert into svg_atlas select * from svg_atlas_view")]
+      (println "Svga time" (-  (js/performance.now) ts))
+      :ok)))
+
 (rum/defc spltest
   []
   (let [ref (rum/create-ref)
         [db set-db!] (rum/use-state nil)
         [query set-query!] (rum/use-state siquery)
         [[cols rows qdur] set-results!] (rum/use-state [[] []])
-        [display-mode set-display-mode!] (rum/use-state #_:table :tabular-svg)
+        [display-mode set-display-mode!] (rum/use-state :table #_:tabular-svg)
         spl-options #js {:autoGeoJSON false
                          :autoJSON false}]
     (rum/use-effect!
@@ -1335,7 +1495,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                    :grid-template-columns "1fr"
                    :width "90%"}}
      [:textarea.code-font {:value query
-                           :spellcheck "false"
+                           :spellCheck "false"
                            :style {:background-color "#000"
                                    :color "#fff"
                                    :height "40ex"
@@ -1349,8 +1509,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
       [:button {:style {:width "10ex" :margin-right "4ex"}
                 :on-click (fn []
                             (let [tqs (js/performance.now)]
-                              (a/let [_ (println "Exec" query)
-                                      result (-> (.exec db query)
+                              (a/let [result (-> (.exec db query)
                                                  (.-get))
                                       cols (.-cols result)
                                       rows (.-rows result)]
@@ -1370,22 +1529,21 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                                             :let [fr (js/FileReader.)
                                                   rfp (js/Promise.
                                                        (fn [resolve reject]
-                                                         (set! (.-onload fr) (fn [ev]
-                                                                               (js/console.log "Resolve" ev)
-                                                                               (resolve (.-result (.-target ev)))))
+                                                         (set! (.-onload fr) (fn [ev] (resolve (.-result (.-target ev)))))
                                                          (set! (.-onerror fr) reject)
                                                          (println "I read the text " (.-name file))
                                                          (.readAsText fr file)))]]
                                         (a/let [content rfp]
-                                          (promise-chain
-                                           (for [top (dsn/dsnparse content)]
-                                             (do (js/console.log "The db is" db )
-                                                 (kcfp/insert-footprint! db top)))))
+                                          (-> (for [top (dsn/dsnparse content)]
+                                                (kcfp/insert-footprint! db top))
+                                              (promise-chain)
+                                              (.catch (fn [ex]
+                                                        (js/console.error "In file" file ex )
+                                                        ))))
                                         #_(kcfp/insert-footprint! db (first (dsn/dsnparse (vec (.-files (.-target ev)))))))
                                    ]
                                (a/let [done (promise-chain ps)]
                                  (js/console.log "Done" done))))}]]
-      (println "Displaymode " display-mode)
       [:label
        "display mode"
        [:select {:on-change (fn [ev]
@@ -1395,14 +1553,34 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
           [:option {:key (name o)
                     :value (name o)
                     :selected (= o display-mode)}
-           (name o)])]]]
+           (name o)])]]
+
+      [:button {:style {:width "20ex" :margin "0 4ex 0 4ex"}
+                :on-click (fn []
+                            (when db (regen-svg-atlas! db)))}
+       "Regen atlas"]
+      ]
      
+     [:style {} (rc/inline "sted/eda/pcb.css")]
      (case display-mode
-       :table (fancy-results cols rows)
+       :table (fancy-results db cols rows)
        :tabular-svg (tabular-svg
                      (into {} (for [i (range (count cols))]
                                 [(aget cols i) i]))
                      rows))]))
+
+
+
+(rum/defc retest
+  []
+  (let [example "M0,0 v100 l5,4"]
+    [:div {}
+     [:h2 "Path D"]
+     [:code [:pre
+             (pr-str (path-d/svg-d-lex example))]]
+     [:code [:pre
+             (pr-str
+              (svgo-lib-path/parsePathData example))]]]))
 
 (rum/defcs dsnroot < (rum/local nil ::result)  
   [{::keys [result]}]
@@ -1422,9 +1600,31 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         [_placement & plcbody] (toplevel 'placement)]
     [:div {:style {:margin-left "1ex"}}
      #_(kicad-footprint-debug
-      (first (dsn/dsnparse kicadstr-kailhsocket))
-      #_(kicad->edn kicadstr-kailhsocket))
+        (first (dsn/dsnparse kicadstr-kailhsocket))
+        #_(kicad->edn kicadstr-kailhsocket))
+     
      (spltest)
+     (retest)
+     [:div {}
+      [:h2 "Area"]
+      
+      
+      (hruler  2 300)
+      [:div {:style {:outline "1px dashed cadetblue"
+                     :width "300mm"
+                     :display :grid
+                     :grid-template-columns "repeat(auto-fit, 20mm)"}}
+       
+       (for [i (range 9)]
+         [:svg {:key i
+                :width "16mm"
+                :height "16mm"
+                :viewBox "-9 -9 18 18"}
+          [:g {:stroke "#fff" :fill "none"
+               :stroke-width "0.1"
+               :font-size "2"}
+           [:use {:href (str "#kcf3" )}]]])]]
+     (svg-atlas)
      #_[:span
         {}
         (pr-str
@@ -1434,184 +1634,188 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
             (+ w xmin) (+ ymin h)
             xmin (+ ymin h)]))]
      
-     [:div
-      [:div {:style {:width "100px"}} (kicadsvg nil kicadedn)]
-      [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
-             :width "1000px"
-             :height "1000px"
-             :style {:border "1px solid cadetblue"}}
-       #_[:foreignObject {:x bx :y by :width bw :height bh}
-          (hruler bx by bw bh)
-          #_[:div
-             {:style {:width (str bw "px")
-                      :height (str bh "px")
-                      :position :absolute
-                      :display :grid
-                      :grid-template-columns "repeat(8, 20000px)"
-                      :grid-template-rows "repeat(auto-fill, 20000px)"
-                      :grid-gap "1em"
-                      :opacity "90%"
-                      :font-size "1000px"
-                      :top "10000px"
-                      :left "50000px"}}
-             (for [i (range 24)]
-               (let [[sx sy sw sh] [-10000 -9000 20000 20000]]
-                 [:div {:key (str "dge" i)
-                        :style {:width (str sw "px")
-                                :height (str sh "px")
-                                :border-radius "1ex"}}
-                  [:svg {:viewBox (gstring/format "%f %f %f %f" sx sy sw sh)}
-                   [:use {:stroke-width 1
-                          :transform "scale(1000,1000)"
-                          :font-size 1
-                          :href "#Kailh_socket_MX"}]]]))]]
-       [:path {:stroke "green"
-               :fill "none"
-               :stroke-width 100
-               :d (pts->d boundary-pts)}]
-       [:g {:transform (str "translate(" 0 "," (+ by by bh) ")"
-                            " scale(1,-1)")
-            :fill "none"
-            :stroke "#fff"}
+     (comment
+       "The big one"
+       
+       [:div
+        [:div {:style {:width "100px"}} (kicadsvg nil kicadedn)]
+        [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw bh)
+               :width "1000px"
+               :height "1000px"
+               :style {:border "1px solid cadetblue"}}
+         #_[:foreignObject {:x bx :y by :width bw :height bh}
+            (hruler bx by bw bh)
+            #_[:div
+               {:style {:width (str bw "px")
+                        :height (str bh "px")
+                        :position :absolute
+                        :display :grid
+                        :grid-template-columns "repeat(8, 20000px)"
+                        :grid-template-rows "repeat(auto-fill, 20000px)"
+                        :grid-gap "1em"
+                        :opacity "90%"
+                        :font-size "1000px"
+                        :top "10000px"
+                        :left "50000px"}}
+               (for [i (range 24)]
+                 (let [[sx sy sw sh] [-10000 -9000 20000 20000]]
+                   [:div {:key (str "dge" i)
+                          :style {:width (str sw "px")
+                                  :height (str sh "px")
+                                  :border-radius "1ex"}}
+                    [:svg {:viewBox (gstring/format "%f %f %f %f" sx sy sw sh)}
+                     [:use {:stroke-width 1
+                            :transform "scale(1000,1000)"
+                            :font-size 1
+                            :href "#Kailh_socket_MX"}]]]))]]
+         [:path {:stroke "green"
+                 :fill "none"
+                 :stroke-width 100
+                 :d (pts->d boundary-pts)}]
+         [:g {:transform (str "translate(" 0 "," (+ by by bh) ")"
+                              " scale(1,-1)")
+              :fill "none"
+              :stroke "#fff"}
         
-        ;; placements
-        (for [[_placement & comps] (toplevel 'placement)
-              [_comp cclass & places] comps
-              [_place cname x y layer rot [_pn pn]] places]
-          [:use.comp {:transform (str
-                                  "translate(" x " " y ")"
-                                  " rotate(" rot ")")
-                      :id cname
-                      :href (str "#" cclass)}])
+          ;; placements
+          (for [[_placement & comps] (toplevel 'placement)
+                [_comp cclass & places] comps
+                [_place cname x y layer rot [_pn pn]] places]
+            [:use.comp {:transform (str
+                                    "translate(" x " " y ")"
+                                    " rotate(" rot ")")
+                        :id cname
+                        :href (str "#" cclass)}])
         
-        ;; wires
-        [:g.wire {:stroke "#ae81ff"
-                  :stroke-linecap "round"}
-         (for [[_wiring & wires] (toplevel 'wiring)
-               [wire & args] wires
-               :when (= 'wire wire)
-               :let [[[_path layer thk & pts] & body] args
-                     props (into {} body)]]
+          ;; wires
+          [:g.wire {:stroke "#ae81ff"
+                    :stroke-linecap "round"}
+           (for [[_wiring & wires] (toplevel 'wiring)
+                 [wire & args] wires
+                 :when (= 'wire wire)
+                 :let [[[_path layer thk & pts] & body] args
+                       props (into {} body)]]
            
-           [:path {:stroke-width thk
-                   :stroke (case layer
-                             "F.Cu" "tomato"
-                             "blue")
-                   :d (pts->d (partition-all 2 pts))
-                   :data-net (props 'net)}])]
+             [:path {:stroke-width thk
+                     :stroke (case layer
+                               "F.Cu" "tomato"
+                               "blue")
+                     :d (pts->d (partition-all 2 pts))
+                     :data-net (props 'net)}])]
         
-        ;; vias
-        (for [[_wiring & wires] (toplevel 'wiring)
-              [via & args] wires
-              :when (= 'via via)
-              :let [[vianame x y & props] args]]
-          [:use.via {:transform (str "translate(" x " " y ")")
-                     :href (str "#" vianame)}])
+          ;; vias
+          (for [[_wiring & wires] (toplevel 'wiring)
+                [via & args] wires
+                :when (= 'via via)
+                :let [[vianame x y & props] args]]
+            [:use.via {:transform (str "translate(" x " " y ")")
+                       :href (str "#" vianame)}])
 
-        ;; planes
-        (for [[_plane plane-name [ty layer _unk & coords] & windows] (structure 'plane)
-              :let [planepts (partition-all 2 coords)]
-              :when (case [plane-name layer]
-                      [ "GND" "B.Cu"] nil true)]
-          [:g (case ty
-                'polygon
+          ;; planes
+          (for [[_plane plane-name [ty layer _unk & coords] & windows] (structure 'plane)
+                :let [planepts (partition-all 2 coords)]
+                :when (case [plane-name layer]
+                        [ "GND" "B.Cu"] nil true)]
+            [:g (case ty
+                  'polygon
                 
-                [:path { ;; :fill "#fff"
-                        :fill "none"
-                        ;; :opacity "0.2"
-                        :stroke "cadetblue"
-                        :stroke-width 99
-                        :d (pts->d planepts)}]
-                nil)
+                  [:path { ;; :fill "#fff"
+                          :fill "none"
+                          ;; :opacity "0.2"
+                          :stroke "cadetblue"
+                          :stroke-width 99
+                          :d (pts->d planepts)}]
+                  nil)
            
-           (when-some [window-pts (not-empty
-                                   (for [[_window [ty layer aw & coords]] windows]
-                                     (partition-all 2 coords)))]
-             (let [comprects (for [[_placement & comps] (toplevel 'placement)
-                                   [_comp cclass & places] comps
-                                   [_place cname x y layer rot [_pn pn]] places
-                                   [_image imgid & body] (id->image cclass)
-                                   [pin padstack & args] body
-                                   :when (= pin 'pin)
-                                   :let [rot? (and (vector? (first args)) (= 'rotate (ffirst args)))
-                                         [pin-id px py] (if-not rot?
-                                                          args
-                                                          (next args))
-                                         deg (when rot? (second (first args)))]
-                                   [_padstack _ps & psbody] (id->padstack padstack)
-                                   [shape [shtype layer & shpts]] psbody
-                                   :when (= [shape layer] ['shape "F.Cu"])
-                                   :when (#{'rect 'polygon} shtype)]
-                               (let [pathdata (case shtype
-                                                rect (let [[xa ya xb yb] shpts]
-                                                       (str (pts->d [[xa ya] [xa yb] [xb yb] [xb ya]]) "z"))
-                                                polygon (pts->d (partition-all 2 (next shpts))))
-                                     pdjs (svgo-path/path2js #js {:attributes #js {:d pathdata}})
-                                     xfpts (svgo-applytransforms/applyTransforms
-                                            #js {:attributes #js {:transform (str "translate(" x " " y ")" 
-                                                                                  "rotate(" rot ")"
-                                                                                  "translate(" px " " py ")")}
-                                                 :computedAttr (fn [] nil)}
-                                            pdjs
-                                            #js {:transformPrecision 99})]
-                                 (loop [i 0
-                                        acc []]
-                                   (if (= i (count pdjs))
-                                     acc
-                                     (let [p (nth pdjs i)]
-                                       (recur (inc i)
-                                              (case (.-command p)
-                                                ("L" "M") (conj acc (.-args p))
-                                                "z" (conj acc (nth acc 0))))))))
-                               #_(println (str "#" cclass padstack xa ya xb yb)))
-                   diff-subj (clj->js [planepts])
-                   diff-arg (clj->js [window-pts])
-                   _ (js/console.time "Geo")
-                   buffered (.-coordinates
-                             (.write
-                              (jts-io/GeoJSONWriter.)
-                              (jts-buf/BufferOp.bufferOp
-                               (.read (jts-io/GeoJSONReader.)
-                                      #js {:type "MultiPolygon"
-                                           :coordinates (clj->js (for [c comprects] [c]))})
-                               450)))
-                   mpcr (mpc/diff
-                         (mpc/diff diff-subj (do diff-arg))
-                         buffered)
+             (when-some [window-pts (not-empty
+                                     (for [[_window [ty layer aw & coords]] windows]
+                                       (partition-all 2 coords)))]
+               (let [comprects (for [[_placement & comps] (toplevel 'placement)
+                                     [_comp cclass & places] comps
+                                     [_place cname x y layer rot [_pn pn]] places
+                                     [_image imgid & body] (id->image cclass)
+                                     [pin padstack & args] body
+                                     :when (= pin 'pin)
+                                     :let [rot? (and (vector? (first args)) (= 'rotate (ffirst args)))
+                                           [pin-id px py] (if-not rot?
+                                                            args
+                                                            (next args))
+                                           deg (when rot? (second (first args)))]
+                                     [_padstack _ps & psbody] (id->padstack padstack)
+                                     [shape [shtype layer & shpts]] psbody
+                                     :when (= [shape layer] ['shape "F.Cu"])
+                                     :when (#{'rect 'polygon} shtype)]
+                                 (let [pathdata (case shtype
+                                                  rect (let [[xa ya xb yb] shpts]
+                                                         (str (pts->d [[xa ya] [xa yb] [xb yb] [xb ya]]) "z"))
+                                                  polygon (pts->d (partition-all 2 (next shpts))))
+                                       pdjs (svgo-path/path2js #js {:attributes #js {:d pathdata}})
+                                       xfpts (svgo-applytransforms/applyTransforms
+                                              #js {:attributes #js {:transform (str "translate(" x " " y ")" 
+                                                                                    "rotate(" rot ")"
+                                                                                    "translate(" px " " py ")")}
+                                                   :computedAttr (fn [] nil)}
+                                              pdjs
+                                              #js {:transformPrecision 99})]
+                                   (loop [i 0
+                                          acc []]
+                                     (if (= i (count pdjs))
+                                       acc
+                                       (let [p (nth pdjs i)]
+                                         (recur (inc i)
+                                                (case (.-command p)
+                                                  ("L" "M") (conj acc (.-args p))
+                                                  "z" (conj acc (nth acc 0))))))))
+                                 #_(println (str "#" cclass padstack xa ya xb yb)))
+                     diff-subj (clj->js [planepts])
+                     diff-arg (clj->js [window-pts])
+                     _ (js/console.time "Geo")
+                     buffered (.-coordinates
+                               (.write
+                                (jts-io/GeoJSONWriter.)
+                                (jts-buf/BufferOp.bufferOp
+                                 (.read (jts-io/GeoJSONReader.)
+                                        #js {:type "MultiPolygon"
+                                             :coordinates (clj->js (for [c comprects] [c]))})
+                                 450)))
+                     mpcr (mpc/diff
+                           (mpc/diff diff-subj (do diff-arg))
+                           buffered)
                    
-                   pathdata (cond
-                              (empty? mpcr) nil
+                     pathdata (cond
+                                (empty? mpcr) nil
                               
-                              (number? (-> mpcr (nth 0) (nth 0)))
-                              (pts->d mpcr)
+                                (number? (-> mpcr (nth 0) (nth 0)))
+                                (pts->d mpcr)
                               
-                              :else
-                              (apply str
-                                     (for [poly mpcr
-                                           ring poly]
-                                       (str (pts->d ring) "  "))))
-                   _ (js/console.timeEnd "Geo")]
+                                :else
+                                (apply str
+                                       (for [poly mpcr
+                                             ring poly]
+                                         (str (pts->d ring) "  "))))
+                     _ (js/console.timeEnd "Geo")]
                
-               #_(js/console.log "Subj" (js/JSON.stringify diff-subj))
-               #_(js/console.log "Argu" (js/JSON.stringify diff-arg))
-               #_(js/console.log "Resu" (js/JSON.stringify mpcr))
-               #_(js/console.log "Pthd" pathdata)
-               [:g.allwin
-                [:g.punch
-                 [:path {:fill "red"
-                         :opacity 0.4
-                         :fill-rule "evenodd"
-                         :stroke-width 50
-                         :stroke "none"
-                         :d pathdata}]]
-                (for [c comprects]
-                  [:path.dink
-                   {:stroke-width 99
-                    :stroke "#fff"
-                    :d (pts->d c)}])]))])]]]
+                 #_(js/console.log "Subj" (js/JSON.stringify diff-subj))
+                 #_(js/console.log "Argu" (js/JSON.stringify diff-arg))
+                 #_(js/console.log "Resu" (js/JSON.stringify mpcr))
+                 #_(js/console.log "Pthd" pathdata)
+                 [:g.allwin
+                  [:g.punch
+                   [:path {:fill "red"
+                           :opacity 0.4
+                           :fill-rule "evenodd"
+                           :stroke-width 50
+                           :stroke "none"
+                           :d pathdata}]]
+                  (for [c comprects]
+                    [:path.dink
+                     {:stroke-width 99
+                      :stroke "#fff"
+                      :d (pts->d c)}])]))])]]])
      
-     (dsn-structure structure)
-     (dsn-library library)]))
+     (comment
+       (dsn-structure structure)
+       (dsn-library library))]))
 
 (defn dsn->elk
   [pcb]
@@ -1725,3 +1929,14 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
       (js/setTimeout 0))
   "Goodbye")
 
+
+
+;; https://regexper.com/#%5B-%2B%5D%3F%28%28%28%5Cd%2B%5C.%5Cd%2B%29%7C%5Cd%2B%29%7C%5C.%5Cd%2B%29%28%5BeE%5D%5B-%2B%5D%3F%5Cd%2B%29%3F
+;; https://regexper.com/#%5B-%2B%5D%3F%28%28%28%5Cd%2B%5C.%5Cd%2B%29%7C%5Cd%2B%29%7C%5C.%5Cd%2B%29%28%5BeE%5D%5B-%2B%5D%3F%5Cd%2B%29%3F
+
+
+;; [x] Import the footprints
+;; [ ] Arrange them on-screen with CSS
+;; [ ] Capture arrangement from DOM
+;; [ ] Export back to footprint
+;; 

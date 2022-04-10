@@ -1,15 +1,24 @@
-.pad.smd {
-    stroke: none;
-    fill: #d30303;
-    opacity: 0.6;
+.pad {
+    fill: currentColor;
+    opacity: 0.7;
 }
 
-/* path.SilkS { stroke: #e7c547; } */
-/* text.SilkS { fill: #e7c547; } */
 
-path.Fab { stroke: #7e7e7e; }
-text.Fab { fill: #7e7e7e; }
+text     { stroke: none; fill: currentColor; }
+.stroked { fill: none; stroke: currentColor; }
 
-path.CrtYd { stroke: #c397d8; }
+.F.SilkS { color: rgb(0, 132, 132); }
+.B.SilkS { color: rgb(132,0,132); }
+.Fab     { color: rgb(132,132,132); }
+.B.CrtYd {color: rgb(132, 132, 132); }
+.F.CrtYd {color: rgb(194, 194, 194); }
+.F.Cu    { color: rgb(132,0,0); }
+.B.Cu    { color: rgb(0,132,0); }
+.F.Paste { color: rgb(132, 0, 0);   }
+.B.Paste { color: rgb(0, 194, 194); }
+.Eco2    { color: rgb(194, 194, 0); }
+.B.Mask  { color: rgb(132, 132, 0); }
+.F.Mask  { color: rgb(132, 0, 132); }
 
-
+.thru_hole    { color: rgb(194, 194, 0); }
+.np_thru_hole { color: rgb(0 78 194); }
