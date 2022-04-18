@@ -50,6 +50,7 @@
    ["martinez-polygon-clipping" :as mpc]
    [sted.eda.dsn :as dsn]
    [sted.eda.kicad-footprint :as kcfp]
+   [sted.eda.kicad :as kcnext]
    [sted.eda.path-d :as path-d]
    [sted.eda.schema :as edaschema]
    ["jsts/org/locationtech/jts/io" :as jts-io]
@@ -349,344 +350,6 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
 (def kicadstr-kailhsocket
   (rc/inline "sted/eda/qfn.kicad_mod"))
 
-(defn kicad->edn
-  [kstr]
-  (clojure.edn/read-string
-   (-> kstr
-       (string/replace #"([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})" "#uuid \"$1\"")
-       (string/replace #"tedit ([0-9a-f]+)" "tedit 0x$1"))))
-
-(def kicadedn
-  (kicad->edn kicadstr-kailhsocket))
-
-(defn kicad->map
-  [attrs]
-  (into {}
-        (for [[a & body] attrs]
-          [a (vec body)])))
-
-(defn kicad->pads
-  [idbase body]
-  (->> body
-       (keep
-        (fn [[f & args]]
-          (case f
-            pad (let [[padname padtype padshape & attrs] args
-                      [[_at x y] [_size sx sy] [_drill drill]] attrs
-                      halfw (* 0.5 sx)
-                      halfh (* 0.5 sy)
-                      prop (kicad->map attrs)]
-                  (when (not-empty (str padname))
-                    {:id (str idbase "." padname) 
-                     :x (- x halfw)
-                     :y (- y halfh)
-                     :width sx
-                     :height sy}))
-            nil)))
-       (vec)))
-(defn kicad->elk
-  [props [_footprint fpname & body]]
-  (let [pads (kicad->pads (:id props) body)
-        xmin (apply min (map :x pads))
-        xmax (apply max (map #(+ (:x %) (:width %)) pads))
-        ymin  (apply min (map :y pads))
-        ymax  (apply max (map #(+ (:y %) (:height %)) pads))]
-    (merge props
-           {:properties {:algorithm "org.eclipse.elk.fixed"
-                         :portConstraints "FIXED_POS"}
-            :width (- xmax xmin)
-            :height (- ymax ymin)
-            :ports (for [p pads]
-                     (do
-                       (let [rp (-> p
-                                    (update :x - xmin)
-                                    (update :y - ymin))]
-                         (println "Port" rp)
-                         rp
-                         )))}))) 
-
-(rum/defc kicadsvg
-  [svgref [_footprint fpname & body]]
-  [:div {}
-   (str fpname) 
-   [:svg
-    {:ref svgref
-     :xmlns "http://www.w3.org/2000/svg" 
-     :viewBox (str "-8 -8 16 16")
-     :style   {:border "1px solid aliceblue"}}
-    [:g {:id (str fpname)}
-     (for [[f & args] body]
-       (case f
-         fp_line (let [[[_start sx sy] [_end ex ey] [_layer layer] [_width w]] args]
-                   [:line {:x1 sx :y1 sy :x2 ex :y2 ey
-                           :data-layer layer
-                           :stroke (case layer
-                                     "F.SilkS" "#fff"
-                                     "F.CrtYd" "cadetblue"
-                                     "F.Fab" "#ae81ff"
-                                     "tomato")
-                           :stroke-width w}])
-         fp_text (let [[vu text [_at x y] [_layer layer]
-                        [_effects [_font [_size sx sy] [_thickness thk]]]] args]
-                   [:text
-                    {:x x :y y
-                     :stroke "#fff"
-                     :stroke-width 0.1
-                     :fill "none"
-                     :font-size sx
-                     :text-anchor "middle"}
-                    (str text)])
-         fp_arc (let [[[_start sx sy] [_end ex ey] [_angle angle] [_layer layer] [_width w]] args
-                      r (js/Math.hypot (- ex sx) (- ey sy))
-                      radians (* angle js/Math.PI (/ 1 180.0))
-                      dx (* r (js/Math.sin radians))
-                      dy (* -1 r (js/Math.cos radians))]
-                  #_(println "Angle " angle
-                           "Sine" (js/Math.sin radians)
-                           "Cosine " (js/Math.cos radians))
-                  [:g {:data-layer layer}
-                   [:circle {:stroke-width w :stroke "green" :cx sx :cy sy :r w}]
-                   [:circle {:stroke-width w :stroke "blue" :cx ex :cy ey :r w}]
-                 
-                   [:circle {:stroke-width w :stroke "aliceblue"
-                             :cx (+ sx (* r (js/Math.sin radians)))
-                             :cy (- sy (* r (js/Math.cos radians)))
-                             :r w}]]
-                  [:path
-                   {:stroke-width w
-                    :stroke "yellow"
-                    :fill "none"
-                    :d
-                    (gstring/format "M %f %f A %f %f 0 0 1 %f %f"
-                                    (+ sx dx)
-                                    (+ sy dy)
-                                    r r ex ey)}])
-         pad (let [[padname padtype padshape & attrs] args
-                   [[_at x y] [_size sx sy] [_drill drill]] attrs
-                   halfw (* 0.5 sx)
-                   halfh (* 0.5 sy)
-                   prop (kicad->map attrs)]
-               (case padshape
-                 circle [:g [:circle {:cx x :cy y :r halfw
-                                      :fill "#fff"
-                                      :opacity "0.2"
-                                      :stroke "none"}]
-                         [:text
-                          {:x x :y (+ y (* 0.5 halfh))
-                           :fill "none"
-                           :stroke-width 0.1
-                           :stroke "blue"
-                           :font-size halfh
-                           :text-anchor "middle"}
-                          (str padname)]]
-                 oval [:ellipse {:cx x :cy y :rx halfw :ry halfh
-                                 :fill "#fff"
-                                 :opacity "0.2"
-                                 :stroke "none"}]
-               
-                 (rect roundrect)
-                 (let [minor (min halfh halfw)
-                       [rratio] (prop 'roundrect_rratio)
-                       rxy (* minor
-                              (or rratio 0))]
-                   [:g
-                    [:rect {:x (- x halfw)
-                            :y (- y halfh)
-                            :width sx
-                            :height sy
-                            :rx rxy
-                            :ry rxy
-                            :fill "#fff"
-                            :opacity "0.2"
-                            :stroke "none"}]
-                    [:text
-                     {:x x :y (+ y (* 0.5 minor))
-                      :fill "none"
-                      :stroke "#fff"
-                      :stroke-width 0.1
-                      :font-size minor
-                      :text-anchor "middle"}
-                     (str padname)]])
-                 nil))
-       
-         nil))]]])
-
-
-(rum/defc kicad-footprint-debug
-  [[_footprint fpname & body :as kc-edn]]
-  (let [w 200]
-    [:div {:style {:display        "flex"
-                   :flex-direction "row"}}
-     [:code {:style {:width (str w "ex")}}
-      [:pre {}
-       (do
-         (zp-hacks/set-options! {:style :fast-hang :width w})
-         (zp-hacks/zprint-file-str (pr-str kc-edn ) fpname))]
-      [:pre {} (string/join "\n\n" edaschema/schema-statements)]]]))
-
-(rum/defc elk-node-svg
-  [{:keys [id width height x y ports children labels]}]
-  [:g {:transform (str "translate(" x "," y ")")}
-   [:rect {:key (str "r" id)
-           :id (str "r" id)
-           :width width :height height
-           :stroke "#fff"}]
-   (for [lbl labels]
-     [:text {:x (:x lbl)
-             :y (:y lbl)
-             :stroke "#fff"
-             :fill "none"
-             :font-size 0.8}
-      (:text lbl)])
-   (for [p ports]
-     [:g
-      [:rect {:id (str "p" (:id p))
-              :key (str "p" (:id p))
-              :x (:x p) :y (:y p) :width (:width p) :height (:height p)
-              :stroke "tomato"}]
-      (when-some [ls (seq (:labels p))]
-        (for [lbl ls]
-          [:text {:x (+ x (:x p) (:x lbl))
-                  :y (+ y (:y p) (:y lbl))
-                  :stroke "#fff"
-                  :fill "none"
-                  :font-size 0.8}
-           (:text lbl)]))])
-   (for [c children]
-     (elk-node-svg c))])
-
-(rum/defc elksvg
-  [r]
-  [:g {:stroke-width 0.1}
-   (for [c (:children r)]
-     (elk-node-svg c))
-   (for [{:keys [sources targets sections] :as e} (:edges r)
-         {:keys [startPoint endPoint bendPoints] :as s} sections]
-     [:path {:stroke "green"
-             ;; :stroke-width 1 
-             :fill "none"
-             :d (str "M" (:x startPoint) " " (:y startPoint)
-                     ;; "L " (:x endPoint) " " (:y endPoint)
-                     (apply str
-                            (for [{:keys [x y]} (conj (or bendPoints []) endPoint)]
-                              (str " L " x " " y))))}])])
-
-#_(rum/defcs fakeroot < (rum/local nil ::result)  
-  [{::keys [result]}]
-  (let [elk (js/ELK.)
-        chip (fn [ch]
-               (kicad->elk ch kicadedn)) 
-        N 20
-        graph (clj->js
-               {:id "root"
-                :properties {:algorithm
-                             #_"org.eclipse.elk.fixed"
-                             "layered"}
-                :layoutOptions {:org.eclipse.elk.spacing.edgeNode 1
-                                :org.eclipse.elk.spacing.edgeEdge 1
-                                :org.eclipse.elk.spacing.nodeNode 1
-                                
-                                ;; :org.eclipse.elk.padding  1
-                                ;; :org.eclipse.elk.spacing.portsSurrounding 1
-
-                                ;; :org.eclipse.elk.layered.wrapping.additionalEdgeSpacing 1
-
-                                :org.eclipse.elk.layered.spacing.edgeEdgeBetweenLayers 1
-                                ;; :org.eclipse.elk.layered.spacing.nodeNodeBetweenLayers 1
-                                :org.eclipse.elk.layered.spacing.baseValue 1
-                                
-                                ;; :org.eclipse.elk.separateConnectedComponents false
-                                ;; :org.eclipse.elk.spacing.componentComponent 1
-                                ;; :org.eclipse.elk.layered.compaction.connectedComponents true
-                                
-                                ;; :org.eclipse.elk.edgeRouting "ORTHOGONAL"
-                                ;; :org.eclipse.elk.padding 1
-
-                                
-                                ;; :org.eclipse.elk.layered.compaction.postCompaction.strategy "EDGE_LENGTH"
-                                }
-                :children (concat
-                           (for [i (range N)]
-                             (chip {:id (str "k" (inc i))}))
-                           #_(for [i ["a" "b" "c" "d" "e" "f"]]
-                               {:id (str "test." i)
-                                :width 1
-                                :height 1})
-                           [(kicad->elk {:id "h"} (kicad->edn kicadstr))]
-                           #_[{:id "gnd"
-                               :width 1
-                               :height 1}])
-                :edges (concat
-                        (for [i (range N)]
-                          {:id (str "e." (inc i))
-                           :sources [(str "k" (inc i) ".1")]
-                           :targets [(str "h." (inc i))]}))})
-        r (some-> @result
-                  (js->clj :keywordize-keys true))]
-    (when-not r
-      (.then (.layout elk graph)
-             (fn [elkr]
-               (reset! result elkr))))
-    (let [svgref (rum/create-ref)]
-      [:div  {:style {:display :grid
-                      :grid-template-columns "repeat(5, 1fr)"}}
-       [:div {:style {:width "500px" :height "500px"}}
-        [:button {:on-click (fn []
-                              (let [svgxml (.-outerHTML (rum/deref svgref))
-                                    svgopt (svgo/optimize svgxml
-                                                          #js {:multipass true
-                                                               :plugins #js [
-                                                                             #js {:name "sortAttrs"
-                                                                                  :params #js {:xmlnsOrder "alphabetical"}}]
-                                                               :js2svg #js {:pretty true
-                                                                            :indent "  "}})]
-                                (js/console.log svgopt)
-                                (println svgxml #_(.-data svgopt) )))}
-         "Go"]
-        (kicadsvg svgref kicadedn)]
-      
-       (when r
-         [:svg
-          {:width "2000px"
-           :height "900px"
-           :viewBox #_(gstring/format
-                       "%f %f %f %f"
-                       -10 -10 100 100)
-           (gstring/format
-            "%f %f %f %f"
-            (:x r)
-            (:y r)
-            (:width r)
-            (:height r))
-           :style   {:border "1px solid aliceblue"}}
-          (elksvg r)])
-     
-       [:code 
-        [:pre (js/JSON.stringify graph nil 2)]]
-       #_[:code
-          [:pre (with-out-str (cljs.pprint/pprint r))]]
-       ])))
-
-(rum/defcs elkroot < (rum/local nil ::result)  
-  [{::keys [result]} elkgraph]
-  (let [elk (js/ELK.)
-        r (some-> @result
-                  (js->clj :keywordize-keys true))]
-    (when-not r
-      (.then (.layout elk elkgraph)
-             (fn [elkr]
-               (reset! result elkr))))
-    (let [svgref (rum/create-ref)]
-      [:div  {:style {:display :grid
-                      :grid-template-columns "repeat(5, 1fr)"}}
-       (when r
-         [:svg
-          {:width "2000px"
-           :height "900px"
-           :viewBox (gstring/format "%f %f %f %f" (:x r) (:y r) (:width r) (:height r))
-           :style   {:border "1px solid aliceblue"}}
-          (elksvg r)])])))
-
 (defn aabb
   [pad pts]
   (let [xmin (- (apply min (map first pts)) pad)
@@ -985,8 +648,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
     [:svg {:viewBox (gstring/format "%f %f %f %f" bx by bw rh)
            :width "300mm"
            :height "20mm"
-           :preserveAspectRatio "xMinYMin slice"
-           }
+           :preserveAspectRatio "xMinYMin slice"}
      [:g {:stroke "#fff"
           :fill "none"}
       (let [d major]
@@ -1017,6 +679,59 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
            [:path {:d (str "M" (+ bx (* d i)) " " (+ by rh)
                            " L" (+ bx (* d i))  " "
                            (+ by (- rh fs fs)))}]]))]]))
+
+(rum/defc mmruler
+  [height mm-div length]
+  (let [rh height
+        mindig (min 3 (count (str mm-div)))
+        maxdig (count (str length))
+        fs (* 0.75  (/ mm-div mindig))
+        
+        nfh (* -3 fs)
+        pad (* 0.1 nfh)
+        by (- rh)
+        ndivs (js/Math.floor (/ length mm-div))
+        maj-stroke (/ mm-div 50)
+        min-stroke (* 0.4 maj-stroke)
+        d mm-div
+        sub 5
+        ds (/ d sub)]
+    [:svg {:viewBox (gstring/format "%f %f %f %f" 0 by length rh)
+           :width (str length "mm")
+           :height (str height "mm")
+           :preserveAspectRatio "xMinYMin slice"}
+     [:g {:stroke "#fff"}
+      
+      [:g.ruler-major {:fill "none" :stroke-width maj-stroke}
+       (for [i (range ndivs)]
+         [:path {:key i
+                 :d (str "M" (* d i) ", " (+ by rh nfh)
+                         " v" (- nfh))} ])]
+      
+      
+      [:g.ruler-major {:fill "#fff" :stroke "none" :font-size fs}
+       [:text {:x 0 :y (+ by rh nfh pad)} "0"]
+       [:text {:x (+ (* 0.6 fs) )
+               :y (+ by rh nfh pad)
+               :font-size (* 0.8 fs )
+               :text-anchor "left"} "mm"]
+       
+       (for [i (range 1 ndivs)]
+         [:text {:key i
+                 :x (+ (* d i)
+                       (if (zero? i)
+                         0
+                         (* -0.5 maj-stroke)))
+                 :y (+ by rh nfh pad)
+                 :text-anchor (if-not (zero? i) "middle" "left")}
+          (str (* i mm-div))])]
+      
+      [:g.ruler-minor {:stroke-width min-stroke}
+       (for [i (range ndivs)
+             j (range 1 sub)]
+         [:path {:key (str i "j" j)
+                 :d (str "M" (+ (* d i) (* ds j)) " " (+ by rh)
+                         "v " (- (+ fs fs)))}])]]]))
 
 
 (rum/defc polygondiffc
@@ -1455,7 +1170,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
           a (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/qfn.kicad_mod"))))
           b (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/gauge.kicad_mod"))))
           c (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/Kailh_socket_MX_6.kicad_mod"))))
-          d (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/ovaltest.kicad_mod"))))
+          d (kcfp/insert-footprint! db (first (dsn/dsnparse (rc/inline "sted/eda/7segment.kicad_mod"))))
           e (.exec db "insert into svg_atlas select * from svg_atlas_view")]
     :ok))
 
@@ -1582,9 +1297,174 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
              (pr-str
               (svgo-lib-path/parsePathData example))]]]))
 
+(rum/defc kcptest
+  []
+  (let [parsed (->> #_(rc/inline "sted/eda/qfn.kicad_mod")
+                    (rc/inline "sted/eda/Kailh_socket_MX_6.kicad_mod")
+                    dsn/dsnparse first kcnext/kicad->edn)
+        
+        printed (kcnext/print-as-sexp
+                 (kcnext/footprint->sexp
+                  (kcnext/grid-of
+                   parsed
+                   3 3
+                   30 30)))
+        reparsed (->> printed dsn/dsnparse first kcnext/kicad->edn)
+        w 180
+        ]
+    [:div {}
+     [:h2 "Kicad->edn " (pr-str (= parsed reparsed))]
+     [:div {:style {:display :flex :flex-direction :row
+                    :font-size "10px"}}
+      [:code [:pre
+              (do (zp-hacks/set-options! {:style :fast-hang :width w})
+                  (zp-hacks/zprint-file-str (pr-str parsed) "1"))]]
+      [:code [:pre
+              (do (zp-hacks/set-options! {:style :fast-hang :width w})
+                  (zp-hacks/zprint-file-str (pr-str reparsed) "1"))]]
+      #_[:code [:pre
+              (do (zp-hacks/set-options! {:style :fast-hang :width w})
+                  (zp-hacks/zprint-file-str (pr-str (kcfp/footprint->sexp parsed)) "1"))]]
+
+      [:code [:pre printed]]]]))
+
+(rum/defc capture-inner
+  [el]
+  (let [bound (.getBoundingClientRect el)
+        vbox (gstring/format "%f %f %f %f"
+                             (.-x bound) (.-y bound)
+                             (.-width bound) (.-height bound))]
+    [:div {:style {:margin-left "2ex"}}
+     [:svg {:style {:outline "1px dashed #fff"}
+            :viewBox vbox}
+      [:g {:stroke-width "1" :fill "none" :stroke "#fff"}
+       (for [e (.querySelectorAll el "svg")]
+         (let [c (.getBoundingClientRect e)
+               v (.-baseVal ^js (.-viewBox e))
+               cw (.-width c)
+               ch (.-height c)
+               vw (.-width v)
+               vh (.-height v)
+               xscl (/ cw vw)
+               yscl (/ ch vh)]
+           [:use {:href (str "#" (.-id e))
+                  :x (.-x c)
+                  :y (.-y c)
+                  :width cw
+                  :height ch}]))]]]))
+
+(rum/defc ct-key
+  [i]
+  [:svg {:id (str "tpat" i)
+         :width "16mm"
+         :height "16mm"
+         :viewBox "-8 -8 16 16"}
+   [:rect {:x -8
+             :stroke "#fff"
+             :stroke-width "1"
+             :y -8
+             :width 16
+             :height 16}]
+   [:text {:stroke "none"
+           :fill "#fff"
+           :stroke-width "0.1"
+           :font-size 9
+           :x 0
+           :y 3
+           :text-anchor "middle"}
+    (str i)]
+   [:g {:stroke "#fff" :fill "none"
+        :stroke-width "0.1"
+        :font-size "2"}
+    [:use {:href (str "#kcf3" )}]]])
+
+(rum/defc capturetest
+  []
+  (let [[scale set-scale!] (rum/use-state 1)
+        [el set-el!] (rum/use-state nil)
+        container (rum/create-ref)]
+    (rum/use-layout-effect!
+     (fn [] (set-el! (rum/deref container)))
+     #js [scale])
+    [:div {:style {:display :flex
+                   :flex-direction "row"}}
+     [:div {}
+      [:label {}
+        (str "Scale:" (.toFixed scale 4))
+        [:input {:type "range"
+                 :min "1"
+                 :max "10"
+                 :step "0.2"
+                 :value scale
+                 :on-change #(set-scale! (js/parseFloat (.. % -target -value)))}]]
+      [:div {:style {:overflow "auto"
+                     :outline "1px solid #eee"}}
+       [:div {:style {:transform (str "scale(" scale ")")
+                      :transform-origin "top left"
+                      ;; :transform-origin "50% 50%"
+                      }}
+        (mmruler 20 10 100)
+        [:div {:ref container
+               :style {:outline "1px dashed cadetblue"
+                       :display :flex
+                       :flex-direction "column"
+                       :width :max-content}}
+         
+         [:div.screen {:style {:display :flex :gap "4mm" :padding "4mm" :flex-direction "row"}}
+  ;; (fp_line (start 33 21) (end 33 -3.5) (layer "F.CrtYd") (width 0.05) (tstamp 2fe8eab0-a49c-4bd1-a4e3-4940f67f2ff2))
+  ;; (fp_line (start -3 -3.5) (end -3 21) (layer "F.CrtYd") (width 0.05) (tstamp 30571ab7-7bf1-46ef-bbc0-984836a45485))
+  ;; (fp_line (start -3 21) (end 33 21) (layer "F.CrtYd") (width 0.05) (tstamp 73487adf-c479-439b-be7e-5656df49ecf7))
+  ;; (fp_line (start 33 -3.5) (end -3 -3.5) (layer "F.CrtYd") (width 0.05) (tstamp 9ff77f87-91a1-4d04-80d6-e862bcc4085e))
+
+          
+          [:div.screen {:style {:display :flex
+                                :flex-direction "row"
+                                :width ""}}
+           (for [i (range 4)]
+             [:div.wtferl {:key (str "B" i)}
+              [:svg {:id (str "Binkus" i)
+                     :width "25.5mm"
+                     :height "36mm"
+                     :viewBox "-3.5 -33 25.5 36"}
+               [:g {:stroke "#fff" :fill "none" :stroke-width "0.1" :font-size "2"
+                    :transform "rotate(-90)"}
+                [:rect {:x -3 :y -3.5 :width 36 :height 25}]
+                [:use {:href (str "#kcf4" )}]]]])]]
+         
+         [:div.buttons
+          {:style {:display :flex
+                   :gap "4mm"
+                   :padding "4mm"
+                   :flex-direction "row"
+                   :justify-content "space-between"}}
+        
+          [:div.numpad
+           {:style
+            {:display :grid
+             :grid-template-columns "repeat(3, 1fr)"
+             :grid-gap "3mm"}}
+           (for [i [7 8 9 4 5 6 1 2 3 0 "+/-" "."]]
+             (rum/with-key (ct-key i) i))]
+        
+          [:div.functions
+           {:style
+            {:display :grid
+             :grid-template-columns "repeat(2, 1fr)"
+             :grid-gap "3mm"}}
+           (for [i ["-=" "C" "/" "<->" "x" "MR" "+=" "M+"]]
+             (rum/with-key (ct-key i) i))]]]]]]
+     
+     [:div {:style {:height "700px"
+                    :width "600px"
+                    :outline "1px dashed blue"}}
+      (if-not el
+        "No element"
+        (capture-inner el))]]))
+
 (rum/defcs dsnroot < (rum/local nil ::result)  
   [{::keys [result]}]
-  (let [[[_pcb dsnfile & body]] (dsn/dsnparse dsn/dsnstr)
+  (let [[[_pcb dsnfile & body]] (dsn/dsnparse
+                                 (rc/inline "sted/eda/RP2040_minimal.dsn"))
         toplevel (group-by first body)
         structure (group-by first (mapcat next (get toplevel 'structure)))
         boundary (group-by first (mapcat next (get structure 'boundary)))
@@ -1604,26 +1484,26 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         #_(kicad->edn kicadstr-kailhsocket))
      
      (spltest)
-     (retest)
+     #_(retest)
+     #_(kcptest)
      [:div {}
-      [:h2 "Area"]
-      
-      
-      (hruler  2 300)
-      [:div {:style {:outline "1px dashed cadetblue"
-                     :width "300mm"
-                     :display :grid
-                     :grid-template-columns "repeat(auto-fit, 20mm)"}}
+      #_[:h2 "Area"]
+      #_(hruler  2 300)
+      (capturetest)
+      #_[:div {:style {:outline "1px dashed cadetblue"
+                       :width "300mm"
+                       :display :grid
+                       :grid-template-columns "repeat(auto-fit, 20mm)"}}
        
-       (for [i (range 9)]
-         [:svg {:key i
-                :width "16mm"
-                :height "16mm"
-                :viewBox "-9 -9 18 18"}
-          [:g {:stroke "#fff" :fill "none"
-               :stroke-width "0.1"
-               :font-size "2"}
-           [:use {:href (str "#kcf3" )}]]])]]
+         (for [i (range 9)]
+           [:svg {:key i
+                  :width "16mm"
+                  :height "16mm"
+                  :viewBox "-9 -9 18 18"}
+            [:g {:stroke "#fff" :fill "none"
+                 :stroke-width "0.1"
+                 :font-size "2"}
+             [:use {:href (str "#kcf3" )}]]])]]
      (svg-atlas)
      #_[:span
         {}
@@ -1817,85 +1697,449 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
        (dsn-structure structure)
        (dsn-library library))]))
 
-(defn dsn->elk
-  [pcb]
-  (let [[_pcb dsnfile & body] pcb
-        toplevel (group-by first body)
-        fontsize 4
-        cclass->pins  (into {}
-                            (for [[_library & comps] (get toplevel 'library)
-                                  [_image cclass & body] comps]
-                              [cclass
-                               (for [[pin psid & args] body
-                                     :when (= pin 'pin)
-                                     :let [rot? (and (vector? (first args)) (= 'rotate (ffirst args)))
-                                           [id x y] (if-not rot?
-                                                      args
-                                                      (next args))]]
-                                 (do
-                                   (println "Pin" id " of " cclass)
-                                   id))]))
-        bignet-dummy-nodes  (for [[_network & nets] (get toplevel 'network)
-                                  [net netname & netbody] nets
-                                  :when (= net 'net)
-                                  [_pins & pins] netbody
-                                  :when (< 2 (count pins))]
-                              {:id (str "bignet-" netname)
-                               :width 2
-                               :height 2
-                               :labels [{:text netname}]})]
-    (clj->js
-     {:id "root"
-      :properties {:algorithm "force"}
-      
-      :layoutOptions {:org.eclipse.elk.spacing.edgeNode 1
-                      :org.eclipse.elk.spacing.edgeEdge 1
-                      :org.eclipse.elk.spacing.nodeNode 1
-                      :org.eclipse.elk.layered.spacing.edgeEdgeBetweenLayers 1
-                      :org.eclipse.elk.layered.spacing.baseValue 1
-                      :org.eclipse.elk.layered.compaction.postCompaction.strategy "EDGE_LENGTH"
+(defonce the-yosys (atom nil))
 
-                      }
-      :children (concat
-                 bignet-dummy-nodes
-                 (for [[_placement & comps] (get toplevel 'placement)
-                       [_comp cclass & places] comps
-                       [_place cname x y layer unk & pn] places]
-                   {:id cname
-                    ;; :x x
-                    ;; :y y
-                    :width 4
-                    :height 4
-                    :layoutOptions {:org.eclipse.elk.portAlignment.default "DISTRIBUTED"}
-                    :labels [{:text cname
-                              :width (* fontsize (count cname ) )
-                              :height fontsize }]
-                    :ports (for [pid (cclass->pins cclass)]
-                             (do
-                               #_(prn (str cname "-" pid))
-                               {:id (str cname "-" pid)
-                                :width 1
-                                :height 1}))}))
-      :edges (concat
-              (for [[_network & nets] (get toplevel 'network)
-                    [net netname & netbody] nets
-                    :when (= net 'net)
-                    [_pins & pins] netbody
-                    :when (= 2 (count pins))]
-                {:id netname
-                 :sources [(first pins)]
-                 :targets [(second pins)]})
-              (for [[_network & nets] (get toplevel 'network)
-                    [net netname & netbody] nets
-                    :when (= net 'net)
-                    [_pins & pins] netbody
-                    :when (< 2 (count pins))
-                    p pins
-                    :let [dummy-id (str "bignet-" netname)]]
-                {:id (str dummy-id "-connector")
-                 :sources [p]
-                 :targets [dummy-id]}
-                ))})))
+(defn new-yosys!
+  []
+  (reset! the-yosys
+          (.create_worker js/window.YosysJS
+                          (fn [] (js/console.log "Yosys created")))))
+
+(rum/defc elk-node-svg
+  [{:keys [id width height x y ports children labels edges cell_type] :as cc}]
+  [:g {:transform (str "translate(" x "," y ")")}
+   (case cell_type
+     "rv" [:use {:href (str "#R_US")
+                 :width width
+                 :height height
+                 }]
+     nil nil
+     )
+   
+   [:rect {:key (str "r" id)
+           :id (str "r" id)
+           :width width :height height
+           :stroke "#fff"
+           :fill "none"}]
+   (for [lbl labels]
+     [:text {:x (:x lbl)
+             :y (:y lbl)
+             :fill "#fff"
+             :stroke "none"
+             :font-size 12}
+      (:text lbl)])
+   (for [p ports]
+     [:g
+      [:rect {:id (str "p" (:id p))
+              :key (str "p" (:id p))
+              :x (:x p) :y (:y p) :width (:width p) :height (:height p)
+              :stroke "tomato"}]
+      (when-some [ls (seq (:labels p))]
+        (for [lbl ls]
+          [:text {:x (+ (:x p) (:x lbl))
+                  :y (+ (:y p) (:y lbl))
+                  :fill "#fff"
+                  :stroke "none"
+                  :font-size 12}
+           (:text lbl)]))])
+   (for [{:keys [sources targets sections] :as e} edges
+         {:keys [startPoint endPoint bendPoints] :as s} sections]
+     [:path { 
+             :stroke "green"
+             :stroke-width 1
+             :fill "none"
+             :d (str "M" (:x startPoint) " " (:y startPoint)
+                     ;; "L " (:x endPoint) " " (:y endPoint)
+                     (apply str
+                            (for [{:keys [x y]} (conj (or bendPoints []) endPoint)]
+                              (str " L " x " " y))))}])
+
+   (for [{:keys [junctionPoints]} edges
+         {:keys [x y]} junctionPoints]
+     [:circle {:stroke "none"
+               :fill "green"
+               :cx x
+               :cy y
+               :r 4}])
+   
+   (for [c children]
+     (elk-node-svg c))])
+
+(defn ys-flatten-module
+  [modname ^js mod]
+  (concat
+   (for [[portname port] (js/Object.entries (.-ports mod))
+         :let [dir (.-direction port)]
+         bit (.-bits port)]
+     #js {:bit bit
+          ;; :module modname
+          ;; :port portname
+          :node (str modname "." portname)
+          :direction dir})
+   
+   (for [[cellname cell] (js/Object.entries (.-cells mod))
+         :let [pdir (.-port_directions cell)]
+         [cname cvec] (js/Object.entries (.-connections cell))
+         bit cvec]
+     #js {:bit bit
+          ;; :module modname
+          ;; :cell cellname
+          ;; :connection cname
+          :node (str cellname "." cname)
+          :direction (aget pdir cname)})))
+
+(defn dingu
+  [^js ys]
+  (reduce
+   (fn [acc [bit-id attrs]]
+     (update acc bit-id (fnil conj []) attrs))
+   {}
+   (for [[modname mod] (js/Object.entries (.-modules ys))
+         [netname net] (js/Object.entries (.-netnames mod))
+         :let [as (.-attributes net)]
+         b (.-bits net)]
+     [b as])))
+
+
+
+
+(def ^:const n-safe-bits (js/Math.log2 js/Number.MAX_SAFE_INTEGER))
+(defn ys-numeric-attr
+  [attrs key]
+  (when attrs
+   (let [v (aget attrs key)]
+     (cond
+       (nil? v)                  nil
+       (number? v)               v
+       (not (string? v))         (throw (js/Error. (str "What is this numeric attribute? " (pr-str v) " at " (.-src attrs))))
+       (< n-safe-bits (count v)) (throw (js/Error. (str "Sorry, we only have " n-safe-bits " bits")))
+       :else                     (js/parseInt v 2)))))
+
+(defn ys->elk
+  [^js e]
+  (let [bit->attrs (dingu e)
+        top-module (last (js/Object.keys (.-modules e )))
+
+        cc (volatile! 0)]
+    {:id            "root"
+     ;; :properties {:algorithm "layered"}
+     :layoutOptions {"org.eclipse.elk.edgeRouting"           "ORTHOGONAL"
+                     "elk.algorithm"                         "layered"
+                     "elk.spacing.portPort"                  20
+                     "org.eclipse.elk.portAlignment.default" "DISTRIBUTED"}
+     ;; modules
+     :children
+     (for [[mn m] (js/Object.entries (.-modules e))]
+       (let [bit-reverse-index (group-by (fn [^js f] (.-bit f)) (ys-flatten-module mn m))]
+         (println "Module " mn "Attrs" (.-attributes m))
+         {:id            mn
+          :labels        [{:text mn}]
+          :width         (or (ys-numeric-attr (.-attributes m) "elk_width")
+                             500)
+          :height        (or (ys-numeric-attr (.-attributes m) "elk_height")
+                             500)
+          :layoutOptions {"org.eclipse.elk.portConstraints" "FIXED_SIDE"
+                          "org.eclipse.elk.direction"       "DOWN"}
+          :ports         (for [[pn p] (js/Object.entries (.-ports m))]
+                           {:width         30
+                            :height        10
+                            :layoutOptions {"org.eclipse.elk.port.side" (case (.-direction p) "input" "WEST" "output" "EAST" "UNDEFINED")}
+                            :id            (str mn "." pn)
+                            :labels        [{:text pn}]})
+          
+          :edges (concat
+                  ;; constant
+                  (for [const  ["0" "1"]
+                        ^js pc (bit-reverse-index const)]
+                    {:id      (str "Ec" mn "_" const (vswap! cc inc))
+                     :sources [(str mn "_cport" const)]
+                     :targets [(.-node pc)]})
+                  
+                  ;; dummy
+                  #_(for [[bit-id ^js pcs] bit-reverse-index
+                          :when            (and (number? bit-id)
+                                                (< 2 (count pcs)))
+                          [i n]            (map vector (range) pcs)]
+                      (do
+                        (println "Dummy" bit-id n)
+                        {:id      (str mn "_de_" bit-id "_" i)
+                         :sources [(str mn "_dummy_" bit-id)]
+                         :targets [(.-node n)]}))
+
+                  (for [[bit-id ^js pcs] bit-reverse-index
+                        :when            (and (number? bit-id)
+                                              (< 2 (count pcs)))
+                        :let             [arb (first pcs)]
+                        other            (next pcs)]
+                    (do
+                      (println "Dummy Edge " (.-node arb)
+                               " -> "
+                               (.-node other)
+                               )
+                      
+                      (if (= "input" (.-direction arb))
+                        {:id      (str mn "_de_" (vswap! cc inc))
+                         :sources [(.-node arb)]
+                         :targets [(.-node other)]}
+                        {:id      (str mn "_de_" (vswap! cc inc))
+                         :sources [(.-node other)]
+                         :targets [(.-node arb)]})))
+
+                  ;; connection
+                  (->> (for [[bit-id ^js pcs] bit-reverse-index
+                             :when            (and (number? bit-id)
+                                                   (= 2 (count pcs)))]
+                         (let [[a b] pcs]
+                           (case [(.-direction a) (.-direction b)]
+                             ;; it is important that ELK knows about edge directions
+                             ["input" "output"]    [(.-node b) (.-node a)]
+                             (["input" "input"]
+                              ["output" "input"]
+                              ["output" "output"]) [(.-node a) (.-node b)]
+                             (throw (ex-info "Do not understand this connection" pcs)))))
+                       (frequencies)
+                       (map
+                        (fn [i [[srcn dstn] nbits]]
+                          (println "Connect" nbits srcn "  ->  " dstn)
+                          {:id      (str "Ee" mn "_" i)
+                           :sources [srcn]
+                           :targets [dstn]})
+                        (range))))
+          
+          ;; cells
+          :children (concat
+                     ;; constant
+                     (for [const ["0" "1"]
+                           :when (bit-reverse-index const)]
+                       {:id     (str "const" const)
+                        :width  20
+                        :height 20
+                        :labels [{:text const}]
+                        :ports  [{:id (str mn "_cport" const)}]})
+                     
+                     ;; dummy
+                     (filterv some?
+                              (for [[bit-id ^js pcs] bit-reverse-index
+                                    :when            (and (number? bit-id)
+                                                          (< 2 (count pcs)))]
+                                (println "Dummy" pcs)
+                                #_{:id     (str mn "_dummy_" bit-id)
+                                   :width  1
+                                   :height 1
+                                   :labels [{:text (str "Dummy" bit-id)}]
+                                   }))
+                     
+                     ;; cell
+                     (for [[cn c] (js/Object.entries (.-cells m))
+                           :let   [pdir (.-port_directions c)
+                                   ^js proto (aget (.-modules e) (.-type c))]]
+                       (let []
+                         (println "Cell" cn #_(get module->attrs (.-type c)))
+                         {:id            cn
+                          :cell_type     (.-type c)
+                          :width         (or (ys-numeric-attr (.-attributes proto) "elk_width")
+                                             50)
+                          :height        (or (ys-numeric-attr (.-attributes proto) "elk_height")
+                                             100)
+                          :labels        [{:text cn}]
+                          :layoutOptions {"org.eclipse.elk.portConstraints" "FIXED_SIDE"}
+                          :ports         (for [[pn bits] (js/Object.entries (.-connections c))]
+                                           {:id            (str cn "." pn)
+                                            :width         20
+                                            :height        10
+                                            :labels        [{:text pn}]
+                                            :layoutOptions {"org.eclipse.elk.port.side"
+                                                            (or (some-> (.-netnames proto)
+                                                                        (aget pn)
+                                                                        (.-attributes)
+                                                                        (aget "elk_port_side"))
+                                                                (case (aget pdir pn) "input" "WEST" "output" "EAST" "FREE"))}})})))}))}))
+
+(defonce the-elk (js/ELK.))
+
+(rum/defc view-ys-json
+  [jst]
+  (let [e   (js/eval (str "(" jst ")")) ; eval because output has comments
+        clj-graph (ys->elk e)
+        [result set-result!] (rum/use-state nil)]
+    
+    (rum/use-effect!
+     (fn []
+       #_(.then (.layout elk graph) set-result!)
+       #_(js/console.log "GRAPH" (clj->js clj-graph))
+       (a/let [r (.layout the-elk (clj->js clj-graph))]
+         #_(js/console.log r)
+         (set-result!  r #_(js->clj r :keywordize-keys true)))
+       nil)
+     [jst])
+    
+    (if-not result
+      [:div {} "No result yet"]
+      [:div {:style {:display :flex}}
+       [:svg {:style {:width  "800px"
+                      :height "800px"
+                      :border "1px solid aliceblue"}}
+        (elk-node-svg (js->clj result :keywordize-keys true))]
+       [:textarea.code-font {:value (js/JSON.stringify result nil 2)
+                             :spellCheck "false"
+                             :readOnly true
+                             :style {:background-color "#000"
+                                     :color "#fff"
+                                     :height "40ex"
+                                     :margin-top "0.5ex"
+                                     :font-variant-ligatures "no-contextual"}}]
+       ])))
+
+
+(rum/defc symbol-svg
+  [sym]
+  [:div {:style {:width "200px"
+                 :height "200px"
+                 :style {:outline "1px dashed #fff"}}}
+   (for [top (sym 'symbol)]
+     [:svg {:id (str (top 'id))
+            ;; :style {:outline "1px dashed #fff"}
+            ;; :viewBox "-2 -5 4 10"
+            :viewBox "-5 -10 10 20"
+            ;; :width "200px"
+            ;; :height "200px"
+            }
+      #_[:rect {:stroke "tomato" :stroke-width "0.1"
+              :x -2
+              :y -5
+              :width 4 :height 10}]
+      (for [unit (top 'symbol)]
+        [:g {:stroke-width "0.1" :fill "none" :stroke "#fff"
+             :transform "scale(1,-1)"}
+         (for [draw (unit 'draw)]
+           (case (draw 'draw)
+             polyline [:path {:d (pts->d (draw 'pts))
+                              :fill (case (second (draw 'fill))
+                                      (nil none) "none"
+                                      outline "#fff")}]
+             circle (let [[cx cy] (draw 'center)]
+                      [:circle {:cx cx
+                                :cy cy
+                                :r (draw 'radius)
+                                :stroke-width (max 0.1 (get (draw 'stroke) 'width 0))}])
+             rectangle (let [[sx sy] (draw 'start)
+                             [ex ey] (draw 'end)
+                             xmin (min sx ex)
+                             ymin (min sy ey)
+                             xmax (max sx ex)
+                             ymax (max sy ey)
+                             w (- xmax xmin)
+                             h (- ymax ymin)]
+                         [:rect {:x xmin :y ymin :width w :height h}])
+             text (let [[x y r] (draw 'at)
+                        [fw fh] (get-in draw '[effects font size])]
+                    [:g {:transform (str
+                                     "translate(" x "," y ")"
+                                     " rotate(" (* 0.1 r) ") "
+                                     "scale(1,-1)")}
+                     [:text {:y (* 0.5 fh)
+                             :stroke "none"
+                             :text-anchor "middle"
+                             :fill "#fff"
+                             :font-size fw}
+                      (draw 'text)]])
+             
+             (println "What is this draw?" (draw 'draw))))
+         (for [{:syms [graphical at length name number] :as pin} (unit 'pin)]
+           (let [[x y r] at
+                 sideways? (< 90 r)
+                 radians (* r js/Math.PI (/ 1 180.0))]
+             [:g.pins
+              {:transform (str "translate(" x "," y ")"
+                               " rotate(" r ") ")}
+              (case graphical
+                line [:path {:d (str "M" 0 "," 0 " h" length)}]
+                nil)
+               
+              [:text {:y 0.3
+                      :text-anchor (if-not sideways? "end" "start")
+                      :stroke "none"
+                      :fill "#fff"
+                      :font-size 1
+                      :transform (str "scale(1,-1)"
+                                      (when sideways? " rotate(-180)"))}
+               (str (pin 'electrical))]
+              
+              (let [[num-fw] (get-in number '[effects font size])
+                    fw (max 1 (or num-fw 1))
+                    tx (* 0.5 length)
+                    ty (cond-> (* 0.3 fw) sideways? -)]
+                [:text {:text-anchor "middle"
+                        :stroke "none"
+                        :fill "#fff"
+                        :font-size fw
+                        :transform (str "translate(" tx "," ty ")"
+                                        " scale(1,-1)"
+                                        (when sideways? " rotate(-180)"))}
+                 (number 'text)])]))])])])
+
+(rum/defc ysroot
+  [ys]
+  (let [[code set-code!] (rum/use-state
+                          (rc/inline "sted/eda/counter.v"))
+        [result set-result!] (rum/use-state nil)
+        ^js ys @the-yosys
+        go (fn go []
+             (doto ys
+               (.verbose true)
+               (.write_file "in.v" code)
+               (.run (string/join "; " ["design -reset"
+                                        "design -reset-vlog"
+                                        "read_verilog in.v"
+                                        "hierarchy -auto-top"
+                                        ;; "uniquify"
+                                        ;; "proc"
+                                        "write_json -aig out.json"]))
+               (.read_file "out.json"
+                           (fn [rf]
+                             (set-result! rf)
+                             #_(js/console.log rf)))))]
+    #_(rum/use-effect! (fn [] nil) [])
+    [:div {:style {:display :grid
+                   :grid-template-columns "1fr"
+                   :width "90%"}}
+     [:textarea.code-font {:value code
+                           :spellCheck "false"
+                           :style {:background-color "#000"
+                                   :color "#fff"
+                                   :height "40ex"
+                                   :margin-top "0.5ex"
+                                   :font-variant-ligatures "no-contextual"}
+                           :on-change (fn [ev] (set-code! (.-value (.-target ev))))}]
+     [:div {:style {:display :flex}}
+      [:button {:style {:width "10ex" :margin-right "4ex"}
+                :on-click go}
+       "Yosys"]
+      [:button {:style {:width "10ex" :margin-right "4ex"}
+                :on-click new-yosys!}
+       "Reboot"]]
+     
+     (symbol-svg
+      (kcnext/kicad->edn* {} [(kcnext/edn-reader-hack (rc/inline "sted/eda/q_npn_cbe.kicad_sym")
+                                                      #_(rc/inline "sted/eda/r_us.kicad_sym")
+                                                      #_(rc/inline "sted/eda/ad630.kicad_sym"))]))
+     (when result
+       [:div {:style {:display :flex :flex-direction "row"}}
+        (view-ys-json result)
+        [:textarea.code-font {:value result
+                              :spellCheck "false"
+                              :readOnly true
+                              :style {:background-color "#000"
+                                      :color "#fff"
+                                      :height "40ex"
+                                      :margin-top "0.5ex"
+                                      :font-variant-ligatures "no-contextual"}}]
+        
+        ])]))
+
+
+
+
 
 (defn ^:dev/after-load init
   []
@@ -1910,11 +2154,18 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                                    (.get "title"))]
         (set! js/document.title req-title))
     #_(rum/unmount el)
+    (when-not @the-yosys
+      (new-yosys!)
+      #_(reset! the-yosys
+                (.create_worker js/window.YosysJS
+                                (fn [] (js/console.log "Yosys created")))))
+    
     (println "Created new app and reset kbdb.  Mount root...")
     
     (-> #_(cr/root app code/form)
         #_(elkroot (dsn->elk (first (dsn/dsnparse dsn/dsnstr))))
-        (dsnroot)
+        #_(dsnroot)
+        (ysroot nil)
         (rum/mount el))
     (println "Done")))
 

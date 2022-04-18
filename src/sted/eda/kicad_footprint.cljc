@@ -1,7 +1,8 @@
 (ns sted.eda.kicad-footprint
   (:require
+   [sted.eda.dsn :as dsn]
    [clojure.string :as string]
-   [goog.string :as gstring]
+   
    [sted.df.async :as a]))
 
 (def fp-draw-cols [:kicad_footprint_id :layer :d_mm :width_mm :text_type :text :font_size_w_mm :font_size_h_mm
@@ -67,37 +68,6 @@
          " a" rx "," ry ",0,1,0," (+ dx) "," 0
          " a" rx "," ry ",0,1,0," (- dx) "," 0)))
 
-(defn arc*
-  [cx cy r t1 t2]
-  (println "T1" (/ t1 (/ js/Math.PI 180.0)) "deg"
-           " T2 " (/ t2 (/ js/Math.PI 180.0)) "deg"
-           ) 
-  (let [
-        ;; start is [r,0] rotated t1
-        sx (+ cx (* r (js/Math.cos t1)))
-        sy (+ cx (* r (js/Math.sin t1)))
-        
-        ex (+ cx (* r (js/Math.cos t2)))
-        ey (+ cx (* r (js/Math.sin t2)))
-        
-        theta1 (cond-> t1
-                 (neg? t1) (+ (* 2 js/Math.PI)))
-        theta2 (cond-> t2
-                 (neg? t2) (+ (* 2 js/Math.PI)))
-        large-arc? (< (js/Math.abs (- theta2 theta1))
-                      js/Math.PI)
-        laf (if large-arc? (do "1") "0")]
-    (str
-     (ellipse->d cx cy 1 1)
-     ";M" cx "," cy
-     " L" sx "," sy
-     ";M" cx "," cy
-     " L" ex "," ey) 
-    
-    #_(str
-       "M " ex "," ey
-       " A" r "," r "," laf ",0,0," sx "," sy)))
-
 (defn fp->d
   [[f & args]]
   (case f
@@ -124,24 +94,16 @@
                          xrot "0"
                          laf "0"
                          sweep "1"]
-
-                     (str
-                      "M " x1 "," y1
-                      " A" r "," r "," xrot "," laf "," sweep "," x3 "," y3))))
+                     (str "M " x1 "," y1
+                          " A" r "," r "," xrot "," laf "," sweep "," x3 "," y3))))
     
     fp_circle (let [[[_center cx cy] [_end ex ey]] args
                     r (js/Math.hypot (- ex cx) (- ey cy))]
-                
-                (ellipse->d cx cy r r)
-                #_(str "M" cx "," cy
-                       " A" r "," r ",0,1,0" cx (+ cy r)
-                       " A" r "," r ",0,1,0" cx (- cy r)
-                       " z"))
+                (ellipse->d cx cy r r))
+    
     fp_poly (let [[[_pts & pts]] args]
-              (pts->d (for [p pts] (subvec p 1)))
-              #_(str "M" sy "," sy
-                     (apply str (for [[_ x y] more]
-                                  (str " L" x "," y)))))
+              (pts->d (for [p pts] (subvec p 1))))
+    
     fp_curve (throw (ex-info "not yet" {:kicad 'fp_curve}))
     
     fp_rect (let [[[_ sx sy] [_ ex ey] [_layer l] [_width w]] args
@@ -153,10 +115,7 @@
                   h (- ymax ymin)
                   halfw (* 0.5 w)
                   halfh (* 0.5 h)]
-              #_(rect->d sx (- sy h ) w h)
-              (rect->d sx sy (- ex sx) (- ey sy))
-
-              #_(rect->d (- halfw) (- halfh) sx sy))
+              (rect->d sx sy (- ex sx) (- ey sy)))
     
     fp_text nil
     
@@ -189,30 +148,6 @@
                                   " " (- sy (* r (js/Math.cos (+ (* i step) radians)))))))
                   ;; "," ex " " ey
                   ")"))
-    #_(let [[[_center cx cy] [_start ex ey] [_angle span-deg]] args
-          r (js/Math.hypot (- ex cx) (- ey cy))
-          angular-span (* span-deg js/Math.PI (/ 1 180.0))
-          start-angle (js/Math.atan2 (- ey cy) (- ex cx))
-          n (js/Math.ceil (/ (* *arc-approx-sectors* angular-span)
-                             (* 2 js/Math.PI)))
-          step (/ angular-span n)]
-      (println "Step" step "Satart" start-angle)
-      (str "LINESTRING ("
-           cx " " cy ","
-           (+ cx (* r (js/Math.sin start-angle))) " " (- cy (* r (js/Math.cos start-angle)))
-           
-           (+ cx (* r (js/Math.sin (- start-angle 0.4))))
-           " "
-           (- cy (* r (js/Math.cos
-                       (- start-angle 0.4)
-                       )))
-           #_(string/join ","
-                          (for [i (range 0 (inc n))]
-                            (str
-                             "" (+ cx (* r (js/Math.sin (+ start-angle (* i step)))))
-                             " " (- cy (* r (js/Math.cos (+ start-angle (* i step))))))))
-           ;; "," ex " " ey
-           ")"))
     
     fp_circle (let [[[_center cx cy] [_end ex ey]] args
                     r (js/Math.hypot (- ex cx) (- ey cy))
@@ -239,17 +174,9 @@
 (def draw (quote #{fp_text fp_line fp_circle fp_arc fp_poly fp_curve fp_rect}))
 (def pad (quote #{pad}))
 
-      
-;; #js [ins-fp
-;;      (into-array
-;;       (cons fpname
-;;             (for [[[_k v :as t]] (map (group-by first (attrs :simple)) simple)]
-;;               v)))]
-
 (defn footprint-insert*
   [fpname attrs]
-  (let [s (into {}
-                (attrs :simple))]
+  (let [s (into {} (attrs :simple))]
     #js [(str "insert into kicad_footprint"
               "        (name, layer, tedit, descr, tags_json, attr, version, generator)"
               "\nvalues(?,    ?,     ?,     ?,     ?,         ?,    ?,       ?)"
@@ -283,10 +210,13 @@
               (aget dcs (name d)))))]))
 
 (defn kicad->map
-  [attrs]
+  [body]
   (into {}
-        (for [[a & body] attrs]
-          [a (vec body)])))
+        (for [b body]
+          (if-not (coll? b)
+            [b true]
+            [(first b) (next b)]))))
+
 
 (def ^:dynamic *places* 5)
 (defn n [x] (.toFixed x *places*))
@@ -433,4 +363,10 @@
                    nil
                    (attrs :pad))]
       (println "Ok"))))
+
+
+
+
+
+
 
