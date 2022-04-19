@@ -151,3 +151,49 @@ union all select * from pads
 union all select * from draws
 --union all select * from padlabels
 ;
+
+
+
+
+
+
+create table kicad_symbol(
+       id integer primary key
+       , qual_id text not null
+       , in_bom integer not null
+       , on_board integer not null
+);
+
+create table kicad_symbol_text(
+       id integer primary key
+       , x real not null
+       , y real not null
+       , rotation_degrees real
+       , font_size real
+       , text string
+);
+
+create table kicad_symbol_property(
+       id integer primary key
+       , kicad_symbol_id integer not null
+       , property_id integer not null
+       , key text not null
+       , value_text_id integer not null
+);
+
+create table kicad_symbol_pin(
+       id integer primary key
+       , electrical_type string not null
+       , graphical_style string not null
+       , length real not null
+       , name_text_id integer not null
+       , number_text_id integer not null
+);
+
+create table kicad_symbol_draw(
+       id integer primary key
+       , type string
+       , param_geom blob
+       , stroke_width real
+       , fill_type string
+);

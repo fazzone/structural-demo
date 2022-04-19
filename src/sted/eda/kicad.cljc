@@ -296,8 +296,8 @@
 
 
 (comment
-  (clojure.pprint/pprint (kicad->edn* {} [(edn-reader-hack (slurp "src/sted/eda/ad630.kicad_sym"))]))
   (clojure.pprint/pprint (kicad->edn* {} [(edn-reader-hack (slurp "src/sted/eda/q_npn_cbe.kicad_sym"))]))
+  (clojure.pprint/pprint (kicad->edn* {} [(edn-reader-hack (slurp "src/sted/eda/ad630.kicad_sym"))]))
   (clojure.pprint/pprint (kicad->edn* {} [(edn-reader-hack (slurp "src/sted/eda/r_us.kicad_sym"))])))
 #_(clojure.pprint/pprint (kicad->edn (edn-reader-hack (slurp "src/sted/eda/ovaltest.kicad_mod"))))
 

@@ -1697,7 +1697,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
        (dsn-structure structure)
        (dsn-library library))]))
 
-(defonce the-yosys (atom nil))
+(defonce ^:export the-yosys (atom nil))
 
 (defn new-yosys!
   []
@@ -2082,23 +2082,26 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
   [ys]
   (let [[code set-code!] (rum/use-state
                           (rc/inline "sted/eda/counter.v"))
-        [result set-result!] (rum/use-state nil)
+        [[logs json-out :as result] set-result!] (rum/use-state nil)
         ^js ys @the-yosys
         go (fn go []
              (doto ys
-               (.verbose true)
+               (.verbose true
+                         (fn [& args]
+                           (prn "Verbose?>" args)))
                (.write_file "in.v" code)
                (.run (string/join "; " ["design -reset"
                                         "design -reset-vlog"
                                         "read_verilog in.v"
                                         "hierarchy -auto-top"
+                                        "flatten"
                                         ;; "uniquify"
                                         ;; "proc"
-                                        "write_json -aig out.json"]))
-               (.read_file "out.json"
-                           (fn [rf]
-                             (set-result! rf)
-                             #_(js/console.log rf)))))]
+                                        "write_json -aig out.json"])
+                     (fn [logs]
+                       (.read_file ys "out.json"
+                                   (fn [json]
+                                     (set-result! [logs json])))))))]
     #_(rum/use-effect! (fn [] nil) [])
     [:div {:style {:display :grid
                    :grid-template-columns "1fr"
@@ -2119,14 +2122,16 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
                 :on-click new-yosys!}
        "Reboot"]]
      
+     (when logs [:code [:pre {:style {:height "20ex" :overflow-y "scroll" :width "min-content" :resize "both"}} logs]])
+     
      (symbol-svg
       (kcnext/kicad->edn* {} [(kcnext/edn-reader-hack (rc/inline "sted/eda/q_npn_cbe.kicad_sym")
                                                       #_(rc/inline "sted/eda/r_us.kicad_sym")
                                                       #_(rc/inline "sted/eda/ad630.kicad_sym"))]))
      (when result
        [:div {:style {:display :flex :flex-direction "row"}}
-        (view-ys-json result)
-        [:textarea.code-font {:value result
+        (view-ys-json json-out)
+        [:textarea.code-font {:value json-out
                               :spellCheck "false"
                               :readOnly true
                               :style {:background-color "#000"
