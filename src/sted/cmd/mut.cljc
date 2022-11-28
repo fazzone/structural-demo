@@ -9,7 +9,6 @@
    [sted.cmd.insert :as insert]
    [sted.sys.handle :as sh]
    [sted.cmd.nav :as nav]
-   #_[sted.loopy :as loopy]
    [sted.embed.data :as sed]
    [sted.embed.md :as emd]
    [sted.core :as core :refer [get-selected-form

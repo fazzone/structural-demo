@@ -9,7 +9,7 @@
                                        go-loop]])))
 
 ;; This is a really stupid hack
-;; But a div that fights back when you try to scroll is even stupider 
+;; But a div that fights back when you try to scroll is even stupider
 (defonce scroll-sequence-number (volatile! 0))
 (defonce scroll-snapshot (volatile! 0))
 (defn scroll-locked? []
@@ -39,8 +39,6 @@
   ;; history?
   (get-history [this txid])
   (save-history! [this txid tx-report])
-  ;; hacks
-  (zchan [this])
 
   (uniqueid [this])
   (reset [this]))
@@ -90,7 +88,6 @@
       
        (get-history [this txid] (get @hs txid))
        (save-history! [this txid r] (swap! hs assoc txid r))
-       (zchan [_this] ch)
        (uniqueid [_this] uu)
        (reset [_this] (bus sub-map))))))
 
@@ -101,8 +98,7 @@
     (disconnect-sub! [_ _ _])
     (get-history [this txid])
     (sub-entity [_ _ _])
-    (save-history! [this txid r])
-    (zchan [this])))
+    (save-history! [this txid r])))
 
 (defrecord App [conn bus history system])
 

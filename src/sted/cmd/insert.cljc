@@ -7,20 +7,8 @@
    [sted.embed :as e]
    [sted.embed.common :as ec ]
    [clojure.edn :as edn]
-   [sted.core :as core :refer [get-selected-form
-                               move-selection-tx]]))
+   [sted.core :as core :refer [move-selection-tx]]))
 
-
-
-#_(defn parse-editbox-tx
-  [s eid]
-  (when-not (empty? s)
-    (some-> (or (e/parse-token-tx s)
-                (and (string/starts-with? s "\"")
-                     (e/parse-token-tx (str s "\"")))
-                nil)
-            ;; todo - handle complex paste (don't clobber tempid)
-            (assoc :db/id eid))))
 (defn parse-editbox-tx
   [s]
   (when-not (empty? s)

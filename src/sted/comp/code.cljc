@@ -16,9 +16,7 @@
    [sted.comp.cons :as ccons]
    [sted.comp.common :as cc]
    [sted.comp.modeline :as ml]
-   [sted.core :as core
-    :refer [get-selected-form
-            move-selection-tx]]
+   [sted.core :as core]
    [sted.comp.keyboard :as ck]
    [sted.comp.inspect :as ci]))
 

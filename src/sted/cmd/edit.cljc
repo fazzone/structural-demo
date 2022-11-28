@@ -3,7 +3,7 @@
    [datascript.core :as d]
    [sted.embed.common :as ec]
    [sted.embed :as e]
-   [sted.core :refer [get-selected-form move-selection-tx]]
+   [sted.core :refer [move-selection-tx]]
    [sted.cmd.move :as move]))
 
 (defn exactly-one
