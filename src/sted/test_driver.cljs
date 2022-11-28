@@ -10,7 +10,7 @@
    ["path" :as path]
    ["fs" :as fs]))
 
-(def inverse-keymap (set/map-invert skm/default-keymap))
+(def inverse-keymap (set/map-invert skm/default))
 
 (defonce refs (atom {}))
 
