@@ -99,6 +99,7 @@
           #__ #_(.waitForTimeout page 50)
           _ (.evaluate page (fn [] (doseq [j (range 9)] (println "j" j))))
           _ (.screenshot page #js {#_#_:fullPage true :path outf})]
+    (println "Wrote? " outf)
     outf))
 
 (defn run-steps

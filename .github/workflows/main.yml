@@ -23,7 +23,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: screenshot
-          path: artifact/screenshot
+          path: artifact/screenshot/
 
 
           
