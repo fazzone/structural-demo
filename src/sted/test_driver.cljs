@@ -118,7 +118,7 @@
 (defn type-mutation
   [^js page mut args]
   (when args (throw (ex-info "no args yet" {:args args})))
-  (let [keys (sk/kbd->keydowns (get inverse-keymap mut ))]
+  (let [keys (skm/kbd->keydowns (get inverse-keymap mut ))]
     (reduce (fn [p [du k]]
               (a/let [acc p
                       _ (case du
