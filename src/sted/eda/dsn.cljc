@@ -77,6 +77,53 @@
                 (recur (conj acc quoted) stack (.substring s (count parsed)))
                 (prn "IUknnown" s)))))))))
 
+(defn dsnparse
+  [s]
+  (loop [acc []
+         stack []
+         ^String s s]
+    (cond
+      (string/starts-with? s ")")
+      (recur (conj (peek stack) acc) (pop stack) (subs s 1))
+        
+      (string/starts-with? s "(")
+      (recur [] (conj stack acc) (subs s 1))
+        
+      (and (empty? s) (empty? stack))
+      acc
+      
+      (empty? s)
+      (do (println "?Stack not empty" )
+          (dotimes [i (count stack)]
+            (println "Stack" i)
+            #_(cljs.pprint/pprint (nth stack i)))
+          (println "Acc to follow")
+          acc)
+      
+      :else
+      (if-some [spaces (re-find #"^\s+" s)]
+        (recur acc stack (.substring s (count spaces)))
+        ;; note that due to this hack we are unable to parse a number as the last top level form
+        (if-some [[parsed left right hack] (re-find #"^(-?\d+)(\.\d*)?([\s\)])" s)]
+          (recur (conj acc #?(:cljs (js/parseFloat (str left right))
+                              :clj #_(if-not right
+                                       (Long/parseLong left)
+                                       (Double/parseDouble (str left right)))
+                              (Double/parseDouble (str left right))))
+                 stack
+                 (.substring s (- (count parsed) (count hack))))
+          (if-some [token (re-find #"^[^\s\)\"]+" s)]
+            (recur (conj acc (cond-> token (empty? acc) symbol))
+                   stack
+                   (.substring s (count token)))
+            (if-some [justquote (re-find #"^\"\s*\)" s)]
+              (recur (conj (peek stack) (conj acc "\""))
+                     (pop stack)
+                     (.substring s (count justquote)))
+              (if-some [[parsed quoted] (re-find #"^\"([^\"]*?)\"" s)] 
+                (recur (conj acc quoted) stack (.substring s (count parsed)))
+                (prn "IUknnown" s)))))))))
+
 
 
 ;;-- pcb boundary (abs, ref)

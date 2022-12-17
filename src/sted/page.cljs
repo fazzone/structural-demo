@@ -370,25 +370,26 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
   (let [gridref (rum/create-ref)]
     [:div {:ref gridref
            :style (merge {:display :grid} grid-style)}
-    (rum/use-layout-effect! (fn []
-                              (let [el (rum/deref gridref)
-                                    gc (.getBoundingClientRect el)]
-                                (loop [n (.-firstChild el)
-                                       acc []]
-                                  (if-not n
-                                    (prn
-                                     (into [:svg {:viewBox (gstring/format "%f %f %f %f"
-                                                                           (.-x gc) (.-y gc)
-                                                                           (.-width gc) (.-height gc))}]
-                                           acc))
-                                    (let [c (.getBoundingClientRect n)]
-                                      (recur (.-nextElementSibling n)
-                                             (conj acc
-                                                   [:rect {:x (.-x c)
-                                                           :y (.-y c)
-                                                           :width (.-width c)
-                                                           :height (.-height c)}]))))))
-                              nil))
+     (rum/use-layout-effect!
+      (fn []
+        (let [el (rum/deref gridref)
+              gc (.getBoundingClientRect el)]
+          (loop [n (.-firstChild el)
+                 acc []]
+            (if-not n
+              (prn
+               (into [:svg {:viewBox (gstring/format "%f %f %f %f"
+                                                     (.-x gc) (.-y gc)
+                                                     (.-width gc) (.-height gc))}]
+                     acc))
+              (let [c (.getBoundingClientRect n)]
+                (recur (.-nextElementSibling n)
+                       (conj acc
+                             [:rect {:x (.-x c)
+                                     :y (.-y c)
+                                     :width (.-width c)
+                                     :height (.-height c)}]))))))
+        nil))
     (for [e elems]
       e)]))
 
@@ -2124,7 +2125,7 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
      
      (when logs [:code [:pre {:style {:height "20ex" :overflow-y "scroll" :width "min-content" :resize "both"}} logs]])
      
-     (symbol-svg
+     #_(symbol-svg
       (kcnext/kicad->edn* {} [(kcnext/edn-reader-hack (rc/inline "sted/eda/q_npn_cbe.kicad_sym")
                                                       #_(rc/inline "sted/eda/r_us.kicad_sym")
                                                       #_(rc/inline "sted/eda/ad630.kicad_sym"))]))
