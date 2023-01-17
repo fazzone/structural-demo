@@ -11,7 +11,9 @@
    [sted.cmd.nav :as nav]
    #_[sted.loopy :as loopy]
    [sted.embed.data :as sed]
-   [sted.embed.md :as emd]
+   
+   #_[sted.embed.md :as emd]
+
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
@@ -259,9 +261,14 @@
     (let [text (->> (tree-seq :coll/type e/seq->vec e)
                     (keep :token/value)
                     (apply str))]
-      (into (vector (assoc (e/parse-token-tx text) :db/id (:db/id head)))
+      
+      (into [[:db/add (:db/id head) :token/value text]]
             (concat (edit/form-raise-tx head)
-                    (move-selection-tx (:db/id sel) (:db/id head)))))))
+                    (move-selection-tx (:db/id sel) (:db/id head))))
+      
+      #_(into (vector (assoc (e/parse-token-tx text) :db/id (:db/id head)))
+              (concat (edit/form-raise-tx head)
+                      (move-selection-tx (:db/id sel) (:db/id head)))))))
 
 (defn restitch
   [sel c]
@@ -304,9 +311,13 @@
 
 (defn tear-tx
   [sel]
+  (println "Ttx" (e/->form sel))
   (if-some [parts (some-> sel :token/value tear-preference-order)]
-    (tear* sel parts)
-    (restitch sel sel )))
+    (do
+      (println "Tear*")
+      (tear* sel parts))
+    (do (println "REstr*")
+        (restitch sel sel ))))
 
 (comment
   (tear-preference-order "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/reference/global_objects/promise/index.md"))
@@ -399,9 +410,9 @@
   [sel text props]
   (let [top-level   (peek (nav/parents-vec sel))
         chain       (some-> top-level :coll/_contains edit/exactly-one)
-        _ (js/console.time "S->tx")
+        ;; _ (js/console.time "S->tx")
         stx (e/string->tx-all text)
-        _ (js/console.timeEnd "S->tx")
+        ;; _ (js/console.timeEnd "S->tx")
         new-node (-> stx
                      (update :db/id #(or % "cft"))
                      (assoc :coll/type :chain)
@@ -548,6 +559,27 @@
    :edit/reject                    (fn [sel]
                                      (let [db (d/entity-db sel)]
                                        (insert/reject-edit-tx db (d/entid db [:form/editing true]))))
+   :edit/reject-and-select         (fn [sel eid]
+                                     (println "Reject+seelct" (pr-str eid))
+                                     #_(let [db (d/entity-db sel)
+                                             edit (d/entity db [:form/editing true])
+                                             tx (into (move-selection-tx (:db/id sel) eid)
+                                                      (edit/form-delete-tx edit))]
+                                         (println "Edit" edit "Tx" tx)
+                                         tx)
+                                     (let [db (d/entity-db sel)
+                                           e (d/entity db [:form/editing true])
+                                           move #_(move/movement-tx db move/up) (select-form-tx db eid)
+                                           del (edit/form-delete-tx e)
+                                           tx (into move
+                                                    del
+                                                    )]
+                                       (println "Movement-tx " move)
+                                       (println "Delete-tx" del)
+                                       #_(run! prn tx)
+                                       tx
+                                       ))
+   
    :edit/finish                    (fn [sel text]
                                      (let [db (d/entity-db sel)]
                                        (insert/finish-edit-tx db (d/entid db [:form/editing true]) text)))
@@ -630,7 +662,7 @@
                                ans)))))
    
    :eval-cont (fn [sel target data]
-                (js/console.log "Eval-cont" data)
+                ;; (js/console.log "Eval-cont" data)
                 (let [db (d/entity-db sel)
                       spine (edit/exactly-one (:seq/_first target))
                       coll (edit/exactly-one (:coll/_contains target))]
@@ -661,16 +693,19 @@
    :summon summon-tx
    :unraise edit/unraise-tx
    :compose edit/ffff
-   :ingest-markdown (fn [sel md-text]
-                      (let [top-level   (peek (nav/parents-vec sel))
-                            chain       (some-> top-level :coll/_contains edit/exactly-one)
-                            txe (emd/md->tx md-text)
-                            new-node {:db/id "mdchain"
-                                      :coll/type :chain
-                                      :coll/contains (:db/id txe)
-                                      :seq/first (:db/id txe)}]
-                        (prn "DBIDTXE" (:db/id txe))
-                        (into [txe
-                               new-node]
-                              (edit/insert-after-tx chain new-node))))})
+   
+   ;; :ingest-markdown (fn [sel md-text]
+   ;;                    (let [top-level   (peek (nav/parents-vec sel))
+   ;;                          chain       (some-> top-level :coll/_contains edit/exactly-one)
+   ;;                          txe (emd/md->tx md-text)
+   ;;                          new-node {:db/id "mdchain"
+   ;;                                    :coll/type :chain
+   ;;                                    :coll/contains (:db/id txe)
+   ;;                                    :seq/first (:db/id txe)}]
+   ;;                      (prn "DBIDTXE" (:db/id txe))
+   ;;                      (into [txe
+   ;;                             new-node]
+   ;;                            (edit/insert-after-tx chain new-node))))
+   
+   })
 

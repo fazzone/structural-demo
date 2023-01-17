@@ -6,19 +6,13 @@
     "dependencies": {
         "create-react-class": "^15.6.3",
         "electron": "^17.0.0",
-        "elkjs": "^0.7.1",
         "flexsearch": "^0.7.21",
-        "greiner-hormann": "^1.4.2",
         "js-yaml": "^4.1.0",
-        "jsts": "^2.8.1",
-        "martinez-polygon-clipping": "^0.7.2",
         "mdast-util-from-markdown": "^1.2.0",
         "mdast-util-frontmatter": "^1.0.0",
         "micromark-extension-frontmatter": "^1.0.0",
         "react": "16.9.0",
-        "react-dom": "16.9.0",
-        "spl.js": "^0.1.0-beta.2",
-        "svgo": "^2.8.0"
+        "react-dom": "16.9.0"
     },
     "devDependencies": {
         "shadow-cljs": "^2.12.2"

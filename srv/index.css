@@ -548,11 +548,13 @@ s { text-decoration: none; }
 
 .hlp {
     position: absolute;
-    /* background-color: #4504b982; */
+    background-color: #4504b982;
     /* border-color: #4504b982; */
     height: 100%;
     border-radius: 1ex;
-    border: 1px solid #fff;
+    /* border: 1px solid #4504b982; */
+    /* border: 1px solid #fff; */
+
 }
 
 .hlp.unique-token {
@@ -565,6 +567,14 @@ s { text-decoration: none; }
     /* background-color: #e1ff1c6e; */
     /* border-color: #e1ff1c6e; */
     
+}
+
+.hlp-tag {
+    position: absolute;
+    width: 1ch;
+    top: -1.25ex;
+    color: #fff;
+    z-index: 999;
 }
 
 
@@ -608,4 +618,5 @@ s { text-decoration: none; }
 g.wire > path:hover {
     stroke: #fff;
 }
+
 

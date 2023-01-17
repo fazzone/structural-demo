@@ -4,3 +4,4 @@
 node_modules/*
 srv/js/cljs-runtime/*
 subtree/*
+txt/*

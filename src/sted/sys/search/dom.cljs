@@ -3,6 +3,11 @@
 
 
 (def results (atom nil))
+
+(defn bink []
+  
+  )
+
 (defn substring-search-all-visible-tokens
   ;; (also search invisible tokens if they are under a visible toplevel)
   [prefix]
@@ -30,14 +35,15 @@
                 #_(js/console.log "SWTL" tl)
                 (->> (.querySelectorAll tl ".tk")
                      (reduce (fn [a ch]
-                               (let [t #_(.-innerText ch)
-                                     (loop [c (.-firstChild ch)]
-                                       (cond (nil? c) " "
-                                             (instance? js/Text c) (.-textContent c)
-                                             :else (recur (.-nextSibling c))))
+                               (let [t (loop [c (.-firstChild ch)]
+                                         (cond (nil? c) " "
+                                               (instance? js/Text c) (.-textContent c)
+                                               :else (recur (.-nextSibling c))))
                                      i (string/index-of (string/lower-case t) prefix)]
                                  #_(js/console.log "F.c." (instance? js/Text (.-firstChild ch)))
-                                 (cond-> a i (update t (fnil conj []) [i ch]))))
+                                 
+                                 (cond-> a i (conj #js [t i ch]))
+                                 #_(cond-> a i (update t (fnil conj []) [i ch]))))
                              acc)))
               (bidi [start fwd back]
                 (concat (take-while some? (iterate fwd start))
@@ -61,11 +67,14 @@
                            (reduce search-within-toplevel acc))))))]
         (let [tag (str  "Searching " prefix)
               _ (js/console.time tag)
-              a (reset! results
-                        (->> (bidi center-chain scan-left scan-right)
-                             #_(map (fn [ch]
-                                      (js/console.log "Bid" ch)
-                                      ch))
-                             (reduce search-within-chain {})))
+              nr (->> (bidi center-chain scan-left scan-right)
+                      #_(map (fn [ch]
+                               (js/console.log "Bid" ch)
+                               ch))
+                      #_(reduce search-within-chain {})
+                      (reduce search-within-chain []))
+              a (reset! results nr)
               _ (js/console.timeEnd tag)]
+          #_(doseq [[t i e] nr]
+            (js/console.log t i e))
           a)))))

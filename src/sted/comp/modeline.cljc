@@ -19,34 +19,39 @@
   [sel bus rec eps]
   (let [db (d/entity-db sel)
         {:keys [^String text valid]} (some-> eps rum/react)]
-   [:span {:class (str "modeline code-font"
-                       #_(if text " editing modeline-search" " modeline-fixed")
-                       "modeline-fixed"
-                       #_(when (and (not (empty? text)) (not valid)) " invalid"))}
-    [:span.modeline-echo
-     {}
-     (let [{:keys [on at status file]} (rum/react save-status)]
-       (when (= on (:db/id sel))
-         (case status
-           :saving "Saving"
-           :ok (str file "@" at)
-           :error "Error"
-           "")))]
     
-    #_(when text ^:inline (cs/results db bus :token/value text rec))
+    (println "ML"
+             (keys (core/get-app bus))
+             (pr-str (type (:system (core/get-app bus)))))
     
-    [:span.modeline-content {}
-     ^String (str (:db/id sel)
-                  "/"
-                  (:max-tx db)
-                  " " (some-> sel :nav/pointer meta)
-                  " " (or (:token/type sel) (:coll/type sel))
-                  " " (:handle/token sel))]
+    [:span {:class (str "modeline code-font"
+                        #_(if text " editing modeline-search" " modeline-fixed")
+                        "modeline-fixed"
+                        #_(when (and (not (empty? text)) (not valid)) " invalid"))}
+     [:span.modeline-echo
+      {}
+      (let [{:keys [on at status file]} (rum/react save-status)]
+        (when (= on (:db/id sel))
+          (case status
+            :saving "Saving"
+            :ok (str file "@" at)
+            :error "Error"
+            "")))]
     
-    #_(when-some [insp (js/document.getElementById "inspector")]
-        (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
+     #_(when text ^:inline (cs/results db bus :token/value text rec))
     
-    #_[:input.edit-box.code-font {:type :text}]]))
+     [:span.modeline-content {}
+      ^String (str (:db/id sel)
+                   "/"
+                   (:max-tx db)
+                   " " (some-> sel :nav/pointer meta)
+                   " " (or (:token/type sel) (:coll/type sel))
+                   " " (:handle/token sel))]
+    
+     #_(when-some [insp (js/document.getElementById "inspector")]
+         (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
+    
+     #_[:input.edit-box.code-font {:type :text}]]))
 
 (rum/defc modeline-nest-next
   [sel bus rec]

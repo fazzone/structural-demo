@@ -123,6 +123,7 @@
        :regex            {:token/type :regex :token/value (n/string n)}
        (throw (ex-info  (str "Cannot decode " (n/string n) (pr-str n)) {:tag (n/tag n)}))))))
 
+
 (defn string->tx
   [s]
   (n->tx (p/parse-string s)))
@@ -217,9 +218,12 @@
     (string/starts-with? value ":")
     (keyword (subs value 1))
     
-    :else (throw (ex-info
-                  (str "What sort of keyword is this? " value)
-                  {}))))
+    :else (keyword value)
+    
+    ;; :else (throw (ex-info
+    ;;               (str "What sort of keyword is this? " value)
+    ;;               {}))
+    ))
 
 (defn coll->
   [e ct xs]
@@ -228,6 +232,7 @@
     :vec  (vec xs)
     :map  (apply array-map xs)
     :set  (set xs)
+    :tear xs
     nil   nil
     (recur nil (:coll/data-type e) xs)))
 
@@ -377,6 +382,7 @@
 
 (defn parse-token-tx
   [s]
+  (println "PTT" (pr-str s))
   (try
     (string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e

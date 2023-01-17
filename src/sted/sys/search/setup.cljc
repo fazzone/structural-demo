@@ -53,13 +53,16 @@
                                           text
                                           32)))
                   #_(js/console.timeEnd t)
-                  (js/setTimeout
-                   (fn []
-                     (let [rs (.search index text)]
-                       (println "Got some results " rs )
-                       (reset! results rs)
-                       (reset! sdom/results rs)
-                       #_(reset! results (.search index text)
-                                 #_(sdom/substring-search-all-visible-tokens text))))
-                   #_(fn [] (reset! results (sdom/substring-search-all-visible-tokens text)))
-                   0)))))))))
+                  (when (< 1 (count text))
+                    (js/setTimeout
+                     #_(fn []
+                         (let [rs (.search index text)]
+                           (println "Got some results " rs )
+                           (reset! results rs)
+                           (reset! sdom/results rs)
+                           #_(reset! results (.search index text)
+                                     #_(sdom/substring-search-all-visible-tokens text))))
+                     
+                     (fn [] (reset! results (sdom/substring-search-all-visible-tokens text)))
+                     
+                     0))))))))))

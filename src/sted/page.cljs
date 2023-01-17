@@ -40,72 +40,16 @@
    [sted.core :as core :refer [get-selected-form]]
    
    [shadow.resource :as rc]
-   
-   
+
    
    
    )
-
   (:require-macros
    [cljs.core.async.macros :refer [go
                                    go-loop]]
    [sted.macros :as m]))
 
-(def siquery
-  (rc/inline "sted/eda/honker.sql")
-  #_"
-  select
-  fp.name as footprint
-  , fpp.name as pad
-  , astext(makepoint(fpp.x_mm, fpp.y_mm)) as placexy
-  , d.d_mm is not null as has_draw_d
-  , kp.d_mm is not null as had_pad_d
-
-  from kicad_footprint fp
-  left join kicad_footprint_draw d on d.kicad_footprint_id = fp.id
-  left join kicad_footprint_pad fpp on fpp.kicad_footprint_id = fp.id
-  left join kicad_pad kp on kp.id = fpp.kicad_pad_id
-  
-  "
-  
-  #_"select 
-  kicad_footprint_id
-  , kf.name
-  , group_concat(d_mm, ' ; ') as svg1
-  , group_concat(d_mm, ' ; ') as svg3
-  , assvg(extent(geomfromtext(wkt))) as svg2
-  , extent(geomfromtext(wkt)) as viewbox3
-  --, (wkt) as viewbox
-from kicad_footprint_draw kfd
-left join kicad_footprint kf on kfd.kicad_footprint_id = kf.id
-where d_mm is not null
-group by 1,2
-limit 1000
-"
-  #_"select * from kicad_pad"
-  #_"with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) 
-, q as (
-select layer, assvg(geom) as svg, geom as viewbox 
-, assvg(collect(geom, st_buffer(geom, 0.5))) as svg2
-, st_expand(geom, 10) as viewbox2
-from data
-)
-, tq as(
-select 
-collect(st_translate(geom, 2*i.value*(mbrmaxx(geom) - mbrminx(geom)), 2*j.value*(mbrmaxy(geom) - mbrminy(geom)), 0)) as tiled
-from generate_series(1,5) i
-join generate_series(1,5) j
-join data group by layer
-)
-select assvg(tiled) as svg, tiled as viewbox from tq"
-  
-  #_"with data as (select layer, collect(geomfromtext(wkt)) as geom from kicad_footprint_draw group by layer) select layer, assvg(geom) as svg, geom as viewbox from data"
-  #_"select layer, assvg(collect(geomfromtext(wkt)))  as svg1, '-100 -100 200 200' as viewbox1 from kicad_footprint_draw group by layer"
-  #_"select , wkt, assvg(geomfromtext(wkt)) from kicad_footprint_draw"
-  #_"select json_group_array(json_object('d',d_mm,'stroke', case when layer = 'F.Cu' then 'red' else '#fff' end )) as svg_agg_dmm from kicad_footprint_draw")
-
-
-(def ^js pdfjs (gobj/get js/window "pdfjs-dist/build/pdf"))
+(comment (def ^js pdfjs (gobj/get js/window "pdfjs-dist/build/pdf")))
 
 (def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
                                :chain/filename  "src/sted/user.clj"))
@@ -211,9 +155,15 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
   [path contents]
   #_(.writeFile (js/require "fs/promises") file contents)
   (or (when-let [require (aget js/window "secret_electron_require")]
-        (-> (.writeFile ^js (require "fs/promises") path contents )
-            (.then  (fn [] (swap! ml/save-status assoc :status :ok :file path)))
-            (.catch (fn [] (swap! ml/save-status assoc :status :error)))))
+        #_(-> (.writeFile ^js (require "fs/promises") path contents )
+              (.then  (fn [] (swap! ml/save-status assoc :status :ok :file path)))
+              (.catch (fn [] (swap! ml/save-status assoc :status :error))))
+        (let [^js fs (require "fs/promises")
+              hack (str path "##")]
+          (a/let [_ (.writeFile fs hack contents)
+                  _ (.rename fs hack path)]
+            (js/console.log "Wrote " path))))
+      
       (do (ask-download-file path contents)
           (swap! ml/save-status assoc :status :ok :file path)))
   
@@ -317,23 +267,9 @@ select assvg(tiled) as svg, tiled as viewbox from tq"
         el (.getElementById js/document "root")]
     (reset! the-app app)
     
-    #_(when-let [req-title (some-> js/window.location.search
-                                   (js/URLSearchParams.)
-                                   (.get "title"))]
-        (set! js/document.title req-title))
-    #_(rum/unmount el)
-    (when-not @the-yosys
-      (new-yosys!)
-      #_(reset! the-yosys
-                (.create_worker js/window.YosysJS
-                                (fn [] (js/console.log "Yosys created")))))
-    
     (println "Created new app and reset kbdb.  Mount root...")
     
-    (-> #_(cr/root app code/form)
-        #_(elkroot (dsn->elk (first (dsn/dsnparse dsn/dsnstr))))
-        #_(dsnroot)
-        (ysroot nil)
+    (-> (cr/root app code/form)
         (rum/mount el))
     (println "Done")))
 

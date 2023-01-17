@@ -99,7 +99,14 @@
   [e bus p]
   (let [ml-ref (rum/create-ref)]
     [:div.form-card
-     {}
+     {:onClick (fn [^js ev]
+                 (when-let [eid (some-> (.-target ev)
+                                        (.-dataset)
+                                        (aget "eid")
+                                        (js/parseInt))]
+                   (.stopPropagation ev)
+                   (core/send! bus [:click eid ]))
+                 false)}
      #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
      #_[:div.top-level-form.code-font {}
         (rum/bind-context
@@ -430,6 +437,12 @@
     (:md/text :md/code :md/inline-code) v))
 
 
+#_(defn form-onclick
+  [bus ^js ev]
+  (.stopPropagation ev)
+  (core/send! bus [:click (:db/id e)])
+  false)
+
 (rum/defc form
   < dbrx/ereactive scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
@@ -450,7 +463,8 @@
                :class (if-not selected?
                         tc
                         (str tc " selected"))
-               :onClick (fn [ev]
+               :data-eid (:db/id e)
+               #_ #_:onClick (fn [ev]
                           (.stopPropagation ev)
                           (js/console.log "click" (:db/id e) bus)
                           (core/send! bus [:click (:db/id e)])

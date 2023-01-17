@@ -43,7 +43,10 @@
   (zchan [this])
 
   (uniqueid [this])
-  (reset [this]))
+  (reset [this])
+
+  (set-app! [this app])
+  (get-app [this]))
 
 (defprotocol ICursor
   (selection [this ent])
@@ -64,9 +67,10 @@
    (let [ch (async/chan)
          pub (async/pub ch first)
          hs (atom {})
+         app-ref (atom nil)
          #?@(:cljs [sub-map (or last-sub-map (js/Map.))]) 
          uu (str (d/squuid))]
-     (when last-sub-map
+     #_(when last-sub-map
        (js/console.log "Re-use sub-map" last-sub-map))
      (reify IBus
        (send! [this msg] (async/put! ch msg))
@@ -92,7 +96,12 @@
        (save-history! [this txid r] (swap! hs assoc txid r))
        (zchan [_this] ch)
        (uniqueid [_this] uu)
-       (reset [_this] (bus sub-map))))))
+       (reset [_this]
+         #?(:cljs (bus sub-map)))
+
+       ;; hacks?
+       (set-app! [_this the-app] (reset! app-ref the-app))
+       (get-app [_] @app-ref)))))
 
 (def blackhole
   (reify IBus
@@ -102,7 +111,9 @@
     (get-history [this txid])
     (sub-entity [_ _ _])
     (save-history! [this txid r])
-    (zchan [this])))
+    (zchan [this])
+    (set-app! [_ _])
+    (get-app [_])))
 
 (defrecord App [conn bus history system])
 
@@ -116,10 +127,10 @@
             (try
               (or (mut-fn m @conn bus) a)
               (catch #? (:cljs js/Error :clj Exception) e
-                
-                (js/console.log "Exception in mutation"
-                                (str topic)
-                                e))))
+                (#?(:clj println :cljs js/console.log)
+                 "Exception in mutation"
+                 (str topic)
+                 e))))
           :ok
           ch)))
     app))
@@ -147,7 +158,11 @@
         (when (:db-after report)
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
-                #_(println txid mut)
+                
+                #_(println "================================================================" )
+                #_(println txid mut )
+                #_(run! prn (:tx-data report))
+                
                 (reset! history (cons report @history)))
             (println "No current-tx?")))
         (when-let [e (:error report)]
@@ -222,32 +237,36 @@
   ([conn] (app conn nil))
   ([conn pbus]
    (let [the-bus (or pbus (bus))
-         my-id (uniqueid the-bus)]
-     (-> {:bus     the-bus
-          :history (atom ())
-          :conn    (doto conn
-                     (d/listen!
-                      (with-meta
-                        (fn [{:keys [db-after db-before tx-data tempids]}]
-                          (try
-                            (let [emax (:max-eid db-before)
-                                  es (into #{}
-                                           (keep (fn [[e]]
-                                                   (when-not (> e emax)
-                                                     e)))
-                                           tx-data)
-                                  as (into #{} (map (fn [[_ a]] a)) tx-data)]
-                                     
-                              (vreset! scroll-snapshot @scroll-sequence-number)
-                              #_(js/console.time "batchedUpdates")
-                              (js/ReactDOM.unstable_batchedUpdates
-                               (fn []
-                                 (doseq [e es]
-                                   (when-not (empty? (d/datoms db-after :eavt e))
-                                     (fire-subs! the-bus (d/entity db-after e))))))
-                              #_(js/console.timeEnd "batchedUpdates"))
-                            (catch #? (:cljs js/Error :clj Exception) e
-                              (js/console.log "Exception in listener" e))))
-                        {:core/id my-id})))}
-         (map->App)
-         (setup-undo!)))))
+         my-id (uniqueid the-bus)
+         the-app (-> {:bus     the-bus
+                      :history (atom ())
+                      :conn    (doto conn
+                                 (d/listen!
+                                  (with-meta
+                                    (fn [{:keys [db-after db-before tx-data tempids]}]
+                                      (try
+                                        (let [emax (:max-eid db-before)
+                                              es (into #{}
+                                                       (keep (fn [[e]]
+                                                               (when-not (> e emax)
+                                                                 e)))
+                                                       tx-data)
+                                              as (into #{} (map (fn [[_ a]] a)) tx-data)]
+                                          
+                                          (vreset! scroll-snapshot @scroll-sequence-number)
+                                          #_(js/console.time "batchedUpdates")
+                                          #?(:cljs
+                                             (js/ReactDOM.unstable_batchedUpdates
+                                              (fn []
+                                                (doseq [e es]
+                                                  (when-not (empty? (d/datoms db-after :eavt e))
+                                                    (fire-subs! the-bus (d/entity db-after e)))))))
+                                          #_(js/console.timeEnd "batchedUpdates"))
+                                        (catch #? (:cljs js/Error :clj Exception) e
+                                          (#?(:clj println :cljs js/console.log)
+                                           "Exception in listener" e))))
+                                    {:core/id my-id})))}
+                     (map->App)
+                     (setup-undo!))]
+     (set-app! the-bus the-app)
+     the-app)))
