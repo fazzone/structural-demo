@@ -243,8 +243,8 @@
   (let [children (e/seq->vec e)]
     [:span {:class ["c" cc ec classes]}
      #_[:span.inline-tag.debug
-        (str (swap! render-counter inc))
-        #_(str (:db/id e))]
+      #_(str (swap! render-counter inc))
+      (str (:db/id e))]
      ;; requires checking propcs in dbrx shouldcompunentupdate
      #_(when-some [p (get proply (:db/id e))]
        [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
@@ -366,9 +366,10 @@
     (or
      (code-coll ct e b c i p)
      (case ct
-       :chain (chain e b c i p)
+       :chain         (chain e b c i p)
        ;; :inspect       (ci/inspect-portal)
-       :demo       (cd/demo {:form [1 2 3 4]} form c)
+
+       :demo          (cd/demo* form c) 
        :grid          (grid e b c i p)
        :bar           (bar e b c i p)
        :hidden        (hiddenc e b c i p)
@@ -484,4 +485,5 @@
                                     (zipmap (map :db/id
                                                  (next (mut/get-numeric-movement-vec e)))
                                             (range 2 9))))))
-     (when selected? (ml/modeline-nest-next e bus form)))))
+     (when selected?
+       (ml/modeline-nest-next e bus form)))))

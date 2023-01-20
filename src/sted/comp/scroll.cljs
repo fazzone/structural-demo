@@ -39,7 +39,6 @@
         chh      (some-> chain-cr (.-height))
         chw      (some-> chain-cr (.-width))
         tlh      (some-> tl-cr (.-height) (js/Math.ceil))
-        tlw      (some-> tl-cr (.-height) (js/Math.ceil))
         elh      (some-> el-cr (.-height) (js/Math.ceil))
         ;; fit entire toplevel if possible, otherwise just selection
         vst      (if (< tlh chh) tl el)

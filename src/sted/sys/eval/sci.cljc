@@ -138,7 +138,8 @@
   [eval-target bus print-output]
   (fn [ex]
     (core/send! bus
-                [:eval-result eval-target
+                [:eval-result
+                 (:db/id eval-target)
                  (str (ex-message ex)
                       "\n"
                       (.-stack ex))])))
@@ -255,12 +256,12 @@
                   estr (e/->string top)
                   res (sci/binding [sel# target] (sci/eval-string* ctx estr))]
               (if-not (instance? js/Promise res)
-                (core/send! bus [:eval-result top res])
+                (core/send! bus [:eval-result (:db/id top) res])
                 (do
                   (println "It was a promise")
                   (.then res
                          (fn [v]
-                           (core/send! bus [:eval-result top v]))))))))))))
+                           (core/send! bus [:eval-result (:db/id top) v]))))))))))))
 
 
 (comment

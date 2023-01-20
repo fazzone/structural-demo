@@ -22,6 +22,7 @@
    "S-R" :unraise
    "M-r" :raise-parent
    "S-_" :uneval
+   "."   :save-demo
    "S-W" :save
    "t"   :tear
    "S-@" :new-deref
@@ -50,6 +51,7 @@
    "C-Enter"   :insert-right-newline
    "Escape"    :select-chain
    "c"         :clone
+   "M-c"       :clone-parent
    "z"         :hop-left
    "x"         :hop-right
    "9"         :wrap

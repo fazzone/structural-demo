@@ -50,7 +50,15 @@
                              ::subber subber
                              ::unsubber (subber (:db/id ent)))))
    :should-update (fn [old-state new-state]
-                    (some-> new-state ::nupdate deref))
+                    #_(some-> new-state ::nupdate deref)
+                    (or
+                     
+                     ;; true               ; hacks for testing
+                     
+                     (some-> (::nupdate new-state) deref)
+                     (some-> (:rum/args new-state)
+                             (nth 1)
+                             core/should-update)))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)

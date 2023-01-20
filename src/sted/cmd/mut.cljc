@@ -548,37 +548,37 @@
     (sed/go root limit (:db/id coll) (:db/id spine))))
 
 (def editing-commands
-  {:float                          edit/exchange-with-previous-tx
-   :sink                           edit/exchange-with-next-tx
-   :select-chain                   nav/select-chain-tx
-   :hop-left                       nav/hop-left
-   :hop-right                      nav/hop-right
-   :uneval                         uneval-and-next
-   :insert-right                   edit/insert-editing-after
-   :insert-left                    edit/insert-editing-before
-   :edit/reject                    (fn [sel]
-                                     (let [db (d/entity-db sel)]
-                                       (insert/reject-edit-tx db (d/entid db [:form/editing true]))))
-   :edit/reject-and-select         (fn [sel eid]
-                                     (println "Reject+seelct" (pr-str eid))
-                                     #_(let [db (d/entity-db sel)
-                                             edit (d/entity db [:form/editing true])
-                                             tx (into (move-selection-tx (:db/id sel) eid)
-                                                      (edit/form-delete-tx edit))]
-                                         (println "Edit" edit "Tx" tx)
-                                         tx)
-                                     (let [db (d/entity-db sel)
-                                           e (d/entity db [:form/editing true])
-                                           move #_(move/movement-tx db move/up) (select-form-tx db eid)
-                                           del (edit/form-delete-tx e)
-                                           tx (into move
-                                                    del
-                                                    )]
-                                       (println "Movement-tx " move)
-                                       (println "Delete-tx" del)
-                                       #_(run! prn tx)
-                                       tx
-                                       ))
+  {:float                  edit/exchange-with-previous-tx
+   :sink                   edit/exchange-with-next-tx
+   :select-chain           nav/select-chain-tx
+   :hop-left               nav/hop-left
+   :hop-right              nav/hop-right
+   :uneval                 uneval-and-next
+   :insert-right           edit/insert-editing-after
+   :insert-left            edit/insert-editing-before
+   :edit/reject            (fn [sel]
+                             (let [db (d/entity-db sel)]
+                               (insert/reject-edit-tx db (d/entid db [:form/editing true]))))
+   :edit/reject-and-select (fn [sel eid]
+                             (println "Reject+seelct" (pr-str eid))
+                             #_(let [db   (d/entity-db sel)
+                                     edit (d/entity db [:form/editing true])
+                                     tx   (into (move-selection-tx (:db/id sel) eid)
+                                                (edit/form-delete-tx edit))]
+                                 (println "Edit" edit "Tx" tx)
+                                 tx)
+                             (let [db   (d/entity-db sel)
+                                   e    (d/entity db [:form/editing true])
+                                   move #_ (move/movement-tx db move/up) (select-form-tx db eid)
+                                   del  (edit/form-delete-tx e)
+                                   tx   (into move
+                                              del
+                                              )]
+                               (println "Movement-tx " move)
+                               (println "Delete-tx" del)
+                               #_(run! prn tx)
+                               tx
+                               ))
    
    :edit/finish                    (fn [sel text]
                                      (let [db (d/entity-db sel)]
@@ -593,11 +593,16 @@
                                      (let [db (d/entity-db sel)]
                                        (insert/wrap-edit-tx (d/entity db [:form/editing true]) ct value)))
 
-   :delete-left      (fn [sel] (move-and-delete-tx sel move/backward-up move/next-sibling))
-   :delete-right     (fn [sel] (move-and-delete-tx sel move/forward-up move/prev-sibling))
-   :raise            edit/form-raise-tx
-   :raise-parent     (comp edit/form-raise-tx move/up)
-   :clone            edit/insert-duplicate-tx
+   :delete-left  (fn [sel] (move-and-delete-tx sel move/backward-up move/next-sibling))
+   :delete-right (fn [sel] (move-and-delete-tx sel move/forward-up move/prev-sibling))
+   :raise        edit/form-raise-tx
+   :raise-parent (comp edit/form-raise-tx move/up)
+   :clone        edit/insert-duplicate-tx
+   :clone-parent (fn [sel]
+                   (concat
+                    (edit/insert-duped-parent-before-tx sel)
+                    (edit/offer-tx sel)))
+   
    :linebreak        linebreak-selected-form-tx
    :wrap             (fn [sel] (edit/form-wrap-tx sel :list))
    :indent           (fn [sel] (indent-selected-form-tx sel 1))
@@ -615,12 +620,12 @@
    :open-chain       chain-from-text
    :new-bar          new-bar-tx
    
-   :hide  (comp toggle-hide-show peek nav/parents-vec )
-   :stringify             replace-with-pr-str
-   :plus                  plus*
-   :minus                 minus*
+   :hide          (comp toggle-hide-show peek nav/parents-vec )
+   :stringify     replace-with-pr-str
+   :plus          plus*
+   :minus         minus*
    ;; bad
-   :insert-txdata         insert-txdata
+   :insert-txdata insert-txdata
    
    :hoist                 hoist-tx
    :gobble                gobble-tx
@@ -634,38 +639,41 @@
    :offer                 edit/offer-tx
    :multiline             recursive-multiline
    :oneline               recursive-oneline-tx
-   :oneline-all (fn [sel]
-                  (some->> sel :coll/contains (mapcat recursive-oneline-tx)))
+   :oneline-all           (fn [sel]
+                            (some->> sel :coll/contains (mapcat recursive-oneline-tx)))
    :clear-one-eval        clear-one-eval
-   :eval-result (fn [sel et data]
-                  (let [target  (peek (nav/parents-vec et))
-                        spine (edit/exactly-one (:seq/_first target))
-                        coll (edit/exactly-one (:coll/_contains target))
-                        nn {:db/id "ncell"
-                            :seq/_next (:db/id spine)}
-                        nl (node-limit (d/entity-db sel))]
-                    (when (and spine coll)
-                      (into [nn
-                             (when-let [old-next (:seq/next spine)]
-                               [:db/add (:db/id nn) :seq/next (:db/id old-next)])]
-                            (go data nl coll nn)))))
-   :eval-inplace (fn [sel target data]
-                   (let [db (d/entity-db sel)
-                         spine (edit/exactly-one (:seq/_first target))
-                         coll (edit/exactly-one (:coll/_contains target))]
-                     (when (and spine coll)
-                       (let [ans (go (list data) (node-limit db) coll spine)
-                             id-hack (some (fn [[_ e]]
-                                             (when (neg? e) e))
-                                           ans)]
-                         (into (select-form-tx db id-hack)
-                               ans)))))
+   :eval-result           (fn [sel et-eid data]
+                            (let [db (d/entity-db sel)
+                                  et (d/entity db et-eid)
+                                  target (peek (nav/parents-vec et))
+                                  spine  (edit/exactly-one (:seq/_first target))
+                                  coll   (edit/exactly-one (:coll/_contains target))
+                                  nn     {:db/id     "ncell"
+                                          :seq/_next (:db/id spine)}
+                                  nl     (node-limit db)]
+                              (when (and spine coll)
+                                (into [nn
+                                       (when-let [old-next (:seq/next spine)]
+                                         [:db/add (:db/id nn) :seq/next (:db/id old-next)])]
+                                      (go data nl coll nn)))))
+   
+   :eval-inplace          (fn [sel target data]
+                            (let [db    (d/entity-db sel)
+                                  spine (edit/exactly-one (:seq/_first target))
+                                  coll  (edit/exactly-one (:coll/_contains target))]
+                              (when (and spine coll)
+                                (let [ans     (go (list data) (node-limit db) coll spine)
+                                      id-hack (some (fn [[_ e]]
+                                                      (when (neg? e) e))
+                                                    ans)]
+                                  (into (select-form-tx db id-hack)
+                                        ans)))))
    
    :eval-cont (fn [sel target data]
                 ;; (js/console.log "Eval-cont" data)
-                (let [db (d/entity-db sel)
+                (let [db    (d/entity-db sel)
                       spine (edit/exactly-one (:seq/_first target))
-                      coll (edit/exactly-one (:coll/_contains target))]
+                      coll  (edit/exactly-one (:coll/_contains target))]
                   (println "Sp" (:db/id spine)
                            "Col" (:db/id coll))
                   (when (and spine coll)
@@ -673,9 +681,9 @@
                       (if (nil? sn)
                         (into (select-form-tx db (:db/id (move/backward-up target)))
                               (edit/form-delete-tx target))
-                        (let [root (if-not (:seq/next spine)
-                                     sn
-                                     (list sn))
+                        (let [root    (if-not (:seq/next spine)
+                                        sn
+                                        (list sn))
                               tx-data (binding [sed/*store* store-fn]
                                         (continue root (node-limit db) coll spine))
                               id-hack (some (fn [[_dbadd e a]]
@@ -690,7 +698,7 @@
                            tx-data)))))))
    
 
-   :summon summon-tx
+   :summon  summon-tx
    :unraise edit/unraise-tx
    :compose edit/ffff
    

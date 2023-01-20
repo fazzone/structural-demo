@@ -101,7 +101,8 @@
         label]
        [:text {:fill st :x x :y (- y ch)}
         (when-let [ct (:coll/type node)]
-          (str (e/open-delim ct) (e/close-delim ct)))]
+          (or (not-empty (str (e/open-delim ct) (e/close-delim ct)))
+              (str ct)))]
        [:g {:stroke st}
         (when (nil? sv)
           [:rect {:x x :y y :width (+ size size) :height size}])
@@ -235,7 +236,8 @@
                "#000"))
        1))))
 
-(rum/defc testing < dbrx/deeply-ereactive
+(rum/defc testing
+  ;; < dbrx/deeply-ereactive
   [top bus renderer]
   (let [size     50
         half     (* 0.5 size)
@@ -243,7 +245,7 @@
         height   (* 2 size)
         inset    size
         svgref   (rum/create-ref)
-        _        (js/console.time "layout")
+        ;; _        (js/console.time "layout")
         pos->ent (my-traversal top)
         eid->pos (reduce-kv
                   (fn [a p e] (assoc a (:db/id e) p))
@@ -253,36 +255,40 @@
         cmax     (apply max (map second (keys pos->ent)))
         vw       (+ inset (* (inc cmax) width))
         vh       (+ inset (* (inc rmax) height))
-        _        (js/console.timeEnd "layout")
-        sel      (core/get-selected-form (d/entity-db top))]
-    [:div
-     [:button {:on-click (fn [c]
-                           (let [svg (rum/deref svgref)]
-                             (js/console.log svg)
-                             (save-svg svg vw vh)))}
-      "Save svg"]
-     [:svg  {:viewBox    (str "0 0 " vw " " vh)
-             :xmlns      "http://www.w3.org/2000/svg"
-             ;; "xmlns:xlink" "http://www.w3.org/1999/xlink"
-             :xmlnsXlink "http://www.w3.org/1999/xlink"
-             
-             :version "1.1" 
-             :ref     svgref
-             :style   {:border     "1px solid"
-                       :background "transparent"}}
-      [:defs
-       [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 3}
-        [:path {:fill "#fff"
-                :d    "M0,0 V6 L6,3 Z"}]]]
-      [:g { ;; :stroke "#fff"
-           :transform    (str "translate(" size "," size ")")
-           ;; :fill "#fff"
-           :stroke       :none
-           :fill         :none
-           :stroke-width 1
-           :font-size    (* 0.4 size)}
-       (for [[[r c] e] pos->ent]
-         (nonrec e renderer size eid->pos r c
-                 (= (:db/id e) (:db/id sel))))]]]))
+        ;; _        (js/console.timeEnd "layout")
+        sel      (core/get-selected-form (d/entity-db top))
+        ]
+    [:svg  {:viewBox    (str "0 0 " vw " " vh)
+            :xmlns      "http://www.w3.org/2000/svg"
+            ;; "xmlns:xlink" "http://www.w3.org/1999/xlink"
+            :xmlnsXlink "http://www.w3.org/1999/xlink"
+            
+            :version "1.1" 
+            :ref     svgref
+            :style   {;; :outline    "1px solid"
+                      :display    "block"
+                      :background "transparent"
+                      :height "100%"
+                      :width "100%"}}
+     [:defs
+      [:marker {:id "head" :orient "auto" :markerWidth 20 :markerHeight 40 :refX 0.1 :refY 3}
+       [:path {:fill "#fff"
+               :d    "M0,0 V6 L6,3 Z"}]]]
+     [:g { ;; :stroke "#fff"
+          :transform    (str "translate(" size "," size ")")
+          ;; :fill "#fff"
+          :stroke       :none
+          :fill         :none
+          :stroke-width 1
+          :font-size    (* 0.4 size)}
+      (for [[[r c] e] pos->ent]
+        (nonrec e renderer size eid->pos r c
+                (= (:db/id e) (:db/id sel))))]]
+    
+    #_[:button {:on-click (fn [c]
+                            (let [svg (rum/deref svgref)]
+                              (js/console.log svg)
+                              (save-svg svg vw vh)))}
+       "Save svg"]))
 
 

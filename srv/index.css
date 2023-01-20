@@ -241,6 +241,7 @@ textarea.edit-box {
     overflow-y: scroll;
     white-space: pre;
     min-width: max-content;
+    /* min-width: 20em; */
     padding-top: 2px;
     padding-bottom: 2px;
     /* width: 100%; */
@@ -361,7 +362,7 @@ span.key-compose-echo {
 }
 
 .eavt-row.retraction {
-    background-color: #444;
+    background-color: #320b04;
 }
 
 
@@ -529,7 +530,8 @@ span.key-compose-echo {
 
 
 .bar .bar {
-    width: unset;
+    /* width: unset; */
+    /* height: unset; */
     border: 1px solid cadetblue;
 }
 
@@ -615,8 +617,23 @@ s { text-decoration: none; }
     padding-left: 1ex;
 }
 
-g.wire > path:hover {
-    stroke: #fff;
+.player-active-row {
+    background-color: white;
+    border-radius: 1ex;
+    color: #000;
 }
 
+.mutdoc {
+    margin-bottom: 2ex;
+}
 
+.mutdoc-title {
+    display: grid;
+    grid-template-columns: 2em 1fr;
+    column-gap: 1ex;
+    align-items: center;
+}
+
+.mutdoc p {
+    white-space: normal;
+}

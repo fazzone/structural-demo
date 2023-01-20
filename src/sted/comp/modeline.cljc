@@ -20,9 +20,10 @@
   (let [db (d/entity-db sel)
         {:keys [^String text valid]} (some-> eps rum/react)]
     
-    (println "ML"
-             (keys (core/get-app bus))
-             (pr-str (type (:system (core/get-app bus)))))
+    (println "ML?" (:db/id sel))
+    #_(println "ML"
+               (keys (core/get-app bus))
+               (pr-str (type (:system (core/get-app bus)))))
     
     [:span {:class (str "modeline code-font"
                         #_(if text " editing modeline-search" " modeline-fixed")
@@ -45,8 +46,12 @@
                    "/"
                    (:max-tx db)
                    " " (some-> sel :nav/pointer meta)
+                   " " (:db/ident sel)
                    " " (or (:token/type sel) (:coll/type sel))
-                   " " (:handle/token sel))]
+                   
+                   " " (:handle/token sel)
+                   
+                   )]
     
      #_(when-some [insp (js/document.getElementById "inspector")]
          (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
@@ -56,6 +61,7 @@
 (rum/defc modeline-nest-next
   [sel bus rec]
   (rum/with-context [my-ref cc/*modeline-ref*]
+    (println "MLnnref" my-ref)
     (some->> my-ref
              (rum/deref)
              (rum/portal (modeline-inner sel bus rec eb/editbox-ednparse-state)))))

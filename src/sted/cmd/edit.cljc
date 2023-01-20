@@ -124,7 +124,6 @@
 
 (defn exchange-with-previous-tx
   [sel]
-  #_(println "XWP" (:db/id sel))
   (let [spine  (exactly-one (:seq/_first sel))
         prev   (some-> spine :seq/_next exactly-one)
         next   (some-> spine :seq/next)
@@ -208,15 +207,27 @@
     {:coll/type :alias
      :alias/of (:db/id (:alias/of e))}))
 
-
+(defn insert-duplicate*
+  [duped inserted-at]
+  (let [new-node (-> (or (duplicate-alias duped)
+                         (form-duplicate-tx duped))
+                     (update :db/id #(or % "dup-leaf")))]
+    (into [new-node]
+          (insert-after-tx inserted-at new-node))))
 
 (defn insert-duplicate-tx
   [sel]
-  (let [new-node (-> (or (duplicate-alias sel)
-                         (form-duplicate-tx sel))
-                     (update :db/id #(or % "dup-leaf")))]
-    (into [new-node]
-          (insert-after-tx sel new-node))))
+  (insert-duplicate* sel sel))
+
+
+(defn insert-duped-parent-before-tx
+  [sel]
+  (when-let [parent (some-> sel :coll/_contains exactly-one)]
+    (let [new-node (-> (or (duplicate-alias parent)
+                           (form-duplicate-tx parent))
+                       (update :db/id #(or % "dup-leaf")))]
+      (into [new-node]
+            (insert-before-tx parent new-node)))))
 
 (defn form-wrap-tx
   ([e ct]
@@ -362,15 +373,11 @@
       (if (nil? prev)
         (if-let [n (:seq/first next)]
           (recur n))
-        (into [{:db/id          "cons"
-                :seq/first (:db/id spine)}
-               [:db/add (:db/id spine) :coll/type (:coll/type coll)]
-               [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)]
+        (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
+               {:db/id "cons" :seq/first (:db/id spine)}             ; create a cons pointing to it
+               [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
                [:db/add (:db/id outer-spine) :seq/next "cons"]
-               (when prev
-                 [:db/retract (:db/id prev) :seq/next (:db/id spine)])
-               (when-let [sn (:seq/next spine)]
-                 [:db/add "cons" :seq/next (:db/id sn)])]
+               (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])]
               (concat
                (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
                (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))

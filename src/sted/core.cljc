@@ -24,8 +24,9 @@
 
 (defn move-selection-tx
   [src-eid dst-eid]
-  [(when src-eid [:db/retract src-eid :form/highlight true])
-   [:db/add dst-eid :form/highlight true]])
+  (when (not= src-eid dst-eid)
+    [(when src-eid [:db/retract src-eid :form/highlight true])
+     [:db/add dst-eid :form/highlight true]]))
 
 (defprotocol IBus
   (send! [this msg])
@@ -46,7 +47,10 @@
   (reset [this])
 
   (set-app! [this app])
-  (get-app [this]))
+  (get-app [this])
+
+  ;; more hacks
+  (should-update [this]))
 
 (defprotocol ICursor
   (selection [this ent])
@@ -73,7 +77,8 @@
      #_(when last-sub-map
        (js/console.log "Re-use sub-map" last-sub-map))
      (reify IBus
-       (send! [this msg] (async/put! ch msg))
+       (send! [this msg]
+         (async/put! ch msg))
        (connect-sub! [this topic sch]
          (async/sub pub topic sch))
        (disconnect-sub! [this topic sch]
@@ -101,7 +106,8 @@
 
        ;; hacks?
        (set-app! [_this the-app] (reset! app-ref the-app))
-       (get-app [_] @app-ref)))))
+       (get-app [_] @app-ref)
+       (should-update [_] nil)))))
 
 (def blackhole
   (reify IBus
@@ -109,11 +115,12 @@
     (connect-sub! [_ _ _])
     (disconnect-sub! [_ _ _])
     (get-history [this txid])
-    (sub-entity [_ _ _])
+    (sub-entity [_ _ _] (fn []))
     (save-history! [this txid r])
     (zchan [this])
     (set-app! [_ _])
-    (get-app [_])))
+    (get-app [_])
+    (should-update [_] true)))
 
 (defrecord App [conn bus history system])
 
@@ -194,17 +201,17 @@
             [prior-undo & undos] (take-while list? @history)
             [u & more]           (drop-while list? @history)]
         #_(println "Undof"
-                 (for [h @history]
-                   (if (map? h)
-                     (get (:tempids h) :db/current-tx)
-                     (for [s h]
-                       (get (:tempids s) :db/current-tx)))))
+                   (for [h @history]
+                     (if (map? h)
+                       (get (:tempids h) :db/current-tx)
+                       (for [s h]
+                         (get (:tempids s) :db/current-tx)))))
         (when u
           (let [rr (d/transact! conn (revert-txdata (:tx-data u)))]
             (println "RR Max-tx" (:max-tx (:db-after rr)) "Tempids" (:tempids rr)))
           #_(let [rr (-> u
-                       (update :db-before update :max-tx inc)
-                       (update :tempids assoc))])
+                         (update :db-before update :max-tx inc)
+                         (update :tempids assoc))])
           #_(do (reset! conn (update (:db-before u) :max-tx inc))
                 (publish-tx-report! bus (:db-before u) (:tx-data u) (:tempids u)))
           (reset! history
@@ -212,24 +219,53 @@
                         (concat undos more)))))
       (recur))
     (connect-sub! bus :undo ch))
+
+  
+  ;; Broken by something
+  #_(let [ch (async/chan)]
+      (connect-sub! bus :reify-undo ch)
+      (go-loop []
+        (let [_ (async/<! ch)]
+          (println "UndoR"
+                   (for [h @history]
+                     (if (map? h)
+                       (get (:tempids h) :db/current-tx)
+                       (for [s h]
+                         (get (:tempids s) :db/current-tx)))))
+          (send! bus [:insert-txdata
+                      (-> (for [h @history]
+                            (if (map? h)
+                              (get (:tempids h) :db/current-tx)
+                              (for [s h]
+                                (get (:tempids s) :db/current-tx))))
+                          (e/->tx)
+                          (assoc :coll/type :undo-preview))])
+          (recur))))
+
   (let [ch (async/chan)]
-    (connect-sub! bus :reify-undo ch)
+    (connect-sub! bus :save-demo ch)
     (go-loop []
       (let [_ (async/<! ch)]
-        (println "UndoR"
-         (for [h @history]
-           (if (map? h)
-             (get (:tempids h) :db/current-tx)
-             (for [s h]
-               (get (:tempids s) :db/current-tx)))))
-        (send! bus [:insert-txdata
-                    (-> (for [h @history]
-                          (if (map? h)
-                            (get (:tempids h) :db/current-tx)
-                            (for [s h]
-                              (get (:tempids s) :db/current-tx))))
-                        (e/->tx)
-                        (assoc :coll/type :undo-preview))])
+        (prn (type @history))
+        (println "UndoR")
+        (cljs.pprint/pprint
+         (reverse
+          (for [h @history
+                :when (map? h)]
+            (:mut h))))
+        #_(cljs.pprint/pprint
+           (vec (for [h @history]
+                  (if (map? h)
+                    (:mut h)
+                    (mapv :mut h)))))
+        #_(for [h @history]
+            (if (map? h)
+              (:mut h)
+            
+              )
+          
+          
+            )
         (recur))))
   app)
 

@@ -12,7 +12,7 @@
         state (d/entity db :sted.page/state)
         ml-ref (rum/create-ref)]
     #_(js/console.log "Conn" conn)
-    (println "Render root" (core/uniqueid bus))
+    #_(println "Render root" (core/uniqueid bus))
          ;; "Test stuff"
      ;; [:div {:style {:display :flex :flex-direction "column"}}
      ;;  (cs/testcomp "Binkus" "nku")

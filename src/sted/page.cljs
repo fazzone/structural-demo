@@ -58,7 +58,8 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                [test-form-data-bar]
+                [(e/->tx [()])]
+                #_[test-form-data-bar]
                 #_[(e/->tx ["hello"
                             "hello"
                             "hello"
@@ -185,6 +186,9 @@
          0))))
 
 (defonce ^:export the-app (atom nil))
+
+;; hck2o <value>
+;; hcklo
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
