@@ -68,7 +68,9 @@
 (defn dom-result-highlights!
   [text results]
   (let [unique-text?  (= 1 (count results))
-        unique-token? (and unique-text? (= 1 (count (val (first results)))))
+        unique-token? (and unique-text?
+                           false
+                           #_(= 1 (count (val (first results)))))
         jj            (volatile! 0)]
     (for [[matched i n]        results]
       (->> n
@@ -101,25 +103,48 @@
            s
            (hlp (count s) i (count match) 1 utext utoken)]])]))
 
-(rum/defc results
+(rum/defc rs < rum/reactive
+  []
+  (let [{:keys [text results] :as uu} (rum/react s/results)]
+    [:span #_{:style {:outline "1px solid #eee"}}
+     "search: "
+     [:input {:type "text"
+              :style {:display "inline"
+                      :width (str (count text) "ex")}
+              :value text}]
+     
+     (dom-result-highlights! text results)
+     
+     ]))
+
+(rum/defc rs** < rum/reactive
+  [bus sstate]
+  (let [app (core/get-app bus)
+        {:keys [text results] :as uu} (some-> sstate :bing (rum/react))]
+    
+    (when uu
+      [:span {:style {:margin-right "1ex"}}
+       "/"
+       [:input.search-box
+        {:type "text"
+         :style {:display "inline"
+                 :width (str (count text) "ch")}
+         :value (or text "")
+         :on-change (fn [^js ev]
+                    
+                      nil)}]
+     
+       (dom-result-highlights! text results)
+     
+       ])))
+
+#_(rum/defc results
   < rum/reactive
   [db bus sa text rec]
   (when (< 1 (count text))
-    
     ;; results come from sdom
-    #_(dom-result-highlights! text (rum/react s/results))
+    (dom-result-highlights! text (rum/react s/results))
     
-    #_[:div {} (let [results       (rum/react s/results)
-                     unique-text?  (= 1 (count results))
-                     unique-token? (and unique-text? (= 1 (count (val (first results)))))
-                     jj            (volatile! 0)]
-                 (for [[matched rs] results
-                       [i n]        rs]
-                   (->> n
-                        (rum/portal (hlp (count matched) i (count text)
-                                         (vswap! jj inc)
-                                         unique-text?
-                                         unique-token?)))))]
     #_(dbsr db text rec)
     
     

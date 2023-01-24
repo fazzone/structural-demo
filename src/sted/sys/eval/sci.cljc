@@ -17,7 +17,8 @@
             [sted.sys.eval.sci.protocols :as esp]
             [goog.object :as gobj]
             [sted.sys.handle :as sh]
-            [mdast-util-from-markdown :as mdast]))
+            [mdast-util-from-markdown :as mdast])
+  #_(:import [cljs.core ExceptionInfo]))
 
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
@@ -231,6 +232,7 @@
                                        (fn [msg]
                                          (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
+    
     (fn [_ db bus]
       (let [target  (get-selected-form db)]
         (if-let [h (:handle/token target)]
@@ -254,14 +256,40 @@
             ;;
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
-                  res (sci/binding [sel# target] (sci/eval-string* ctx estr))]
-              (if-not (instance? js/Promise res)
-                (core/send! bus [:eval-result (:db/id top) res])
-                (do
-                  (println "It was a promise")
-                  (.then res
-                         (fn [v]
-                           (core/send! bus [:eval-result (:db/id top) v]))))))))))))
+                  ;; res (sci/binding [sel# target] (sci/eval-string* ctx estr))
+                  {:keys [ok res]} (try
+                                     {:ok true
+                                      :res (sci/binding [sel# target] (sci/eval-string* ctx estr))}
+                                     (catch :default e
+                                       {:ok nil
+                                        :res e}))]
+              
+              (cond
+                (not ok) (do
+                           (js/console.error "Exception in eval"  (instance? cljs.core.ExceptionInfo res) res)
+                           (if-let [d (ex-data res)]
+                             (do
+                               (when-let [csa (:sci.impl/callstack d)]
+                                 (run! prn (deref csa)))
+                               (core/send! bus [:eval-result (:db/id top)
+                                                d
+                                                {:coll/type :fancy}]))
+                             (core/send! bus [:eval-result (:db/id top)
+                                              {:error res}])))
+                
+                (instance? js/Promise res)
+                (.then res (fn [v] (core/send! bus [:eval-result (:db/id top) v])))
+                
+                :else
+                (core/send! bus [:eval-result (:db/id top) res]))
+              
+              #_(if-not (instance? js/Promise res)
+                  (core/send! bus [:eval-result (:db/id top) res])
+                  (do
+                    (println "It was a promise")
+                    (.then res
+                           (fn [v]
+                             (core/send! bus [:eval-result (:db/id top) v]))))))))))))
 
 
 (comment

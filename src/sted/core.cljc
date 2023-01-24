@@ -173,7 +173,7 @@
                 (reset! history (cons report @history)))
             (println "No current-tx?")))
         (when-let [e (:error report)]
-          (println (str "Error transacting " e (pr-str mut)) e)
+          (println (str "Error transacting " e mut-name) e)
           (println "Tx-data")
           (run! prn tx-data))
         (recur (or (get (:tempids report) :db/current-tx)
@@ -247,13 +247,20 @@
     (go-loop []
       (let [_ (async/<! ch)]
         (prn (type @history))
-        (println "UndoR")
-        (cljs.pprint/pprint
-         (reverse
-          (for [h @history
-                :when (map? h)]
-            (:mut h))))
+        (do
+          (println "All mutations in order:")
+          (cljs.pprint/pprint
+           (reverse
+            (for [h @history
+                  :when (map? h)]
+              (:mut h)))))
+        
+        ;; repeat last mutation
+        (when-let [lm (some :mut @history)]
+          (send! bus lm))
+        
         #_(cljs.pprint/pprint
+           
            (vec (for [h @history]
                   (if (map? h)
                     (:mut h)

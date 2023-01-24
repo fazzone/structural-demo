@@ -27,7 +27,7 @@
   #_(js/console.log "KBD" (core/uniqueid bus))
   (if-not (identical? js/document.body js/document.activeElement)
     (do
-      #_(js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement))
+      (js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement))
     (let [ms @mods
           kbd (ske/event->kbd ev (:super ms) (:hyper ms))]
       

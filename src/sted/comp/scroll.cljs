@@ -59,11 +59,15 @@
         (.scrollTo bar #js {:left new-bar-left}))))
 
 
+
+
 (defn scroll-to-selected!
   ([]
-   (let [[el & more :as els] (js/document.querySelectorAll ".selected")]
+   (let [[el & more :as els] (-> (js/document.querySelectorAll ".selected")
+                                 (js/Array.from)
+                                 (.filter #(nil? (.closest % ".alternate-reality")) ))]
      (when more
-       (js/console.log "There should be one selected element!" els))
+       (js/console.log "There should be one real selected element!" els))
      (if-not el
        (js/console.log "There should be one selected element!")
        (scroll-to-selected* el (.getBoundingClientRect el))))))

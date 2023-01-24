@@ -1,10 +1,12 @@
 (ns sted.sys.search.setup
-  (:require [sted.core :as core]
-            [sted.sys.search.db :as sdb]
-            [datascript.core :as d]
-            [datascript.db :as db #?@(:cljs [:refer [Datom]])]
-            #?(:cljs [sted.sys.search.dom :as sdom])
-            ["flexsearch" :as fs])
+  (:require
+   [rum.core :as rum]
+   [sted.core :as core]
+   [sted.sys.search.db :as sdb]
+   [datascript.core :as d]
+   [datascript.db :as db #?@(:cljs [:refer [Datom]])]
+   #?(:cljs [sted.sys.search.dom :as sdom])
+   ["flexsearch" :as fs])
   #?(:clj (:import [datascript.db Datom])))
 
 (defn cleanup!
@@ -24,7 +26,8 @@
     (recur (cleanup! app))
     (let [results (atom [])
           state (atom {})
-          index (initial-index @conn)]
+          index (initial-index @conn)
+          bar-el (atom nil)]
       
       (d/listen!
        conn
@@ -37,32 +40,45 @@
                (.add index (.-e dtm) (.-v dtm))
                (.remove index (.-e dtm)))))
          #_(js/console.timeEnd "FTS indexing")))
+
+      (d/transact! conn
+                   [{:db/ident :search/state
+                     :bing results
+                     :bong state}])
       
+      #_(println "######## Create a new search updated")
       
       (-> app
           (assoc-in [:system :search]
                     {:results results :state state})
+          
+          (core/register-mutation! :update-bar-ref
+                                   (fn [[_ r] _ _]
+                                     (reset! bar-el (rum/deref r))))
+          
           (core/register-mutation!
            :update-search
            (fn [[_ text] _ _]
-             #?(:cljs
-                (let [t (str "dbsearch " text)]
-                  #_(js/console.time t)
-                  #_(prn "Prefxi" (count (sdb/db-prefix-search
-                                          @conn
-                                          text
-                                          32)))
-                  #_(js/console.timeEnd t)
-                  (when (< 1 (count text))
-                    (js/setTimeout
-                     #_(fn []
-                         (let [rs (.search index text)]
-                           (println "Got some results " rs )
-                           (reset! results rs)
-                           (reset! sdom/results rs)
-                           #_(reset! results (.search index text)
-                                     #_(sdom/substring-search-all-visible-tokens text))))
-                     
-                     (fn [] (reset! results (sdom/substring-search-all-visible-tokens text)))
-                     
-                     0))))))))))
+             #_(println "UpdS" text)
+             (let [t (str "dbsearch " text)]
+               #_(prn "Prefxi" (count (sdb/db-prefix-search
+                                       @conn
+                                       text
+                                       32)))
+               
+               #_(js/console.timeEnd t)
+               
+               #_(when (< 1 (count text))
+                   (js/setTimeout
+                    (fn []
+                      (let [rs (sdom/substring-search-all-visible-tokens @bar-el text)]
+                        (println "Search"
+                                 (pr-str text)
+                                 " finished. Swap the results")
+                        (reset! results rs)))
+                    0))
+               
+               (when (< 1 (count text))
+                 (let [rs (sdom/substring-search-all-visible-tokens @bar-el text)]
+                   #_(println "Search" (pr-str text) " finished. Swap the results")
+                   (reset! results rs))))))))))

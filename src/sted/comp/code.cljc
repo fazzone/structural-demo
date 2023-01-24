@@ -218,12 +218,19 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
-
 (rum/defc bar
-  < remember-scroll-position
   [b bus classes]
   (let [ref-me (rum/create-ref)]
-    [:div.bar.hide-scrollbar {:class classes} #_(lazy-children b bus)
+    [:div.bar.hide-scrollbar {:ref ref-me
+                              :class classes}
+     
+     (rum/use-layout-effect!
+      (fn []
+        (core/send! bus [:update-bar-ref ref-me])
+        (fn cleanup []))
+      [bus])
+     
+     #_(lazy-children b bus)
      (for [chain-head (e/seq->vec b)]
        (-> (form chain-head bus 0 nil)
            (rum/with-key (:db/id chain-head))))]))

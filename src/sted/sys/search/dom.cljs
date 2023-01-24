@@ -4,20 +4,19 @@
 
 (def results (atom nil))
 
-(defn bink []
-  
-  )
 
 (defn substring-search-all-visible-tokens
   ;; (also search invisible tokens if they are under a visible toplevel)
-  [prefix]
-  #_(println "SSAVT" prefix)
-  (let [w js/window.innerWidth
-        h js/window.innerHeight
-        center-chain (or (some-> (js/document.elementFromPoint (/ w 2) (/ h 2))
+  [bar-el prefix]
+  (let [bar-bcr (.getBoundingClientRect bar-el)
+        w (.-width bar-bcr)
+        h (.-height bar-bcr)
+        center-chain (or (some-> (js/document.elementFromPoint (+ (.-x bar-bcr) (/ w 2))
+                                                               (+ (.-y bar-bcr) (/ h 2)))
                                  (.closest ".chain"))
-                         (some-> (js/document.elementFromPoint 30 30)
-                                 (.closest ".chain")))]
+                         #_(some-> (js/document.elementFromPoint 30 30)
+                                   (.closest ".chain")))]
+    
     (if-not center-chain
       (println "No center chain???????????")
       (letfn [(bounds [node]
@@ -32,7 +31,6 @@
               (scan-down  [n] (some-> n (vis-below? (bounds n)) (.-nextSibling)))
               (scan-right [n] (some-> n (vis-right? (bounds n)) (.-nextSibling)))
               (search-within-toplevel [acc tl]
-                #_(js/console.log "SWTL" tl)
                 (->> (.querySelectorAll tl ".tk")
                      (reduce (fn [a ch]
                                (let [t (loop [c (.-firstChild ch)]
@@ -50,7 +48,8 @@
                         (take-while some? (next (iterate back start)))))
               (search-within-chain [acc chain]
                 (let [b (bounds chain)
-                      tl (some-> (js/document.elementFromPoint (+ 30 (.-x b)) (/ h 2))
+                      tl (some-> (js/document.elementFromPoint (+ 30 (.-x b))
+                                                               (+ (.-y b) (/ h 2)))
                                  (.closest ".form-card"))]
                   (if tl
                     (->> (bidi tl scan-up scan-down)
@@ -73,8 +72,8 @@
                                ch))
                       #_(reduce search-within-chain {})
                       (reduce search-within-chain []))
-              a (reset! results nr)
+              a (reset! results {:text prefix :results nr})
               _ (js/console.timeEnd tag)]
           #_(doseq [[t i e] nr]
-            (js/console.log t i e))
+              (js/console.log t i e))
           a)))))

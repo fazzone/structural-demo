@@ -44,10 +44,8 @@ body, .prose-font {
 .top-level-form {
     /* border: 1px solid #ae81ff; */
     width: 100%;
-    /* box-sizing: border-box; */
-
-    /* white-space: nowrap; */
 }
+
 .top-level-form.code-font {
     /* color: #a6a6a0; */
     color: #777;
@@ -202,7 +200,7 @@ textarea.edit-box {
     flex-shrink: 0;
 }
 
-/* .form-card:first-child { padding-top: 3ex; } */
+.form-card:first-child { padding-top: 1ex; }
 
 #root {
     /* height: 98vh; */
@@ -518,14 +516,17 @@ span.key-compose-echo {
 /* .chain:first-child { padding-top: 200px; } */
 
 .tk.verbatim {
-    display: block;
+    /* display: block; */
     overflow-x: auto;
     white-space: pre;
     max-width: 80em;
-    padding: 1ex;
+    /* padding: 1ex; */
     background-color: #333;
     border-radius: 0px;
 }
+
+
+
 .tk.verbatim.selected { background-color: #055005; }
 
 
@@ -533,6 +534,7 @@ span.key-compose-echo {
     /* width: unset; */
     /* height: unset; */
     border: 1px solid cadetblue;
+    padding: 1ex;
 }
 
 s { text-decoration: none; }
@@ -637,3 +639,17 @@ s { text-decoration: none; }
 .mutdoc p {
     white-space: normal;
 }
+
+.search-box {
+    min-width: 2ch;
+    border: 0;
+    border-color: transparent;
+    border-style: solid;
+    padding: 0;
+    background-color: #000;
+    color: #fff;
+    font-size: inherit;
+    font-family: inherit;
+    /* outline: 1px solid cadetblue; */
+}
+

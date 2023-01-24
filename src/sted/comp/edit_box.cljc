@@ -67,8 +67,11 @@
   {:did-mount (fn [state]
                 #_(some-> state :rum/react-component (.-refs) (aget ref-name) (.focus))
                 (when-let [el (some-> state :rum/react-component (.-refs) (aget ref-name))]
-                  (when-not (.closest el ".alternate-reality")
-                    (.focus el)))
+                  #_(when-not (.closest el ".alternate-reality")
+                    (.focus el))
+                  (if-not (.closest el ".alternate-reality")
+                    (.focus el)
+                    (set! (.-tabindex el) -1)))
                 state)})
 
 
@@ -116,4 +119,6 @@
                           (println "Sending" mut)
                           (core/send! bus mut))))}]
      
-     (when value ^:inline (cs/results (d/entity-db e) bus :token/value value rec)))))
+     #_(when value ^:inline (cs/results (d/entity-db e) bus :token/value value rec))
+     
+     )))

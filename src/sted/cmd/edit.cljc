@@ -480,13 +480,24 @@
               :form/edit-initial ""
               :form/edit-comp true}))
   ([sel props]
-   (into [{:db/id "funcall"
-           :coll/type :list
-           :coll/contains #{"funcname" (:db/id sel)} 
-           :seq/first (merge {:db/id "funcname"} props)
-           :seq/next {:seq/first (:db/id sel)}}]
-         (concat (form-overwrite-tx sel "funcall")
-                 (move-selection-tx (:db/id sel) "funcname")))))
+   (let [{:form/keys [linebreak indent]} sel]
+    (into [{:db/id "funcall"
+            :coll/type :list
+            :coll/contains #{"funcname" (:db/id sel)} 
+            :seq/first (merge {:db/id "funcname"} props)
+            :seq/next {:seq/first (:db/id sel)}}]
+          (concat
+           ;; indentation
+           (when linebreak [[:db/add "funcall" :form/linebreak true]])
+           (when indent [[:db/add "funcall" :form/indent indent]])
+           (when (and linebreak indent)
+             (->> (tree-seq :coll/contains :coll/contains sel)
+                  (keep (fn [e]
+                          (when (and (:form/linebreak e) (:form/indent e))
+                            [:db/add (:db/id e) :form/indent (+ 2 (:form/indent e))])))))
+           ;; critical
+           (form-overwrite-tx sel "funcall")
+           (move-selection-tx (:db/id sel) "funcname"))))))
 
 (comment
   (let [top (e/->entity '[1 foo 2 3])

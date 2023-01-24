@@ -10,19 +10,24 @@
   [{:keys [conn bus] :as app} rec]
   (let [db @conn
         state (d/entity db :sted.page/state)
-        ml-ref (rum/create-ref)]
+        ml-ref (rum/create-ref)
+        [h set-h!] (rum/use-state nil)]
     #_(js/console.log "Conn" conn)
     #_(println "Render root" (core/uniqueid bus))
-         ;; "Test stuff"
-     ;; [:div {:style {:display :flex :flex-direction "column"}}
-     ;;  (cs/testcomp "Binkus" "nku")
-     ;;  (cs/testcomp "smalltext" "small")
+    ;; "Test stuff"
+    ;; [:div {:style {:display :flex :flex-direction "column"}}
+    ;;  (cs/testcomp "Binkus" "nku")
+    ;;  (cs/testcomp "smalltext" "small")
       
-     ;;  ]
-     ;; [:hr]
-
+    ;;  ]
+    ;; [:hr]
+    
     [:div.bar-container {}
-     (rum/bind-context [cc/*modeline-ref* ml-ref]
-                       (rec (:state/bar state) bus 0 nil))
+     (rum/bind-context
+      [cc/*modeline-ref* ml-ref]
+      
+      (js/console.log "Bindycontexty" ml-ref)
+      
+      (rec (:state/bar state) bus 0 nil))
      [:div.modeline-outer {:id "modeline" :ref ml-ref}]]))
 

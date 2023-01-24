@@ -15,15 +15,12 @@
 
 (def save-status (atom nil))
 
+(def kick (atom 0))
+
 (rum/defc modeline-inner < rum/reactive
   [sel bus rec eps]
   (let [db (d/entity-db sel)
         {:keys [^String text valid]} (some-> eps rum/react)]
-    
-    (println "ML?" (:db/id sel))
-    #_(println "ML"
-               (keys (core/get-app bus))
-               (pr-str (type (:system (core/get-app bus)))))
     
     [:span {:class (str "modeline code-font"
                         #_(if text " editing modeline-search" " modeline-fixed")
@@ -39,29 +36,37 @@
             :error "Error"
             "")))]
     
+     
+     
+     
+     
+     ;; ^:inline (cs/rs** bus)
      #_(when text ^:inline (cs/results db bus :token/value text rec))
     
-     [:span.modeline-content {}
-      ^String (str (:db/id sel)
-                   "/"
-                   (:max-tx db)
-                   " " (some-> sel :nav/pointer meta)
-                   " " (:db/ident sel)
-                   " " (or (:token/type sel) (:coll/type sel))
+     (let [sstate (d/entity db :search/state)]
+      [:span.modeline-content {}
+       ^:inline (cs/rs** bus sstate)
+      
+       ^String (str (:db/id sel)
+                    "/"
+                    (:max-tx db)
+                    " " (some-> sel :nav/pointer meta)
+                    " " (:db/ident sel)
+                    " " (or (:token/type sel) (:coll/type sel))
                    
-                   " " (:handle/token sel)
+                    " " (:handle/token sel)
                    
-                   )]
+                    )])
     
      #_(when-some [insp (js/document.getElementById "inspector")]
          (rum/portal (ci/inspect-inner (d/entity-db sel) bus) insp))
     
      #_[:input.edit-box.code-font {:type :text}]]))
 
-(rum/defc modeline-nest-next
+(rum/defc modeline-nest-next < rum/reactive
   [sel bus rec]
-  (rum/with-context [my-ref cc/*modeline-ref*]
-    (println "MLnnref" my-ref)
-    (some->> my-ref
-             (rum/deref)
-             (rum/portal (modeline-inner sel bus rec eb/editbox-ednparse-state)))))
+  (let [ k (rum/react kick)]
+    (rum/with-context [my-ref cc/*modeline-ref*]
+      (some->> my-ref
+               (rum/deref)
+               (rum/portal (modeline-inner sel bus rec eb/editbox-ednparse-state))))))

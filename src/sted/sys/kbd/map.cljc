@@ -61,6 +61,7 @@
    "p"         :slurp-right
    "S-P"       :barf-right
    "Tab"       :zp
+   "S-Tab"     "Nothing yet"
    ;; "S-Tab"     :dedent
    "e"         :eval-sci
    "S-("       :new-list

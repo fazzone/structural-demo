@@ -526,9 +526,7 @@
 (defn store-fn
   ([] (str (d/squuid)))
   ([v] (when (meta v) (store-fn)))
-  ([k v]
-   (println "Store" k v)
-   (sh/store k v)))
+  ([k v] (sh/store k v)))
 
 (defn node-limit
   [db]
@@ -642,14 +640,18 @@
    :oneline-all           (fn [sel]
                             (some->> sel :coll/contains (mapcat recursive-oneline-tx)))
    :clear-one-eval        clear-one-eval
-   :eval-result           (fn [sel et-eid data]
+   :eval-result           (fn [sel et-eid data props]
                             (let [db (d/entity-db sel)
                                   et (d/entity db et-eid)
                                   target (peek (nav/parents-vec et))
                                   spine  (edit/exactly-one (:seq/_first target))
                                   coll   (edit/exactly-one (:coll/_contains target))
-                                  nn     {:db/id     "ncell"
-                                          :seq/_next (:db/id spine)}
+                                  nn     (-> {:db/id     "ncell"
+                                              :seq/_next (:db/id spine)
+                                              :binker "B I N K"
+                                              ;; :db/ident "HJafongs"
+                                              }
+                                             (merge props))
                                   nl     (node-limit db)]
                               (when (and spine coll)
                                 (into [nn

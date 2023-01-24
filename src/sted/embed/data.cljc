@@ -39,22 +39,6 @@
     (sequential? e)     :list
     (instance? Datom e) :vec))
 
-(defn zconj! [c v] (conj c v))
-
-(defn emit-tk
-  [out eid t v]
-  (-> out
-      (conj! [:db/add eid :token/type t])
-      (conj! [:db/add eid :token/value v])))
-
-(defn emit1
-  [out eid coll-type v]
-  (if coll-type
-    (conj! out [:db/add eid :coll/type coll-type])
-    (let [tt (or (->token-type v)
-                 :verbatim)]
-      (emit-tk out eid tt (->token-value tt v)))))
-
 (defrecord LoopState [
                       outer       ; eid which coll/contains us
                       cell        ; cons cell allocated for us to fill
@@ -70,6 +54,27 @@
   ([ptr])
   ;; store ptr under key
   ([key ptr]))
+
+
+(defn emit-tk
+  [out eid t v]
+  (-> out
+      (conj! [:db/add eid :token/type t])
+      (conj! [:db/add eid :token/value v])))
+
+(defn emit1
+  [out eid coll-type v]
+  (if coll-type
+    (conj! out [:db/add eid :coll/type coll-type])
+    (if-let [tt (->token-type v)]
+      (emit-tk out eid tt (->token-value tt v))
+      (let [tt :verbatim
+            ;; k (*store*)
+            ]
+        #_(*store* k v)
+        (-> out
+            (emit-tk eid tt (->token-value tt v))
+            #_(conj! [:db/add eid :handle/token k ]))))))
 
 (defn emit-cont
   [out cell ptr k]
@@ -138,7 +143,7 @@
                      ;; vcell is a cons for the map value
                      true  (conj! [:db/add cell :seq/next vcell])
                      ncell (conj! [:db/add vcell :seq/next ncell])))
-            
+            ;; all other coll types
             (let [nout (cond-> out
                          ;; vcell is a value cell for this coll/token node
                          cell  (conj! [:db/add cell :seq/first vcell])

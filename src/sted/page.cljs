@@ -58,8 +58,8 @@
   (let [chains (concat
                 #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
                 #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                [(e/->tx [()])]
-                #_[test-form-data-bar]
+                #_[(e/->tx [()])]
+                [test-form-data-bar]
                 #_[(e/->tx ["hello"
                             "hello"
                             "hello"
