@@ -16,20 +16,6 @@
                                move-selection-tx]]))
 
 
-;; edit box
-
-
-(defn select-nth-search-result
-  [n]
-  (println "SNSR" n)
-  (when-let [eid (some-> (js/document.getElementById (str "sr" n))
-                         (.closest ".tk")
-                         (.-dataset)
-                         (.-eid)
-                         (js/parseInt))]
-    [:edit/reject-and-select eid]))
-
-
 (defn editbox-keydown-mutation
   [e text key]
   (case key
@@ -44,15 +30,6 @@
     "[" [:edit/wrap :vec text]
     "S-(" [:edit/wrap :list text]
     "S-{" [:edit/wrap :map text]
-    "M-1" (select-nth-search-result 1)
-    "M-2" (select-nth-search-result 2)
-    "M-3" (select-nth-search-result 3)
-    "M-4" (select-nth-search-result 4)
-    "M-5" (select-nth-search-result 5)
-    "M-6" (select-nth-search-result 6)
-    "M-7" (select-nth-search-result 7)
-    "M-8" (select-nth-search-result 8)
-    "M-9" (select-nth-search-result 9)
     (" " "S- ") (cond
                   (empty? text) [:edit/reject]
                   (= "\"" (first text)) (println "Quotedstring")
@@ -79,21 +56,20 @@
        nil)
      [])
     
-    (rum/fragment
-     [:input.edit-box
-      {:type        :text
-       :ref         iref
-       :spellCheck  "false"
-       :value       (or value "")
-       :style       {:width (str (max 1 (count value)) "ch")}
-       :on-change   #(let [new-text (string/triml (.-value (.-target %)))
-                           token    (e/parse-token-tx new-text)]
-                       (set-text! new-text)
-                       nil)
-       :on-key-down (fn [ev]
-                      (let [kbd (ske/event->kbd ev)
-                            mut (editbox-keydown-mutation e value kbd)]
-                        (when mut
-                          (.preventDefault ev)
-                          (.stopPropagation ev)
-                          (core/send! bus mut))))}])))
+    [:input.edit-box
+     {:type        :text
+      :ref         iref
+      :spellCheck  "false"
+      :value       (or value "")
+      :style       {:width (str (max 1 (count value)) "ch")}
+      :on-change   #(let [new-text (string/triml (.-value (.-target %)))
+                          token    (e/parse-token-tx new-text)]
+                      (set-text! new-text)
+                      nil)
+      :on-key-down (fn [ev]
+                     (let [kbd (ske/event->kbd ev)
+                           mut (editbox-keydown-mutation e value kbd)]
+                       (when mut
+                         (.preventDefault ev)
+                         (.stopPropagation ev)
+                         (core/send! bus mut))))}]))

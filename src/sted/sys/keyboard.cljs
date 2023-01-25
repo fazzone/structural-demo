@@ -15,27 +15,16 @@
 
 (def ^:const hyper "F23")
 
-#_(def ^:export event-log #js [])
-
-#_(defn event->kbd
-  [^KeyboardEvent ev mods]
-  (let [ms @mods]
-    (ske/event->kbd ev (:super ms) (:hyper ms))))
-
 (defn keydown
   [^KeyboardEvent ev mods keymap bus]
   #_(js/console.log "KBD" (core/uniqueid bus))
   (if-not (identical? js/document.body js/document.activeElement)
     (do
-      
       #_(js/console.log (str "KBD" [my-generation] "The document is not active") js/document.activeElement))
     (let [ms @mods
           kbd (ske/event->kbd ev (:super ms) (:hyper ms))]
       
       #_(js/console.log "KBD" (pr-str ms) kbd (pr-str (get @keymap kbd)))
-      
-      #_(.push event-log #js { :kbd kbd :time (js/Date.now)})
-      #_(js/console.log event-log)
       
       (cond
         (= super (.-key ev))

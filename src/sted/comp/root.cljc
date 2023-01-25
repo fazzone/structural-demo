@@ -12,13 +12,12 @@
         state (d/entity db :sted.page/state)
         ml-ref (rum/create-ref)
         [h set-h!] (rum/use-state nil)]
+    
     [:div.bar-container {}
      (rum/bind-context
       [cc/*modeline-ref* ml-ref]
       (rec (:state/bar state) bus 0 nil))
      
      [:div.modeline-outer.code-font {:id "modeline" :ref ml-ref}
-      (cs/rs** bus (d/entity db :search/state))
-      
-      ]]))
+      (cs/rs** bus (d/entity db :search/state))]]))
 

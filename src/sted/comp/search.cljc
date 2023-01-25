@@ -64,12 +64,7 @@
                            false
                            #_(= 1 (count (val (first results)))))
         jj            (volatile! 0)]
-    #_(for [[matched i n]        results]
-        (->> n
-              (rum/portal (hlp (count matched) i (count text)
-                               (vswap! jj inc)
-                               unique-text?
-                               unique-token?))))
+
     (for [^js r results]
       (->> (.-element r)
            (rum/portal (hlp (count (.-match r))
@@ -79,57 +74,7 @@
                             unique-text?
                             unique-token?))))))
 
-(rum/defc testcomp
-  [s match]
-  (let [i (string/index-of s match)] 
-    [:div.code-font
-     {:style {:margin-top "1ex"
-              :margin-left "5ex"
-              :zoom "400%"}}
-     [:span (str "hlp "  (pr-str s) " " (str i) " " (pr-str match))]
-     [:div {:style {:margin-top "1ex"}}
-      [:span.tk.v s
-       (hlp (count s) i (count match) 1 false false)]]
-     [:div {:style {:margin-top "1ex"}}
-      [:span.tk.l s
-       (hlp (count s) i (count match) 1 false false)]]
-    
-     #_(for [utext [true false]
-             utoken [true false]]
-         [:div {:style {:margin-top "1ex"}
-                :key (str utext "_" utoken)}
-          (string/join " " ["hlp" (count s) i (count match) 1 utext utoken])
-          [:span.tk.v
-           s
-           (hlp (count s) i (count match) 1 utext utoken)]])]))
-
-(rum/defc rs < rum/reactive
-  []
-  (let [{:keys [text results] :as uu} (rum/react s/results)]
-    [:span #_{:style {:outline "1px solid #eee"}}
-     "search: "
-     [:input {:type "text"
-              :style {:display "inline"
-                      :width (str (count text) "ex")}
-              :value text}]
-     
-     (dom-result-highlights! text results)
-     
-     ]))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
-
-(defn select-nth-search-result
-  [n]
-  (println "SNSRssssssss" n)
-  #_(when-let [eid (some-> (js/document.getElementById (str "sr" n))
-                         (.closest ".tk")
-                         (.-dataset)
-                         (.-eid)
-                         (js/parseInt))]
-    (js/console.log "Clicky?" eid)
-
-    [:search/select n]))
 
 (defn searchbox-keydown-mutation
   [key]
@@ -194,32 +139,4 @@
      (dom-result-highlights! text results)]))
 
 
-#_(rum/defc results
-  < rum/reactive
-  [db bus sa text rec]
-  (when (< 1 (count text))
-    ;; results come from sdom
-    (dom-result-highlights! text (rum/react s/results))
-    
-    #_(dbsr db text rec)
-    
-    
-    ;; results come from dbsearch
-    #_[:div {}
-       [:div.search
-        (for [eid (rum/react s/results)]
-          (let [e (d/entity db eid)
-                k (* 3 eid)]
-            (rum/fragment
-             {:key (- k)}
-             (rum/bind-context [cc/*indenter* nil] ^:inline
-                               (rec (or #_(move/up e)
-                                        e)
-                                    core/blackhole
-                                    0
-                                    nil))
-             [:span {:key (- 1 k)} "x" ]
-             [:span.last {:key (- 2 k)}
-              (str eid)])))]]     
-    ))
 

@@ -224,12 +224,11 @@
     [:div.bar.hide-scrollbar {:ref ref-me
                               :class classes}
      
+     ;; Hack for DOM search
      (rum/use-layout-effect!
       (fn []
-        (println "Stash the bar ref!!")
         (core/send! bus [:update-bar-ref (rum/deref ref-me)])
-        (fn cleanup []
-          (println "This bar is being taken down")))
+        nil)
       [bus])
      
      #_(lazy-children b bus)
@@ -446,13 +445,6 @@
     :regex (str "REGEX:" v)
     (:md/text :md/code :md/inline-code) v))
 
-
-#_(defn form-onclick
-  [bus ^js ev]
-  (.stopPropagation ev)
-  (core/send! bus [:click (:db/id e)])
-  false)
-
 (rum/defc form
   < dbrx/ereactive scroll-selected
   {:key-fn (fn [e b i p] (:db/id e))}
@@ -473,12 +465,7 @@
                :class (if-not selected?
                         tc
                         (str tc " selected"))
-               :data-eid (:db/id e)
-               #_ #_:onClick (fn [ev]
-                          (.stopPropagation ev)
-                          (js/console.log "click" (:db/id e) bus)
-                          (core/send! bus [:click (:db/id e)])
-                          false)}
+               :data-eid (:db/id e)}
               ^String it])
            (:coll/type e)
            (case (:coll/type e)

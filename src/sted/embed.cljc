@@ -218,12 +218,7 @@
     (string/starts-with? value ":")
     (keyword (subs value 1))
     
-    :else (keyword value)
-    
-    ;; :else (throw (ex-info
-    ;;               (str "What sort of keyword is this? " value)
-    ;;               {}))
-    ))
+    :else (keyword value)))
 
 (defn coll->
   [e ct xs]
@@ -382,7 +377,6 @@
 
 (defn parse-token-tx
   [s]
-  (println "PTT" (pr-str s))
   (try
     (string->tx s)
     (catch #? (:cljs js/Error :clj Exception) e
@@ -415,7 +409,3 @@
                           #_[(string->tx-all (slurp "src/sted/page.cljs"))]))
               :avet
               ))))
-
-
-(do 0x7374656473746564)
-

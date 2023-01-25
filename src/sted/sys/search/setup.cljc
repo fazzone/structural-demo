@@ -47,8 +47,6 @@
                      :bing results
                      :bong state}])
       
-      #_(println "######## Create a new search updated")
-      
       (-> app
           (assoc-in [:system :search]
                     {:results results :state state})
@@ -56,9 +54,7 @@
           (core/register-mutation! :update-bar-ref
                                    (fn [[_ r] _ _]
                                      (d/transact! conn [{:db/ident :sted.page/state
-                                                         ::bar-ref r}])
-                                     (js/console.log "Updated bar-ref " r)
-                                     #_(reset! bar-el (rum/deref r))))
+                                                         ::bar-ref r}])))
 
           (core/register-mutation! :search/start  #(reset! state true))
           (core/register-mutation! :search/cancel #(do
@@ -77,7 +73,7 @@
           (core/register-mutation! :update-search
                                    (fn [[_ text] db bus]
                                      (when (< 1 (count text))
-                                       (js/console.log "Updating search?" (::bar-ref (d/entity db :sted.page/state)))
+                                       #_(js/console.log "Updating search?" (::bar-ref (d/entity db :sted.page/state)))
                                        (let [rs (sdom/substring-search-all-visible-tokens
                                                  (::bar-ref (d/entity db :sted.page/state))
                                                  text)]

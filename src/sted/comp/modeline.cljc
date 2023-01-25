@@ -19,21 +19,8 @@
 
 (rum/defc modeline-inner < rum/reactive
   [sel bus rec]
-  (let [db (d/entity-db sel)
-        
-        ]
+  (let [db (d/entity-db sel)]
     (rum/fragment
-     
-     #_[:span.modeline-echo
-      {}
-      (let [{:keys [on at status file]} (rum/react save-status)]
-        (when (= on (:db/id sel))
-          (case status
-            :saving "Saving"
-            :ok (str file "@" at)
-            :error "Error"
-            "")))]
-     
      [:span.modeline-content {}
       ^String (str (:db/id sel)
                    "/"

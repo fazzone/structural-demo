@@ -38,15 +38,9 @@
    [goog.object :as gobj]
    [zprint.core :as zp-hacks]
    [sted.core :as core :refer [get-selected-form]]
-   
-   [shadow.resource :as rc]
-
-   
-   
-   )
+   [shadow.resource :as rc])
   (:require-macros
-   [cljs.core.async.macros :refer [go
-                                   go-loop]]
+   [cljs.core.async.macros :refer [go go-loop]]
    [sted.macros :as m]))
 
 (def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
@@ -185,15 +179,6 @@
 
 (defonce ^:export the-app (atom nil))
 
-;; hck2o <value>
-;; hcklo
-
-(defn setup-editbox!
-  [{:keys [conn bus] :as app}]
-  (d/transact! conn
-               [{:db/ident ::state
-                 :edit/partial (atom nil)}])
-  app)
 
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
@@ -216,7 +201,6 @@
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
-         (setup-editbox!)
          (core/register-mutation!
           :save
           (fn [_ db bus]
@@ -281,9 +265,7 @@
     (println "Created new app and reset kbdb.  Mount root...")
     
     (-> (cr/root app code/form)
-        (rum/mount el))
-    
-    (println "MountDone")))
+        (rum/mount el))))
 
 
 (defn ^:export become

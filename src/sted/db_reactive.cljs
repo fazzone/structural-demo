@@ -50,15 +50,10 @@
                              ::subber subber
                              ::unsubber (subber (:db/id ent)))))
    :should-update (fn [old-state new-state]
-                    #_(some-> new-state ::nupdate deref)
-                    (or
-                     
-                     ;; true               ; hacks for testing
-                     
-                     (some-> (::nupdate new-state) deref)
-                     (some-> (:rum/args new-state)
-                             (nth 1)
-                             core/should-update)))
+                    (or (some-> (::nupdate new-state) deref)
+                        (some-> (:rum/args new-state)
+                                (nth 1)
+                                (core/should-update))))
    :will-remount  (fn [old-state new-state]
                     (let [[old-e old-bus] (-> old-state :rum/args)
                           [new-e bus]     (-> new-state :rum/args)
@@ -72,9 +67,6 @@
                             (u))
                           (assoc new-state ::unsubber ((::subber new-eid)))))))
    :will-unmount  (fn [state]
-                    #_(println "Unsub"  (-> state :rum/args first :db/id)
-                             (core/uniqueid
-                              (-> state :rum/args second)))
                     (when-some [u (::unsubber state)]
                       (u))
                     state)

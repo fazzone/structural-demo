@@ -41,14 +41,9 @@
   (get-history [this txid])
   (save-history! [this txid tx-report])
   ;; hacks
-  (zchan [this])
-
   (uniqueid [this])
   (reset [this])
-
-  (set-app! [this app])
-  (get-app [this])
-
+  
   ;; more hacks
   (should-update [this]))
 
@@ -99,14 +94,11 @@
       
        (get-history [this txid] (get @hs txid))
        (save-history! [this txid r] (swap! hs assoc txid r))
-       (zchan [_this] ch)
        (uniqueid [_this] uu)
        (reset [_this]
          #?(:cljs (bus sub-map)))
 
        ;; hacks?
-       (set-app! [_this the-app] (reset! app-ref the-app))
-       (get-app [_] @app-ref)
        (should-update [_] nil)))))
 
 (def blackhole
@@ -117,9 +109,6 @@
     (get-history [this txid])
     (sub-entity [_ _ _] (fn []))
     (save-history! [this txid r])
-    (zchan [this])
-    (set-app! [_ _])
-    (get-app [_])
     (should-update [_] true)))
 
 (defrecord App [conn bus history system])
@@ -220,59 +209,21 @@
       (recur))
     (connect-sub! bus :undo ch))
 
-  
-  ;; Broken by something
-  #_(let [ch (async/chan)]
-      (connect-sub! bus :reify-undo ch)
-      (go-loop []
-        (let [_ (async/<! ch)]
-          (println "UndoR"
-                   (for [h @history]
-                     (if (map? h)
-                       (get (:tempids h) :db/current-tx)
-                       (for [s h]
-                         (get (:tempids s) :db/current-tx)))))
-          (send! bus [:insert-txdata
-                      (-> (for [h @history]
-                            (if (map? h)
-                              (get (:tempids h) :db/current-tx)
-                              (for [s h]
-                                (get (:tempids s) :db/current-tx))))
-                          (e/->tx)
-                          (assoc :coll/type :undo-preview))])
-          (recur))))
-
   (let [ch (async/chan)]
     (connect-sub! bus :save-demo ch)
     (go-loop []
       (let [_ (async/<! ch)]
-        (prn (type @history))
-        (do
-          (println "All mutations in order:")
-          (cljs.pprint/pprint
-           (reverse
-            (for [h @history
-                  :when (map? h)]
-              (:mut h)))))
+        #_(do (println "All mutations in order:")
+            (cljs.pprint/pprint
+             (reverse
+              (for [h @history
+                    :when (map? h)]
+                (:mut h)))))
         
         ;; repeat last mutation
         (when-let [lm (some :mut @history)]
           (send! bus lm))
         
-        #_(cljs.pprint/pprint
-           
-           (vec (for [h @history]
-                  (if (map? h)
-                    (:mut h)
-                    (mapv :mut h)))))
-        #_(for [h @history]
-            (if (map? h)
-              (:mut h)
-            
-              )
-          
-          
-            )
         (recur))))
   app)
 
@@ -311,5 +262,4 @@
                                     {:core/id my-id})))}
                      (map->App)
                      (setup-undo!))]
-     (set-app! the-bus the-app)
      the-app)))

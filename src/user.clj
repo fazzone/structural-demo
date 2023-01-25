@@ -60,35 +60,7 @@
 (comment
   (shadow/watch :ptr))
 
-#_(count
- (slurp
-  (str
-   "C:/Program Files/KiCad/6.0/share/kicad/symbols/"
-   "4xxx.kicad_sym")))
 
-#_(spit
- "testpattern.bin"
- (let [ns [0 0xff 0xf0 0xff00 0x0f0 0x0fff]
-       b (java.nio.ByteBuffer/allocate (* 4 (count ns)))]
-   (doseq [n ns]
-     (.putInt b n))
-   (.array b)))
-
-#_(->>   "4xxx.kicad_sym"
-       (str "C:/Program Files/KiCad/6.0/share/kicad/symbols/")
-       slurp
-       clojure.edn/read-string
-       (tree-seq coll? seq)
-       next
-       (filter (fn [e]
-                 (and (list? e) (= 'symbol (first e)))))
-       (take 3)
-       (run! (fn [[_symbol s & body]]
-               (clojure.pprint/pprint
-                (into {:symbol s}
-                      (for [[p v & vs] body]
-                        [p (if-not vs v (into [v] vs))])))
-               #_(run! prn e))))
 
 
 
