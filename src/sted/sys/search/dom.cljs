@@ -39,8 +39,15 @@
                                                :else (recur (.-nextSibling c))))
                                      i (string/index-of (string/lower-case t) prefix)]
                                  #_(js/console.log "F.c." (instance? js/Text (.-firstChild ch)))
-                                 
-                                 (cond-> a i (conj #js [t i ch]))
+                                 (cond-> a
+                                   i (conj #js {:match t
+                                                :index i
+                                                :element ch
+                                                :eid (some-> ^js ch
+                                                             (..  -dataset -eid)
+                                                             (js/parseInt))})
+                                   #_(conj #js [t i ch (doto #js {:eid (.. ^js ch -dataset -eid)}
+                                                         js/console.log)]))
                                  #_(cond-> a i (update t (fnil conj []) [i ch]))))
                              acc)))
               (bidi [start fwd back]

@@ -4,6 +4,7 @@
    [sted.core :as core]
    [sted.sys.search.db :as sdb]
    [datascript.core :as d]
+   [sted.cmd.mut :as mut]
    [datascript.db :as db #?@(:cljs [:refer [Datom]])]
    #?(:cljs [sted.sys.search.dom :as sdom])
    ["flexsearch" :as fs])
@@ -25,7 +26,7 @@
   (if (::results app)
     (recur (cleanup! app))
     (let [results (atom [])
-          state (atom {})
+          state (atom nil)
           index (initial-index @conn)
           bar-el (atom nil)]
       
@@ -54,31 +55,30 @@
           
           (core/register-mutation! :update-bar-ref
                                    (fn [[_ r] _ _]
-                                     (reset! bar-el (rum/deref r))))
+                                     (d/transact! conn [{:db/ident :sted.page/state
+                                                         ::bar-ref r}])
+                                     (js/console.log "Updated bar-ref " r)
+                                     #_(reset! bar-el (rum/deref r))))
+
+          (core/register-mutation! :search/start  #(reset! state true))
+          (core/register-mutation! :search/cancel #(do
+                                                     (reset! state nil)
+                                                     (reset! results [])))
           
-          (core/register-mutation!
-           :update-search
-           (fn [[_ text] _ _]
-             #_(println "UpdS" text)
-             (let [t (str "dbsearch " text)]
-               #_(prn "Prefxi" (count (sdb/db-prefix-search
-                                       @conn
-                                       text
-                                       32)))
-               
-               #_(js/console.timeEnd t)
-               
-               #_(when (< 1 (count text))
-                   (js/setTimeout
-                    (fn []
-                      (let [rs (sdom/substring-search-all-visible-tokens @bar-el text)]
-                        (println "Search"
-                                 (pr-str text)
-                                 " finished. Swap the results")
-                        (reset! results rs)))
-                    0))
-               
-               (when (< 1 (count text))
-                 (let [rs (sdom/substring-search-all-visible-tokens @bar-el text)]
-                   #_(println "Search" (pr-str text) " finished. Swap the results")
-                   (reset! results rs))))))))))
+          (core/register-simple! :search/select
+                                 (fn [sel isr]
+                                   (let [rs (:results @results)]
+                                     (when (<= 1 isr (count rs))
+                                       (let [^js r (nth rs (dec isr))]
+                                         (reset! state nil)
+                                         (reset! results [])
+                                         (core/move-selection-tx (:db/id sel) (.-eid r)))))))
+
+          (core/register-mutation! :update-search
+                                   (fn [[_ text] db bus]
+                                     (when (< 1 (count text))
+                                       (js/console.log "Updating search?" (::bar-ref (d/entity db :sted.page/state)))
+                                       (let [rs (sdom/substring-search-all-visible-tokens
+                                                 (::bar-ref (d/entity db :sted.page/state))
+                                                 text)]
+                                         (reset! results rs)))))))))

@@ -5,6 +5,7 @@
             [sted.cmd.move :as move]
             [sted.comp.common :as cc]
             [sted.sys.search.db :as sdb]
+            [sted.sys.kbd.evt :as ske]
             [sted.core :as core]
             [sted.sys.search.dom :as s]
             #_[comp.code :as code]))
@@ -37,16 +38,7 @@
                                         :left (str left "ch")}}]
        :else
        [:span.hlp.unique-text {:style {:width (str tkl "ch")
-                                       :left (str left "ch")}}])
-     
-     #_(if-not unique?
-         [:span.hlp
-          {:style {:width (str len "ch")
-                   :left (str (+ off left) "ch")}}]
-         [:span.hlp.unique-token
-          {:style {:width (str tkl "ch")
-                   :left (str left "ch")}}])]
-    ))
+                                       :left (str left "ch")}}])]))
 
 (rum/defc dbsr
   [db text rec]
@@ -72,9 +64,17 @@
                            false
                            #_(= 1 (count (val (first results)))))
         jj            (volatile! 0)]
-    (for [[matched i n]        results]
-      (->> n
-           (rum/portal (hlp (count matched) i (count text)
+    #_(for [[matched i n]        results]
+        (->> n
+              (rum/portal (hlp (count matched) i (count text)
+                               (vswap! jj inc)
+                               unique-text?
+                               unique-token?))))
+    (for [^js r results]
+      (->> (.-element r)
+           (rum/portal (hlp (count (.-match r))
+                            (.-index r)
+                            (count text)
                             (vswap! jj inc)
                             unique-text?
                             unique-token?))))))
@@ -117,26 +117,82 @@
      
      ]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+(defn select-nth-search-result
+  [n]
+  (println "SNSRssssssss" n)
+  #_(when-let [eid (some-> (js/document.getElementById (str "sr" n))
+                         (.closest ".tk")
+                         (.-dataset)
+                         (.-eid)
+                         (js/parseInt))]
+    (js/console.log "Clicky?" eid)
+
+    [:search/select n]))
+
+(defn searchbox-keydown-mutation
+  [key]
+  (case key
+    "1"      [:search/select 1]
+    "2"      [:search/select 2]
+    "3"      [:search/select 3]
+    "4"      [:search/select 4]
+    "5"      [:search/select 5]
+    "6"      [:search/select 6]
+    "7"      [:search/select 7]
+    "8"      [:search/select 8]
+    "9"      [:search/select 9]
+    "Enter"  [:search/select 1]
+    "Escape" [:search/cancel]
+    
+    nil))
+
+(rum/defc search-box
+  [bus]
+  (let [[text set-text!] (rum/use-state "")
+        iref (rum/create-ref)]
+    
+    (rum/use-layout-effect!
+     (fn []
+       (when-let [el (rum/deref iref)]
+         (if-not (.closest el ".alternate-reality")
+           (.focus el)
+           (set! (.-tabindex el) -1)))
+       nil)
+     [])
+    
+    [:input.search-box
+     {:type        :text
+      :ref         iref
+      :spellCheck  "false"
+      :value       (or text "")
+      :style       {:width (str (max 1 (count text)) "ch")}
+      :on-change   #(let [new-text (string/triml (.-value (.-target %)))]
+                      (set-text! new-text)
+                      (core/send! bus [:update-search new-text])
+                      nil)
+      :on-key-down (fn [ev]
+                     (let [kbd (ske/event->kbd ev)
+                           mut (searchbox-keydown-mutation kbd)]
+                        
+                       (when mut
+                         (.preventDefault ev)
+                         (.stopPropagation ev)
+                         (core/send! bus mut))
+                       ))}]))
+
+
 (rum/defc rs** < rum/reactive
   [bus sstate]
-  (let [app (core/get-app bus)
-        {:keys [text results] :as uu} (some-> sstate :bing (rum/react))]
+  (let [{:keys [text results] :as uu} (some-> sstate :bing (rum/react))
+        bong (some-> sstate :bong (rum/react))]
     
-    (when uu
-      [:span {:style {:margin-right "1ex"}}
-       "/"
-       [:input.search-box
-        {:type "text"
-         :style {:display "inline"
-                 :width (str (count text) "ch")}
-         :value (or text "")
-         :on-change (fn [^js ev]
-                    
-                      nil)}]
-     
-       (dom-result-highlights! text results)
-     
-       ])))
+    [:span.searcher {}
+     (when bong "search: ")
+     (when bong (search-box bus))
+     (dom-result-highlights! text results)]))
+
 
 #_(rum/defc results
   < rum/reactive

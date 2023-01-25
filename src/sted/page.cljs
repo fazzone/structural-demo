@@ -49,8 +49,6 @@
                                    go-loop]]
    [sted.macros :as m]))
 
-(comment (def ^js pdfjs (gobj/get js/window "pdfjs-dist/build/pdf")))
-
 (def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
                                :chain/filename  "src/sted/user.clj"))
 
@@ -190,6 +188,13 @@
 ;; hck2o <value>
 ;; hcklo
 
+(defn setup-editbox!
+  [{:keys [conn bus] :as app}]
+  (d/transact! conn
+               [{:db/ident ::state
+                 :edit/partial (atom nil)}])
+  app)
+
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
@@ -207,9 +212,11 @@
          (core/register-mutation! :eval-sci (eval-sci/mutatef a the-app))
          (core/register-simple! :zp (sf/mutatef a))
          (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
+         
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
+         (setup-editbox!)
          (core/register-mutation!
           :save
           (fn [_ db bus]
@@ -275,7 +282,8 @@
     
     (-> (cr/root app code/form)
         (rum/mount el))
-    (println "Done")))
+    
+    (println "MountDone")))
 
 
 (defn ^:export become

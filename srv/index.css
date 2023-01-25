@@ -308,7 +308,9 @@ span.indenter {
 }
 
 .modeline-outer {
-    display: block;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 3ch;
     color: #777;
     min-height: 3ex;
     line-height: 3ex;
@@ -316,30 +318,6 @@ span.indenter {
     /* margin-top: 0.5ex; */
     /* margin-bottom: 0.5ex; */
 }
-
-.modeline {
-    /* height: 3ex; */
-}
-/* .modeline-fixed { height: 3ex; } */
-/* .modeline-search { height: 15ex; } */
-
-span.modeline.editing {
-    /* background-color: #2a4a2a; */
-}
-span.modeline.editing.invalid {
-    background-color: red;
-}
-span.modeline-content {
-    float: left;
-    margin-right: 0.5em;
-}
-span.modeline-echo {
-    float: right;
-}
-span.key-compose-echo {
-    padding-left: 1ex;
-}
-
 
 .datoms-table {
     display: grid;
@@ -641,15 +619,27 @@ s { text-decoration: none; }
 }
 
 .search-box {
-    min-width: 2ch;
+    min-width: 8ch;
     border: 0;
     border-color: transparent;
     border-style: solid;
-    padding: 0;
+    /* margin: 0 1ch 0 1ch; */
+    /* padding: 0; */
     background-color: #000;
     color: #fff;
     font-size: inherit;
     font-family: inherit;
     /* outline: 1px solid cadetblue; */
 }
+.search-box:not(:focus) {
+    background-color: tomato;
+}
 
+.searcher {
+    grid-row: 1;
+    grid-column: 2;
+}
+.modeline-content {
+    grid-row: 1;
+    grid-column: 1;
+}

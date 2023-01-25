@@ -87,7 +87,9 @@
    "M-S-I"     "No, I do not want to report a problem to Google"
    "M-l"       :clear-one-eval
    "q"         :compose
-   })
+   
+   "/"   :search/start
+   "C-s" :search/start})
 
 (defn kbd->keydowns
   [kbd]

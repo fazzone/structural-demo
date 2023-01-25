@@ -61,52 +61,34 @@
                   :else [:edit/finish-and-edit-next-node text])
     nil))
 
-
-(defn focus-ref-on-mount
-  [ref-name]
-  {:did-mount (fn [state]
-                #_(some-> state :rum/react-component (.-refs) (aget ref-name) (.focus))
-                (when-let [el (some-> state :rum/react-component (.-refs) (aget ref-name))]
-                  #_(when-not (.closest el ".alternate-reality")
-                    (.focus el))
-                  (if-not (.closest el ".alternate-reality")
-                    (.focus el)
-                    (set! (.-tabindex el) -1)))
-                state)})
-
-
-(def editbox-ednparse-state (atom nil))
-
-
-(rum/defcs edit-box
-  < (rum/local [] ::text)
-  (focus-ref-on-mount "the-input")
-  [{::keys [text] :as ebst} e bus rec]
-  (let [value    (if (= [] @text)
-                   (or (:form/edit-initial e)
-                       (:token/value e))
-                   @text)
-        form-eid (:db/id e)]
+(rum/defc edit-box
+  [e bus r]
+  (let [[text set-text!] (rum/use-state nil)
+        value    (or text
+                     (:form/edit-initial e)
+                     (:token/value e))
+        form-eid (:db/id e)
+        iref (rum/create-ref)]
+    
+    (rum/use-layout-effect!
+     (fn []
+       (when-let [el (rum/deref iref)]
+         (if-not (.closest el ".alternate-reality")
+           (.focus el)
+           (set! (.-tabindex el) -1)))
+       nil)
+     [])
+    
     (rum/fragment
      [:input.edit-box
-      #_.code-font
-      #_:textarea.edit-box.code-font
       {:type        :text
-       ;; :wrap :off
-       :ref         "the-input"
+       :ref         iref
        :spellCheck  "false"
        :value       (or value "")
        :style       {:width (str (max 1 (count value)) "ch")}
        :on-change   #(let [new-text (string/triml (.-value (.-target %)))
                            token    (e/parse-token-tx new-text)]
-                       (reset! text new-text)
-                       #_(prn "EBonchange" (type bus) new-text)
-                       (core/send! bus [:update-search new-text])
-                       (reset! editbox-ednparse-state
-                               {:form-eid form-eid
-                                :text     new-text
-                                :valid    (some? token)
-                                :type     (some-> token first val)})
+                       (set-text! new-text)
                        nil)
        :on-key-down (fn [ev]
                       (let [kbd (ske/event->kbd ev)
@@ -114,11 +96,4 @@
                         (when mut
                           (.preventDefault ev)
                           (.stopPropagation ev)
-                          (when (not= :edit/wrap (first mut))
-                            (reset! editbox-ednparse-state nil))
-                          (println "Sending" mut)
-                          (core/send! bus mut))))}]
-     
-     #_(when value ^:inline (cs/results (d/entity-db e) bus :token/value value rec))
-     
-     )))
+                          (core/send! bus mut))))}])))

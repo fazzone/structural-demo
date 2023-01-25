@@ -226,8 +226,10 @@
      
      (rum/use-layout-effect!
       (fn []
-        (core/send! bus [:update-bar-ref ref-me])
-        (fn cleanup []))
+        (println "Stash the bar ref!!")
+        (core/send! bus [:update-bar-ref (rum/deref ref-me)])
+        (fn cleanup []
+          (println "This bar is being taken down")))
       [bus])
      
      #_(lazy-children b bus)
@@ -250,11 +252,11 @@
   (let [children (e/seq->vec e)]
     [:span {:class ["c" cc ec classes]}
      #_[:span.inline-tag.debug
-      #_(str (swap! render-counter inc))
-      (str (:db/id e))]
+        #_(str (swap! render-counter inc))
+        (str (:db/id e))]
      ;; requires checking propcs in dbrx shouldcompunentupdate
      #_(when-some [p (get proply (:db/id e))]
-       [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
+         [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
      (cond ec    [:span.d.pfc ^String open]
            open  [:span.d ^String open]
            :else nil)
