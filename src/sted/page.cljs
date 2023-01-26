@@ -20,6 +20,7 @@
    [sted.comp.common :as ccommon]
    [sted.comp.modeline :as ml]
    [sted.comp.root :as cr]
+   [sted.comp.doc :as cdoc]
    [sted.cmd.move :as move]
    [sted.cmd.nav :as nav]
    [sted.cmd.insert :as insert]
@@ -264,7 +265,10 @@
     
     (println "Created new app and reset kbdb.  Mount root...")
     
-    (-> (cr/root app code/form)
+    #_(-> (cr/root app code/form)
+          (rum/mount el))
+    
+    (-> (cdoc/root code/form)
         (rum/mount el))))
 
 

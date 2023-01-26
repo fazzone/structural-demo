@@ -724,7 +724,8 @@
 (rum/defc demo*
   [r c]
 
-  #_(cdoc/mutations-reference r nil)
+  
+  
   
   
   [:div.mememe
@@ -747,7 +748,12 @@
               [[:tail]
                [:update-search "ring"]
                
-               #_[:update-search "conj"]])]
+               #_[:update-search "conj"]])
+
+
+   (cdoc/mutations-reference r nil)
+   
+   ]
   
 
   #_(rum/bind-context

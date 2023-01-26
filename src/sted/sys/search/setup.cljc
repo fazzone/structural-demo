@@ -2,6 +2,7 @@
   (:require
    [rum.core :as rum]
    [sted.core :as core]
+   [sted.cmd.nav :as nav]
    [sted.sys.search.db :as sdb]
    [datascript.core :as d]
    [sted.cmd.mut :as mut]
@@ -69,8 +70,11 @@
 
           (core/register-mutation! :update-search
                                    (fn [[_ text] db bus]
-                                     (let [rs (sdom/substring-search-all-visible-tokens
+                                     (let [top-level (nav/parents-vec (core/get-selected-form db))
+                                           chain (some-> top-level :coll/_contains first)
+                                           rs (sdom/substring-search-all-visible-tokens
                                                (::bar-ref (d/entity db :sted.page/state))
+                                               (:db/id chain)
                                                text)]
                                        (reset! state {:query text
                                                       :results rs}))))))))

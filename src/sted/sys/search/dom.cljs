@@ -4,16 +4,19 @@
 
 (defn substring-search-all-visible-tokens
   ;; (also search invisible tokens if they are under a visible toplevel)
-  [bar-el prefix]
-  (js/console.log "SSAVT" bar-el)
+  [bar-el chain-eid prefix]
+  #_(js/console.log "SSAVT" bar-el chain-eid)
   (let [bar-bcr (.getBoundingClientRect bar-el)
         w (.-width bar-bcr)
         h (.-height bar-bcr)
-        center-chain (or (some-> (js/document.elementFromPoint (+ (.-x bar-bcr) (/ w 2))
-                                                               (+ (.-y bar-bcr) (/ h 2)))
-                                 (.closest ".chain"))
-                         #_(some-> (js/document.elementFromPoint 30 30)
-                                   (.closest ".chain")))]
+        center-chain (or
+                      (when chain-eid
+                        (.querySelector bar-el (str ":scope > [data-eid=\"" chain-eid "\"]")))
+                      (some-> (js/document.elementFromPoint (+ (.-x bar-bcr) (/ w 2))
+                                                            (+ (.-y bar-bcr) (/ h 2)))
+                              (.closest ".chain"))
+                      #_(some-> (js/document.elementFromPoint 30 30)
+                                (.closest ".chain")))]
     (if-not center-chain
       (println "No center chain???????????")
       (letfn [(bounds [node]
