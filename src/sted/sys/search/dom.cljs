@@ -2,12 +2,10 @@
   (:require [clojure.string :as string]))
 
 
-(def results (atom nil))
-
-
 (defn substring-search-all-visible-tokens
   ;; (also search invisible tokens if they are under a visible toplevel)
   [bar-el prefix]
+  (js/console.log "SSAVT" bar-el)
   (let [bar-bcr (.getBoundingClientRect bar-el)
         w (.-width bar-bcr)
         h (.-height bar-bcr)
@@ -16,7 +14,6 @@
                                  (.closest ".chain"))
                          #_(some-> (js/document.elementFromPoint 30 30)
                                    (.closest ".chain")))]
-    
     (if-not center-chain
       (println "No center chain???????????")
       (letfn [(bounds [node]
@@ -74,13 +71,6 @@
         (let [tag (str  "Searching " prefix)
               _ (js/console.time tag)
               nr (->> (bidi center-chain scan-left scan-right)
-                      #_(map (fn [ch]
-                               (js/console.log "Bid" ch)
-                               ch))
-                      #_(reduce search-within-chain {})
                       (reduce search-within-chain []))
-              a (reset! results {:text prefix :results nr})
               _ (js/console.timeEnd tag)]
-          #_(doseq [[t i e] nr]
-              (js/console.log t i e))
-          a)))))
+          nr)))))

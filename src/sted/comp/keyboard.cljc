@@ -155,6 +155,14 @@
                         "++"]}
    :linebreak {:label "linebreak"}})
 
+(rum/defc binker < rum/reactive
+  [db]
+  (let [mods (some-> (d/entity db :sted.page/state)
+                     :sted.sys.keyboard/mods
+                     (rum/react))]
+    (println "Binker")
+    [:code [:pre (pr-str mods)]]))
+
 (rum/defc keyboard-diagram
   [kme bus classes]
   (let [k->l #_defaultkl
@@ -162,32 +170,36 @@
               (for [{:key/keys [kbd mutation]} (:keymap/bindings kme)]
                 [kbd (get mutation->label mutation)]))
         key (partial kkc k->l)]
-    [:div.keyboard-container {:class classes}
-     [:div.keyboard-row.number
-      (key "Esc" "Escape")
-      (for [ch (vec "1234567890-=")]
-        (rum/with-key (key ch) ch))
-      (key "Backspace")]
-     [:div.keyboard-row.qwer
-      (key "Tab")
-      (for [ch "qwertyuiop[]\\"]
-        (rum/with-key (key ch) ch))]
-     [:div.keyboard-row.asdf
-      (key "Control")
-      (for [ch "asdfghjkl;'"]
-        (rum/with-key (key ch) ch))
-      (key "Enter")]
-     [:div.keyboard-row.zxcv
-      (key "Shift")
-      (for [ch "zxcvbnm,./"]
-        (rum/with-key (key ch) ch))
-      (key "Shift")]
-     [:div.keyboard-row.space
-      (key "Hyper")
-      (key "Super")
-      (key "Meta")
-      (key " ")
-      (key "Meta")
-      (key "Super")
-      (key "Hyper")
-      (key "Control")]]))
+    (println "New keyboard diagram?")
+    [:div
+     #_[:code [:pre (pr-str mods)]]
+     (binker (d/entity-db kme))
+     [:div.keyboard-container {:class classes}
+      [:div.keyboard-row.number
+       (key "Esc" "Escape")
+       (for [ch (vec "1234567890-=")]
+         (rum/with-key (key ch) ch))
+       (key "Backspace")]
+      [:div.keyboard-row.qwer
+       (key "Tab")
+       (for [ch "qwertyuiop[]\\"]
+         (rum/with-key (key ch) ch))]
+      [:div.keyboard-row.asdf
+       (key "Control")
+       (for [ch "asdfghjkl;'"]
+         (rum/with-key (key ch) ch))
+       (key "Enter")]
+      [:div.keyboard-row.zxcv
+       (key "Shift")
+       (for [ch "zxcvbnm,./"]
+         (rum/with-key (key ch) ch))
+       (key "Shift")]
+      [:div.keyboard-row.space
+       (key "Hyper")
+       (key "Super")
+       (key "Meta")
+       (key " ")
+       (key "Meta")
+       (key "Super")
+       (key "Hyper")
+       (key "Control")]]]))

@@ -19,5 +19,5 @@
       (rec (:state/bar state) bus 0 nil))
      
      [:div.modeline-outer.code-font {:id "modeline" :ref ml-ref}
-      (cs/rs** bus (d/entity db :search/state))]]))
+      (cs/rs** bus (:sted.sys.search.setup/state state))]]))
 

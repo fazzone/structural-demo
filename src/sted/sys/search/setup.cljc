@@ -21,12 +21,15 @@
           (fs/Index. #js {:tokenize "forward"})
           (d/datoms db :avet :token/value)))
 
+#_(defn get-state
+  [db]
+  (some-> db (d/entity :sted.page/state) ::state))
+
 (defn setup!
   [{:keys [conn bus] :as app}]
   (if (::results app)
     (recur (cleanup! app))
-    (let [results (atom [])
-          state (atom nil)
+    (let [state (atom nil)
           index (initial-index @conn)
           bar-el (atom nil)]
       
@@ -43,38 +46,31 @@
          #_(js/console.timeEnd "FTS indexing")))
 
       (d/transact! conn
-                   [{:db/ident :search/state
-                     :bing results
-                     :bong state}])
+                   [{:db/ident :sted.page/state
+                     ::state state}])
       
       (-> app
-          (assoc-in [:system :search]
-                    {:results results :state state})
           
           (core/register-mutation! :update-bar-ref
                                    (fn [[_ r] _ _]
                                      (d/transact! conn [{:db/ident :sted.page/state
                                                          ::bar-ref r}])))
 
-          (core/register-mutation! :search/start  #(reset! state true))
-          (core/register-mutation! :search/cancel #(do
-                                                     (reset! state nil)
-                                                     (reset! results [])))
+          (core/register-mutation! :search/start  #(reset! state {:query ""}))
+          (core/register-mutation! :search/cancel #(reset! state nil))
           
           (core/register-simple! :search/select
                                  (fn [sel isr]
-                                   (let [rs (:results @results)]
+                                   (let [rs (:results @state)]
                                      (when (<= 1 isr (count rs))
                                        (let [^js r (nth rs (dec isr))]
-                                         (reset! state nil)
-                                         (reset! results [])
+                                         (swap! state dissoc :query)
                                          (core/move-selection-tx (:db/id sel) (.-eid r)))))))
 
           (core/register-mutation! :update-search
                                    (fn [[_ text] db bus]
-                                     (when (< 1 (count text))
-                                       #_(js/console.log "Updating search?" (::bar-ref (d/entity db :sted.page/state)))
-                                       (let [rs (sdom/substring-search-all-visible-tokens
-                                                 (::bar-ref (d/entity db :sted.page/state))
-                                                 text)]
-                                         (reset! results rs)))))))))
+                                     (let [rs (sdom/substring-search-all-visible-tokens
+                                               (::bar-ref (d/entity db :sted.page/state))
+                                               text)]
+                                       (reset! state {:query text
+                                                      :results rs}))))))))

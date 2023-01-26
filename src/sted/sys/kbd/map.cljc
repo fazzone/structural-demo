@@ -1,73 +1,11 @@
 (ns sted.sys.kbd.map)
 
 (def default
-  {"f"   :flow-right
-   "S-^" :new-meta
-   "S-F" :flow-right-coll
-   "u"   :undo
-   "S-A" :alias
-   "g"   :gobble
-   "S-I" :zp
-   "o"   :offer
-   ";"   :new-comment
-   "S-S" :split
-   "M-s" :splice
-   "S-Z" :drag-left
-   "S-X" :drag-right
-   "n"   :find-next
-   "S-N" :find-first
-   "C-/" :undo
-   ;; "S-R" :reify-undo
-   "r"   :raise
-   "S-R" :unraise
-   "M-r" :raise-parent
-   "S-_" :uneval
-   "."   :save-demo
-   "S-W" :save
-   "t"   :tear
-   "S-@" :new-deref
-   "a"   :flow-left
-   "w"   :float
-   "s"   :sink
-   ;; "S-H"       :toplevel
-   "h"   :parent
-   ;; vi
-   ;; "j"   :next
-   ;; "k"   :prev
-   ;; lispm
-   
-   "k" :next
-   "j" :prev
-   
-   "l" :tail
-
-   " "         :insert-right
-   "S- "       :insert-left
-   "d"         :delete-right
-   "S-H"       :hoist
-   ;; "Backspace" :delete-left
-   "Backspace" :move-to-deleted-chain
-   "Enter"     :linebreak
-   "C-Enter"   :insert-right-newline
-   "Escape"    :select-chain
-   "c"         :clone
-   "M-c"       :clone-parent
-   "z"         :hop-left
-   "x"         :hop-right
-   "9"         :wrap
-   ;; "9"         :new-list
+  {" "         :insert-right
+   "-"         :hide
+   "."         :save-demo
+   "/"         :search/start
    "0"         :parent
-   "]"         :parent
-   "p"         :slurp-right
-   "S-P"       :barf-right
-   "Tab"       :zp
-   "S-Tab"     "Nothing yet"
-   ;; "S-Tab"     :dedent
-   "e"         :eval-sci
-   "S-("       :new-list
-   "["         :new-vec
-   "S-C"       :new-chain
-   "S-B"       :new-bar "'" :new-quote
    "1"         :m1
    "2"         :m2
    "3"         :m3
@@ -76,20 +14,79 @@
    "6"         :m6
    "7"         :m7
    "8"         :m8
-   "v"         :scroll
-   "-"         :hide
-   "i"         :insert-left
-   "S-Q"       :stringify
-   "S-+"       :plus
-   "S-M"       :multiline
-   "S-O"       :oneline
-   "M-S-O"     :oneline-all
+   "9"         :wrap
+   ";"         :new-comment
+   "Backspace" :move-to-deleted-chain
+   "C-/"       :undo
+   "C-Enter"   :insert-right-newline
+   "C-s"       :search/start
+   "Enter"     :linebreak
+   "Escape"    :select-chain
    "M-S-I"     "No, I do not want to report a problem to Google"
+   "M-S-O"     :oneline-all
+   "M-c"       :clone-parent
    "M-l"       :clear-one-eval
+   "M-r"       :raise-parent
+   "M-s"       :splice
+   "S- "       :insert-left
+   "S-("       :new-list
+   "S-+"       :plus
+   "S-@"       :new-deref
+   "S-A"       :alias
+   "S-B"       :new-bar "'" :new-quote
+   "S-C"       :new-chain
+   "S-F"       :flow-right-coll
+   "S-H"       :hoist
+   "S-I"       :zp
+   "S-M"       :multiline
+   "S-N"       :find-first
+   "S-O"       :oneline
+   "S-P"       :barf-right
+   "S-Q"       :stringify
+   "S-R"       :unraise
+   "S-S"       :split
+   "S-Tab"     "Nothing yet"
+   "S-W"       :save
+   "S-X"       :drag-right
+   "S-Z"       :drag-left
+   "S-^"       :new-meta
+   "S-_"       :uneval
+   "Tab"       :zp
+   "["         :new-vec
+   "]"         :parent
+   "a"         :flow-left
+   "c"         :clone
+   "d"         :delete-right
+   "e"         :eval-sci
+   "f"         :flow-right
+   "g"         :gobble
+   "h"         :parent
+   "i"         :insert-left
+   "j"         :prev
+   "k"         :next
+   "l"         :tail
+   "n"         :find-next
+   "o"         :offer
+   "p"         :slurp-right
    "q"         :compose
-   
-   "/"   :search/start
-   "C-s" :search/start})
+   "r"         :raise
+   "s"         :sink
+   "t"         :tear
+   "u"         :undo
+   "v"         :scroll
+   "w"         :float
+   "x"         :hop-right
+   "z"         :hop-left
+   ;; "9"         :new-list
+   ;; "Backspace" :delete-left
+   ;; "S-H"       :toplevel
+   ;; "S-R" :reify-undo
+   ;; "S-Tab"     :dedent
+   ;; "j"   :next
+   ;; "k"   :prev
+   ;; lispm
+   ;; vi
+   })
 
 (defn kbd->keydowns
   [kbd]

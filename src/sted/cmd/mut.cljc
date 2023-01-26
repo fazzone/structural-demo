@@ -342,17 +342,20 @@
          (d/entity (d/entity-db sel) dst))))))
 
 (defn make-alias-tx
-  [sel]
-  (let [top-level (peek (nav/parents-vec sel))
+  [sel a-eid]
+  (let [ps (nav/parents-vec sel)
+        top-level (peek ps)
         tempid "alias"
+        of-eid (or a-eid (:db/id sel))
         new-node {:db/id tempid
                   :coll/type :alias
-                  :alias/of (:db/id sel)}]
-    (println "MAke alias" new-node)
-    (into [new-node]
-          (concat
-           (edit/insert-before-tx top-level new-node)
-           (move-selection-tx (:db/id sel) tempid)))))
+                  :alias/of of-eid}]
+    (if (some #(= of-eid) ps)
+      nil
+      (into [new-node]
+            (concat
+             (edit/insert-before-tx top-level new-node)
+             (move-selection-tx (:db/id sel) tempid))))))
 
 (defn new-bar-tx
   [sel]

@@ -271,7 +271,7 @@
     :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
     :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
     :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
-    :tear             (delimited-coll* e b "Â«"  "Â»" "dl" nil c i p)
+    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
     :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
     :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
     :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)

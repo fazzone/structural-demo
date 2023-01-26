@@ -94,9 +94,8 @@
     nil))
 
 (rum/defc search-box
-  [bus]
-  (let [[text set-text!] (rum/use-state "")
-        iref (rum/create-ref)]
+  [bus text]
+  (let [iref (rum/create-ref)]
     
     (rum/use-layout-effect!
      (fn []
@@ -114,7 +113,6 @@
       :value       (or text "")
       :style       {:width (str (max 1 (count text)) "ch")}
       :on-change   #(let [new-text (string/triml (.-value (.-target %)))]
-                      (set-text! new-text)
                       (core/send! bus [:update-search new-text])
                       nil)
       :on-key-down (fn [ev]
@@ -124,19 +122,19 @@
                        (when mut
                          (.preventDefault ev)
                          (.stopPropagation ev)
-                         (core/send! bus mut))
-                       ))}]))
+                         (core/send! bus mut))))}]))
 
 
 (rum/defc rs** < rum/reactive
   [bus sstate]
-  (let [{:keys [text results] :as uu} (some-> sstate :bing (rum/react))
-        bong (some-> sstate :bong (rum/react))]
+  (let [{:keys [query results] :as s} (some-> sstate (rum/react))]
     
-    [:span.searcher {}
-     (when bong "search: ")
-     (when bong (search-box bus))
-     (dom-result-highlights! text results)]))
+    (if-not query
+      [:span.searcher {}]
+      [:span.searcher {}
+       "search: "
+       (search-box bus query)
+       (dom-result-highlights! query results)])))
 
 
 

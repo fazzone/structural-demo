@@ -658,7 +658,6 @@
              _ (send! (:bus app) m)
              snap app]
        (println "}}} Performed" m)
-       (prn "Snap" (deref (-> snap :system :search :results)))
        (conj ss snap)))
    []
    muts))
@@ -678,7 +677,7 @@
          (do
            #_(set-st! 2)
            (a/let [ss (get-snapshots! app muts)]
-             (set-rs! (-> (peek ss) :system :search :results deref))
+             (set-rs! 1)
              (swap! ml/kick inc)
              #_(doseq [s ss]
                  (prn "Snap" (deref (-> s :system :search :results)))))))
@@ -727,30 +726,28 @@
 
   #_(cdoc/mutations-reference r nil)
   
-  [:div.empty {} ]
-  #_[:div.mememe
-     (real-root r
-                (e/->tx (quote (prefix suffix conj matching testing connect)))
-                [[:flow-right]
-                 [:update-search "co"]
-                 [:update-search "con"]])
   
+  [:div.mememe
+   (real-root r
+              (e/->tx (quote (prefix suffix conj matching testing connect)))
+              [[:flow-right]
+               [:update-search "co"]
+               [:update-search "con"]])
    
-   
-     (real-root r
-                (e/->tx (quote (prefix suffix conj matching testing connect)))
-                [[:tail]
-                 [:update-search "fix"]
+   (real-root r
+              (e/->tx (quote (prefix suffix conj matching testing connect)))
+              [[:tail]
+               [:update-search "fix"]
                
-                 #_[:update-search "conj"]])
+               #_[:update-search "conj"]])
 
-     (real-root r
-                (e/->tx (quote ("Very long strings with search results"
-                                a b :string c d)))
-                [[:tail]
-                 [:update-search "ring"]
+   (real-root r
+              (e/->tx (quote ("Very long strings with search results"
+                              a b :string c d)))
+              [[:tail]
+               [:update-search "ring"]
                
-                 #_[:update-search "conj"]])]
+               #_[:update-search "conj"]])]
   
 
   #_(rum/bind-context
