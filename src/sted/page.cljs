@@ -254,7 +254,6 @@
               (sk/cleanup!)
               (sm/cleanup!))))
 
-
 (defn ^:dev/after-load init
   []
   #_(some-> the-singleton-db meta :listeners (reset! {}))
@@ -266,11 +265,9 @@
     (println "Created new app and reset kbdb.  Mount root...")
     
     #_(-> (cr/root app code/form)
-          (rum/mount el))
-    
+        (rum/mount el))
     (-> (cdoc/root code/form)
         (rum/mount el))))
-
 
 (defn ^:export become
   [db]

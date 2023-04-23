@@ -1,11 +1,9 @@
 (ns sted.comp.demo
   (:require
-   
    [sted.embed :as e]
    [sted.schema :as s]
    [sted.sys.search.setup :as search]
    [sted.embed.data :as sed]
-   
    [datascript.core :as d]
    [sted.comp.root :as cr]
    [sted.df.async :as a]
@@ -18,7 +16,6 @@
    [sted.sys.eval.sci :as eval-sci]
    [sted.comp.keyboard :as kc]
    [sted.comp.doc :as cdoc]
-   
    [sted.cmd.mut :as mut]
    [sted.db-reactive :as dbrx]
    [sted.comp.common :as cc]
@@ -34,14 +31,11 @@
   [conn]
   (let [a (core/app conn)
         aa (atom nil)]
-    
     (println "Setup new demo app")
-    
     (doseq [[m f] mut/movement-commands]
       (core/register-simple! a m (core/movement->mutation f)))
     (doseq [[m f] mut/editing-commands]
       (core/register-simple! a m f))
-    
     (reset! aa
             (-> a
                 (sh/setup!)
@@ -50,19 +44,17 @@
                 (core/register-mutation! :sync (fn [[_ r]] (r :sync)))
                 (core/register-mutation! :update-bar-ref
                                          (fn [[_ r] _ _]
-                                           (js/console.log "Update bar ref!" r)
-                                           ))
+                                           (js/console.log "Update bar ref!" r)))
                 (search/setup!)))))
+
 
 (defn run-steps
   [{:keys [form setup mutations]}]
   (let [conn (t/create-conn form)
-        
         mut-map (merge mut/editing-commands
                        (zipmap (keys mut/movement-commands)
                                (map core/movement->mutation
                                     (vals mut/movement-commands))))
-        
         dbs (reductions
              (fn [{:keys [db-after]} [mut-name & args :as mut]]
                (let [sel    (core/get-selected-form db-after)
@@ -73,12 +65,11 @@
              (concat setup mutations))]
     dbs))
 
+
 (rum/defc demo
   [steps rec classes]
   (let [dbs (run-steps steps)
-
         eid (:db/id (core/get-selected-form (:db-after (first dbs))))]
-    
     [:div {:class (str "alternate-reality " classes)}
      [:div {:style {:display "grid"
                     :grid-template-columns "4ex min-content min-content 1fr 1fr"
@@ -96,7 +87,6 @@
                     (str "Im" im " of " (count mutations))
                     (if (zero? im)
                       "(init)"
-                    
                       (str (nth mutations (dec im)))))]
           :txd [:div {:key (str w i)}
                 (cd/tx-data tx-data)]
@@ -110,10 +100,10 @@
                      core/blackhole
                      (fn [n] (rec n core/blackhole 0 nil)))]))]]))
 
+
 (rum/defc render-steps*
-  [steps]
-  
-  )
+  [steps])
+
 
 (rum/defc player*
   [classes rec children]
@@ -121,7 +111,6 @@
                                                     {:playing false
                                                      :index (dec (count children))})
         sref (rum/create-ref)]
-    
     (rum/use-effect!
      (fn []
        (when playing
@@ -129,9 +118,7 @@
                                   100)]
            #(js/clearTimeout tid))))
      [s])
-
-    
-    [:div {:style { :border "1px solid aliceblue"
+    [:div {:style {:border "1px solid aliceblue"
                    :border-radius "2ex"
                    :padding "1ex"
                    :margin "1ex"
@@ -146,7 +133,6 @@
       [:span {:style {:justify-self "center"}} "Mutation"]
       [:span {:style {:justify-self "center"}} "After"]
       [:span {:style {:justify-self "center"}} "tx-data"]
-       
       [:div {:style {:display "grid"
                      :grid-template-columns "1fr"
                      :align-items "center"
@@ -163,47 +149,40 @@
                                      :padding "1ex 2ex 1ex 2ex"
                                      :background-color (if (= i index)
                                                          "#272727"
-                                                         "unset"
-                                                         )}
+                                                         "unset")}
                              :on-click  #(set-state! (assoc s :index i))}
                        (or (some-> mutation pr-str)
                            "(init)")]))]
-      
       [:div
        (:comp (nth children index))
-       
        [:div {:style {:height "80vh"}}
         (:ccons (nth children index))]]
-
       [:div {:style {:justify-self "end" :overflow :auto}}
        nil
        #_(cd/tx-data (:tx-data (nth children index)))]
-       
       [:div {:style {:grid-column "1 / span 3"
                      :display "grid"
                      :gap "1ex"
                      :grid-template-columns "min-content min-content 1fr"}}
        [:span {:role "button" :on-click #(set-state! (update s :playing not))
                :style {:font-size "200%"}}
-        (if playing "\u23f8" "\u25b6")]
-       
+        (if playing "⏸" "▶")]
        [:span {:style {:place-self "center end"}}
         (str index "/" (dec (count children)))]
-       
        [:input {:type "range"
                 :ref sref
                 :min 0
                 :max (dec (count children))
                 :value index
                 :on-change (fn [^js ev]
-                             (set-state! (assoc s :index (js/parseInt (.-value (.-target ev))) )))}]]]
-     
+                             (set-state! (assoc s :index (js/parseInt (.-value (.-target ev))))))}]]]
      #_[:div {:style {:margin-top "1ex"}}
         [:span {:role "button" :on-click #(set-state! (update s :playing not))
                 :style {:font-size "200%"}}
          (if playing
-           "\u23f8"
-           "\u25b6")]]]))
+           "⏸"
+           "▶")]]]))
+
 
 (rum/defc player
   [steps rec classes]
@@ -222,6 +201,7 @@
                         core/blackhole
                         (fn [n] (rec n core/blackhole 0 nil)))))))))
 
+
 (def population
   [[:flow-right]
    [:flow-right]
@@ -233,13 +213,11 @@
    [:delete-left] [:delete-left] [:delete-right] [:delete-right]
    [:clone] [:clone]
    [:split]
-   
    ;; [:split] [:split]
    ;; [:splice] [:splice]
    [:barf-right]
    [:slurp-right] [:slurp-right] [:slurp-right]
    [:raise] [:raise]])
-
 
 
 (def my-mutations
@@ -628,19 +606,20 @@
     [:linebreak]
     #_[:zp]
     [:m1]
-    [:eval-result 176 ([3 4 5] [6 8 10])] 
-    [:flow-right] 
-    [:flow-left] ])
+    [:eval-result 176 ([3 4 5] [6 8 10])]
+    [:flow-right]
+    [:flow-left]])
+  #_(repeatedly 16 #(rand-nth population)))
 
-  
-  #_(repeatedly 16 #(rand-nth population))) 
 
 #_(do (println "My-Mutations")
     (prn my-mutations))
 
+
 (def search-test-form
   (e/->tx (quote (prefix suffix conj matching testing connect)))
   #_(e/string->tx-all (rc/inline "sted/test/example.cljc")))
+
 
 (defn send!
   [bus msg]
@@ -648,6 +627,7 @@
    (fn [resolve reject]
      (core/send! bus msg)
      (core/send! bus [:sync resolve]))))
+
 
 (defn get-snapshots!
   [app muts]
@@ -668,7 +648,6 @@
   (let [[app set-app!] (rum/use-state nil)
         [st set-st!] (rum/use-state 1)
         [rs set-rs!] (rum/use-state nil)]
-    
     (rum/use-effect!
      (fn []
        (if (nil? app)
@@ -683,20 +662,14 @@
                  (prn "Snap" (deref (-> s :system :search :results)))))))
        nil)
      [app muts])
-
     [:div.alternate-reality
      [:div {:style {:margin "2ex"
                     :width "32em"}}
       (when app (cr/root app rec))]
-     
      #_[:div.controls {}
         [:input {:type "button"
                  :value "Send flow"
                  :on-click (fn [] (core/send! (:bus app) [:flow-right]))}]]
-
-     
-     
-     
      ;; shows undo history....  not the same
      #_[:div.snaps {}
         (str "Keys" (pr-str (type (deref (:history app)))))
@@ -708,89 +681,83 @@
              (str i " " (pr-str mut))
              (cr/root {:conn (atom db-after)
                        :bus core/blackhole}
-                      rec
-                      )]))]]))
-
+                      rec)]))]]))
 
 
 ;; Attributes
+
+
 ;; M - moves the selection
+
+
 ;; F - moves further than O(1) links away
+
+
 ;; N - creates new nodes
+
+
 ;; D - deletes nodes
+
+
 ;; E - enters token-editing state
-;; 
+
+
+;;
 
 (rum/defc demo*
   [r c]
-
-  
-  
-  
-  
   [:div.mememe
+   [:div
+    {:style {:display :grid
+             :grid-template-columns "1fr 1fr 1fr"
+             :grid-gap "1ch"
+             #_:background-color
+             #_"tomato"
+             :width "64ch"
+             :height "32ch"}}
+    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
+    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
+    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
+    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
+    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
    (real-root r
               (e/->tx (quote (prefix suffix conj matching testing connect)))
               [[:flow-right]
                [:update-search "co"]
                [:update-search "con"]])
-   
    (real-root r
               (e/->tx (quote (prefix suffix conj matching testing connect)))
               [[:tail]
                [:update-search "fix"]
-               
                #_[:update-search "conj"]])
-
    (real-root r
               (e/->tx (quote ("Very long strings with search results"
-                              a b :string c d)))
+                              a
+                              b
+                              :string
+                              c
+                              d)))
               [[:tail]
                [:update-search "ring"]
-               
                #_[:update-search "conj"]])
-
-
-   (cdoc/mutations-reference r nil)
-   
-   ]
-  
-
+   (cdoc/mutations-reference r nil)]
   #_(rum/bind-context
-     [cc/*modeline-ref* nil]
-     [:div {:style {:display :flex
-                    :flex-direction :column}}
-      
-      (demo {:form '((a [1] c))
-             :setup [[:flow-right] [:flow-right] [:flow-right]]
-             :mutations [[:split]]}
-            r c)
-
-      #_(for [j (range 1)]
-          [:div {:key j}
-           [:h2 (str j)]
-           (player {:form (quote (fn [n] (r 0 g)))
-                    :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
-                    :mutations my-mutations}
-                   r c)])])
-  
+      [cc/*modeline-ref* nil]
+      [:div
+       {:style {:display :flex
+                :flex-direction :column}}
+       (demo {:form '((a [1] c))
+              :setup [[:flow-right] [:flow-right] [:flow-right]]
+              :mutations [[:split]]}
+             r
+             c)
+       #_(for [j (range 1)]
+           [:div {:key j}
+            [:h2 (str j)]
+            (player {:form (quote (fn [n] (r 0 g)))
+                     :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
+                     :mutations my-mutations}
+                    r
+                    c)])])
   ;; flow-right
-  )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+)

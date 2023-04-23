@@ -33,7 +33,8 @@
    "S-+"       :plus
    "S-@"       :new-deref
    "S-A"       :alias
-   "S-B"       :new-bar "'" :new-quote
+   "S-B"       :new-bar
+   "'"         :new-quote
    "S-C"       :new-chain
    "S-F"       :flow-right-coll
    "S-H"       :hoist
