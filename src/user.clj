@@ -10,6 +10,8 @@
 
 (defonce shadow-server (future (server/start!)))
 
+
+
 (defonce shadow-watch
   (future
     @shadow-server
@@ -34,6 +36,7 @@
     (Thread/sleep 223)
     (server/start!))
   (shadow/watch :br)
+  (shadow/watch :elec)
   (shadow/watch :ptr)
   (do
     (shadow/release :elec)

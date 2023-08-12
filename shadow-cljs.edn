@@ -7,6 +7,7 @@
  :builds {:br {:target :browser
                :output-dir "srv/js"
                :modules {:main {:init-fn sted.page/init}}
+               :closure-defines {sted.core/JSENV  "browser"}
                :release {:compiler-options {:optimizations :advanced
                                             :output-feature-set :es2018
                                             ;; :pretty-print true
@@ -14,7 +15,10 @@
                                             }}}
           :elec {:target :node-script
                  :output-to "srv/electron-main.js"
-                 :main sted.electron-main/main}
+                 :main sted.electron-main/main
+                 :closure-defines {sted.core/JSENV "node"}}
           :ptr {:target :node-script
                 :output-to "srv/td/test-driver.js"
-                :main sted.test-driver/main}}}
+                :main sted.test-driver/main
+                
+                }}}

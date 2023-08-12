@@ -8,6 +8,8 @@
        [cljs.core.async.macros :refer [go
                                        go-loop]])))
 
+#?(:cljs (goog-define JSENV "unset"))
+
 ;; This is a really stupid hack
 ;; But a div that fights back when you try to scroll is even stupider 
 (defonce scroll-sequence-number (volatile! 0))

@@ -25,8 +25,10 @@
       (:symbol :keyword) (str e)
       (:string :number) e
       (str "# "
-           (or (some-> e (.-constructor ) (.-name))
-               "object")))))
+           (or (not-empty (some-> e (.-constructor ) (.-name)))
+               (do
+                 (js/console.log "What are you?"  e)
+                 "object"))))))
 
 (defn ->coll-type
   [e]
@@ -83,10 +85,6 @@
     (do (*store* k ptr)
         (conj! out [:db/add cell :handle/token k]))))
 
-
-
-
-
 (defn sdloop
   [ncount stk out]
   #_(println "Sdloop" (first stk))
@@ -101,7 +99,7 @@
         (recur ncount popped out)
         
         ;; unwind our stack - do not call next on any conses
-        (and lazy? (> 1 ncount))                   
+        (and lazy? (> 1 ncount))
         (let [car  (ec/new-tempid)
               ct   (->coll-type me)
               nout (-> out
@@ -109,21 +107,21 @@
                        #_(conj! [:db/add cell :seq/first car]))]
           (recur 0 popped
                  (if (->coll-type me)
-                     (-> out
-                         (conj! [:db/add cell :seq/first car])
+                   (-> out
+                       (conj! [:db/add cell :seq/first car])
+                       (conj! [:db/add outer :coll/contains car])
+                       (emit1 car nil '...C)
+                       (emit-cont car (cons nil rest) (*store*)))
+                   (let [ccell (ec/new-tempid)]
+                     (-> nout
+                         (emit1 car nil me)
+                         (emit-cont ccell rest (*store*))
                          (conj! [:db/add outer :coll/contains car])
-                         (emit1 car nil '...C)
-                         (emit-cont car (cons nil rest) (*store*)))
-                     (let [ccell (ec/new-tempid)]
-                       (-> nout
-                           (emit1 car nil me)
-                           (emit-cont ccell rest (*store*))
-                           (conj! [:db/add outer :coll/contains car])
-                           (conj! [:db/add outer :coll/contains ccell])
-                           (conj! {:db/id    cell
-                                   :seq/next {:seq/first {:db/id       ccell
-                                                          :token/type  :symbol
-                                                          :token/value "...R"}} }))))))
+                         (conj! [:db/add outer :coll/contains ccell])
+                         (conj! {:db/id    cell
+                                 :seq/next {:seq/first {:db/id       ccell
+                                                        :token/type  :symbol
+                                                        :token/value "...R"}} }))))))
         
         ;; reduce one cons, allocate tempids for its pointers
         :else
@@ -159,6 +157,7 @@
                   (recur ncount
                          (cond-> npopped nrest (conj (LoopState. vcell vcell nrest :lazy-enter)))
                          (emit1 nout vcell coll-type me)))))))))))
+
 (defn go
   ([root limit]
    (go root limit nil nil))

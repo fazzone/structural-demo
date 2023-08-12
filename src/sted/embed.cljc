@@ -7,6 +7,7 @@
    [rewrite-clj.zip :as z]
    [rewrite-clj.reader :as r]
    [rewrite-clj.node.protocols :as np]
+   [rewrite-clj.node.comment :as ncomment]
    [clojure.string :as string]
    [datascript.core :as d]
    [datascript.impl.entity :as di]))
@@ -42,6 +43,23 @@
 
 
 
+(defn collapse-comments
+  [xs]
+  (reduce
+   (fn [a v]
+     (if-not (and (= :comment (n/tag v))
+                  (= :comment (some-> (peek a) n/tag))
+                  (= (:prefix v) (:prefix (peek a)))) 
+       (conj a v)
+       (conj (pop a)
+             ;; n/comment expects one line and checks
+             (ncomment/->CommentNode
+              (:prefix v)
+              (str (:s (peek a))
+                   (:prefix v)
+                   (:s v))))))
+   []
+   xs))
 
 (defn n->tx
   ([n] (n->tx n 0))
@@ -69,7 +87,10 @@
            (coll-tx [coll-type xs]
              (let [id (ec/new-tempid)]
                (cond-> {:db/id id :coll/type coll-type}
-                 (seq xs) (merge (ec/seq-tx (seq-ws-tx xs id 0 nil []))))))]
+                 (seq xs) (merge (-> xs
+                                     collapse-comments
+                                     (seq-ws-tx id 0 nil [])
+                                     ec/seq-tx)))))]
      (case (n/tag n)
        (:token :multi-line)
        (case (np/node-type n)
@@ -88,22 +109,23 @@
        :vector           (coll-tx :vec (n/children n))
        :map              (coll-tx :map (n/children n))
        :set              (coll-tx :set (n/children n))
+       ;; :forms            (coll-tx :chain (n/children n))
        :forms            (coll-tx :chain (n/children n))
        :deref            (coll-tx :deref (n/children n))
        :comma            nil
        :comment          {:token/type :comment :token/value (string/trimr (n/string n))}
        :meta             (let [[mta-n val & more] (filter (comp not #{:whitespace :newline} n/tag) (n/children n))
                                mta                (n/sexpr mta-n)]
-                  #_(println "Mta-n" (n/string mta-n)
-                             "Mta" mta
-                             "Val" (n/string val)
-                             "More" more)
-                  (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
-                  (coll-tx :meta (n/children n))
-                  #_{:coll/type     :meta
-                     :coll/contains #{"m" "v"}
-                     :seq/first     9}
-                  #_(n->tx val))
+                           #_(println "Mta-n" (n/string mta-n)
+                                      "Mta" mta
+                                      "Val" (n/string val)
+                                      "More" more)
+                           (when more (throw (ex-info "Cannot understand meta" {:meta [mta-n val more]})))
+                           (coll-tx :meta (n/children n))
+                           #_{:coll/type     :meta
+                              :coll/contains #{"m" "v"}
+                              :seq/first     9}
+                           #_(n->tx val))
        ;; (n/children (first (n/children (p/parse-string-all "#?(:cljs 1 :clj 4)"))))
        ;; => (<token: ?> <list: (:cljs 1 :clj 4)>)
        :reader-macro
@@ -356,6 +378,28 @@
         (d/with (deref (d/create-conn s/form-schema))
                 [tx-entity])]
     (->form (d/entity db-after (get tempids (:db/id tx-entity))))))
+
+(defn roundtrip-string
+  [s]
+  (let [tx-entity (update (string->tx-all s) :db/id #(or % "top"))
+        {:keys [db-after tempids]}
+        (d/with (deref (d/create-conn s/form-schema))
+                [tx-entity])]
+    (run! prn tx-entity)
+    (->string (d/entity db-after (get tempids (:db/id tx-entity))))))
+
+(comment
+  
+  (p/parse-string "0x3456")
+  
+  ;; (let [s (slurp "f:/gem/env/iocp.fnl")
+  ;;       r (roundtrip-string s)]
+  ;;   #_(println s)
+  ;;   #_(println "================================================================")
+  ;;   (spit "f:/tmp.fnl" r)
+  ;;   (= s r))
+  
+  )
 
 (defn test-roundtrip
   [data]

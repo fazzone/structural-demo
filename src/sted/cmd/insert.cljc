@@ -73,7 +73,10 @@
          (move-selection-tx (:db/id ed) "inner")
          (when (:form/linebreak ed)
            [[:db/retract (:db/id ed) :form/linebreak true]
-            [:db/add "newnode" :form/linebreak true]]))))
+            [:db/add "newnode" :form/linebreak true]])
+         (when-let [ind (:form/indent ed)]
+           [[:db/retract (:db/id ed) :form/indent ind]
+            [:db/add "newnode" :form/indent ind]]))))
 
 (defn finish-edit-tx
   [db eid text]

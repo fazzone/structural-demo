@@ -126,13 +126,35 @@
 (rum/defc erc
   < rum/reactive
   [{:eval/keys [of out]  :as e} bus classes]
-  (let [[result] (e/seq->vec e)]
-    [:div.eval-result {:class classes} #_(form result bus 0 (first ()))
-     ^String (:token/value result)
-     [:div "Result of "
-      [:a.eval-result-ref
-       {:on-click (fn [] (core/send! bus [:select (:db/id of)]))}
-       (str "#" (:db/id (:eval/of e)))]]]))
+  (let [[result-type & result :as svec] (e/seq->vec e)]
+    (println "Erc svec" svec)
+    (println "Rtyp " (:token/value result-type))
+    (case (e/->form result-type)
+      :exception
+      (let [[extype msg data stack & more] result]
+        [:div.eval-exception {:class classes}
+         (form result-type bus nil)
+         (when extype
+           [:span.ex-type {} "type:" (form extype bus nil)])
+         (when msg 
+           [:span.ex-message {} "msg:" (form msg bus nil)])
+         (when data
+           [:span.ex-data {} "data: " (form data bus nil)])
+         
+         #_[:span {} "Stackform" (form stack bus nil)
+          
+          
+          ]
+         [:ul.stacktrace {}
+          (for [f (e/seq->vec stack)]
+            [:li {}  "Ste" ^:inline (form f bus 0 nil)])]])
+      
+      :ok
+      [:div.eval-result {:class classes} 
+       ^String (:token/value result)
+       ]
+      
+      [:div (str "No result type: " (pr-str result-type))])))
 
 
 #_(def inhibit-scroll? (volatile! false))
@@ -272,7 +294,7 @@
     :map              (delimited-coll* e b "{"  "}" "dl" nil c i p)
     :set              (delimited-coll* e b "#{" "}" "dl" nil c i p)
     :fn               (delimited-coll* e b "#(" ")" "dl" nil c i p)
-    :tear             (delimited-coll* e b "«"  "»" "dl" nil c i p)
+    :tear             (delimited-coll* e b "\u00ab"  "\u00bb" "dl" nil c i p)
     :meta             (delimited-coll* e b "^"  nil  nil "pf" c i p)
     :deref            (delimited-coll* e b "@"  nil  nil "pf" c i p)
     :quote            (delimited-coll* e b "'"  nil  nil "pf" c i p)
@@ -403,7 +425,7 @@
   [t v]
   (case t
     :symbol         (case v
-                      ("defn" "let" "when" "and" "or" "if" "do" "for" "some->"
+                      ("fn" "defn" "let" "when" "and" "or" "if" "do" "for" "some->"
                        "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
                        "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
                       "tk m"
@@ -424,12 +446,11 @@
     :md/code        "md-code code-font"
     :md/inline-code "md-inline-code code-font"))
 
-
 (defn token-text
   [t v]
   #_(subs xxx 0 (if (number? v)
-                (count (str v))
-                (count v)))
+                  (count (str v))
+                  (count v)))
   (case t
     :symbol v
     :keyword  v #_(let [is (string/index-of k "/")]
@@ -470,8 +491,7 @@
               ^String it])
            (:coll/type e)
            (case (:coll/type e)
-             nil (comment
-                   "Probably a retracted entity, do nothing")
+             nil (comment "Probably a retracted entity, do nothing")
              ^:inline (any-coll e
                                 bus
                                 (when selected? "selected")

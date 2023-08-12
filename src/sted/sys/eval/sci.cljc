@@ -212,46 +212,46 @@
   (datafy [n]
     the-sci-context))
 
-
 (defn mutatef
-  [{:keys [conn bus] :as app} app-atom-circular-ref]
-  (let [sel#           (sci/new-dynamic-var 'sel nil)
-        app#           (sci/new-var 'sted
-                                    app-atom-circular-ref
-                                    nil)
+  [{:keys [conn bus]  :as app} app-atom-circular-ref]
+  (let [sel# (sci/new-dynamic-var 'sel nil)
+        app# (sci/new-var 'sted
+                          app-atom-circular-ref
+                          nil)
         unbound-prints (atom [])
-        ctx            (-> (sci-opts app #_{:bindings {'sel sel#}})
-                           (sci/init)
-                           (sci/merge-opts {:bindings {'sel       sel#
-                                                       'sted      app#
-                                                       'bus       bus
-                                                       'transact! (transactor conn)}}))]
+        ctx (-> (sci-opts app #_{:bindings {'sel sel#}})
+                (sci/init)
+                (sci/merge-opts {:bindings {'sel sel#
+                                            'sted app#
+                                            'bus bus
+                                            'transact! (transactor conn)}}))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
-    (sci/alter-var-root sci/print-fn (fn [_]
-                                       (fn [msg]
-                                         (swap! unbound-prints conj msg))))
+    (sci/alter-var-root sci/print-fn
+                        (fn [_]
+                          (fn [msg]
+                            (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
-    
     (fn [_ db bus]
-      (let [target  (get-selected-form db)]
+      (let [target (get-selected-form db)]
         (if-let [h (:handle/token target)]
           (core/send! bus [:eval-cont target (sh/load h)])
-          (if-let [up-h (some-> target move/up :handle/token)]
+          (if-let [up-h (some-> target
+                                move/up
+                                :handle/token)]
             (let [c (sh/load up-h)
                   k (e/->form target)]
               (.then (js/Promise.resolve
-                      (cond
-                        (sequential? c)
-                        (datafy/nav c nil k)
-                        (associative? c)
-                        (datafy/nav c k (get c k))
-                        (set? c)
-                        (datafy/nav c k k)
-                        :else
-                        (str "???" (type c))))
+                       (cond
+                         (sequential? c)
+                           (datafy/nav c nil k)
+                         (associative? c)
+                           (datafy/nav c k (get c k))
+                         (set? c)
+                           (datafy/nav c k k)
+                         :else
+                           (str "???" (type c))))
                      (fn [z]
-                       #_(core/send! bus [:eval-cont target (list nil z)])
-                       (core/send! bus [:eval-inplace target z]))))
+                       (core/send! bus [:ingest-replacing z]))))
             ;;
             (let [top (peek (nav/parents-vec target))
                   estr (e/->string top)
@@ -262,24 +262,21 @@
                                      (catch :default e
                                        {:ok nil
                                         :res e}))]
-              
               (cond
-                (not ok) (do (js/console.error "Exception in eval"  (instance? cljs.core.ExceptionInfo res) res)
+                (not ok) (do (js/console.error "Exception in eval" (instance? cljs.core.ExceptionInfo res) res)
                              (if-let [d (ex-data res)]
                                (do
-                                 (when-let [csa (:sci.impl/callstack d)]
+                                 #_(when-let [csa (:sci.impl/callstack d)]
+                                   (println "Csa")
                                    (run! prn (deref csa)))
-                                 (core/send! bus [:eval-result (:db/id top)
-                                                  d
-                                                  {:coll/type :fancy}]))
-                               (core/send! bus [:eval-result (:db/id top)
-                                                {:error res}])))
-                
+                                 (core/send! bus [:eval-error (:db/id top) res]))
+                               (core/send! bus
+                                           [:eval-result (:db/id top)
+                                            {:error res}])))
                 (instance? js/Promise res)
-                (.then res (fn [v] (core/send! bus [:eval-result (:db/id top) v])))
-                
+                  (.then res (fn [v] (core/send! bus [:eval-result (:db/id top) v])))
                 :else
-                (core/send! bus [:eval-result (:db/id top) res])))))))))
+                  (core/send! bus [:eval-result (:db/id top) res])))))))))
 
 
 (comment

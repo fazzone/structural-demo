@@ -1,6 +1,6 @@
 (ns sted.df.github
-  (:require [clojure.core.protocols :refer [nav]])
-  (:require [sted.df.async :as m]))
+  (:require [clojure.core.protocols :refer [nav]]
+            [sted.df.async :as m]))
 
 (def root "https://hacker-news.firebaseio.com/v0")
 

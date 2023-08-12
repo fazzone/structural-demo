@@ -10,6 +10,7 @@
    [sted.sys.handle :as sh]
    [sted.cmd.nav :as nav]
    [sted.embed.data :as sed]
+   [sted.embed.except :as embed-except]
    #_[sted.embed.md :as emd]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
@@ -610,18 +611,42 @@
                                        (when-let [old-next (:seq/next spine)]
                                          [:db/add (:db/id nn) :seq/next (:db/id old-next)])]
                                       (go data nl coll nn)))))
+
+   :eval-error (fn [sel et-eid data]
+                 (let [db     (d/entity-db sel)
+                       et     (d/entity db et-eid)
+                       target (peek (nav/parents-vec et))
+                       spine  (edit/exactly-one (:seq/_first target))
+                       coll   (edit/exactly-one (:coll/_contains target))
+                       txe    (embed-except/ex->tx data)]
+                   (into [txe]
+                         (edit/insert-after-tx et txe))))
+
+   ;; :ingest-markdown (fn [sel md-text]
+   ;;                    (let [top-level   (peek (nav/parents-vec sel))
+   ;;                          chain       (some-> top-level :coll/_contains edit/exactly-one)
+   ;;                          txe (emd/md->tx md-text)
+   ;;                          new-node {:db/id "mdchain"
+   ;;                                    :coll/type :chain
+   ;;                                    :coll/contains (:db/id txe)
+   ;;                                    :seq/first (:db/id txe)}]
+   ;;                      (prn "DBIDTXE" (:db/id txe))
+   ;;                      (into [txe
+   ;;                             new-node]
+   ;;                            (edit/insert-after-tx chain new-node))))
+
    
-   :eval-inplace (fn [sel target data]
-                   (let [db    (d/entity-db sel)
-                         spine (edit/exactly-one (:seq/_first target))
-                         coll  (edit/exactly-one (:coll/_contains target))]
-                              (when (and spine coll)
-                                (let [ans     (go (list data) (node-limit db) coll spine)
-                                      id-hack (some (fn [[_ e]]
-                                                      (when (neg? e) e))
-                                                    ans)]
-                                  (into (select-form-tx db id-hack)
-                                        ans)))))
+   :ingest-replacing (fn [sel data]
+                       (let [db    (d/entity-db sel)
+                             spine (edit/exactly-one (:seq/_first sel))
+                             coll  (edit/exactly-one (:coll/_contains sel))]
+                         (when (and spine coll)
+                           (let [ans     (go data (node-limit db) coll spine)
+                                 id-hack (some (fn [[_ e]]
+                                                 (when (neg? e) e))
+                                               ans)]
+                             (into (select-form-tx db id-hack)
+                                   ans)))))
    
    :eval-cont (fn [sel target data]
                 ;; (js/console.log "Eval-cont" data)

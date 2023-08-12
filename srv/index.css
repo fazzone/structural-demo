@@ -456,6 +456,17 @@ span.indenter {
 }
 .eval-result.selected { background-color: #055005; }
 
+.eval-exception {
+    background-color: #6e2012;
+    padding: 1ex;
+    white-space: pre;
+    border-radius: 2ex;
+    max-width: min-content;
+}
+.eval-exception.selected { background-color: #055005; }
+.ex-type { margin-right: 2ex; }
+
+
 .eval-result-ref {
     font-weight: bolder;
     color: #57b7e5;
