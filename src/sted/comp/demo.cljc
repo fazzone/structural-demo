@@ -707,57 +707,60 @@
 (rum/defc demo*
   [r c]
   [:div.mememe
-   [:div
-    {:style {:display :grid
-             :grid-template-columns "1fr 1fr 1fr"
-             :grid-gap "1ch"
-             #_:background-color
-             #_"tomato"
-             :width "64ch"
-             :height "32ch"}}
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
-   (real-root r
-              (e/->tx (quote (prefix suffix conj matching testing connect)))
-              [[:flow-right]
-               [:update-search "co"]
-               [:update-search "con"]])
-   (real-root r
-              (e/->tx (quote (prefix suffix conj matching testing connect)))
-              [[:tail]
-               [:update-search "fix"]
-               #_[:update-search "conj"]])
-   (real-root r
-              (e/->tx (quote ("Very long strings with search results"
-                              a
-                              b
-                              :string
-                              c
-                              d)))
-              [[:tail]
-               [:update-search "ring"]
-               #_[:update-search "conj"]])
+   (comment
+     [:div
+      {:style {:display :grid
+               :grid-template-columns "1fr 1fr 1fr"
+               :grid-gap "1ch"
+               #_:background-color
+               #_"tomato"
+               :width "64ch"
+               :height "32ch"}}
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
+     (real-root r
+                (e/->tx (quote (prefix suffix conj matching testing connect)))
+                [[:flow-right]
+                 [:update-search "co"]
+                 [:update-search "con"]])
+     (real-root r
+                (e/->tx (quote (prefix suffix conj matching testing connect)))
+                [[:tail]
+                 [:update-search "fix"]
+                 #_[:update-search "conj"]])
+     (real-root r
+                (e/->tx (quote ("Very long strings with search results"
+                                a
+                                b
+                                :string
+                                c
+                                d)))
+                [[:tail]
+                 [:update-search "ring"]
+                 #_[:update-search "conj"]]))
+   
    (cdoc/mutations-reference r nil)]
+  
   #_(rum/bind-context
-      [cc/*modeline-ref* nil]
-      [:div
-       {:style {:display :flex
-                :flex-direction :column}}
-       (demo {:form '((a [1] c))
-              :setup [[:flow-right] [:flow-right] [:flow-right]]
-              :mutations [[:split]]}
-             r
-             c)
-       #_(for [j (range 1)]
-           [:div {:key j}
-            [:h2 (str j)]
-            (player {:form (quote (fn [n] (r 0 g)))
-                     :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
-                     :mutations my-mutations}
-                    r
-                    c)])])
+     [cc/*modeline-ref* nil]
+     [:div
+      {:style {:display :flex
+               :flex-direction :column}}
+      (demo {:form '((a [1] c))
+             :setup [[:flow-right] [:flow-right] [:flow-right]]
+             :mutations [[:split]]}
+            r
+            c)
+      #_(for [j (range 1)]
+          [:div {:key j}
+           [:h2 (str j)]
+           (player {:form (quote (fn [n] (r 0 g)))
+                    :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
+                    :mutations my-mutations}
+                   r
+                   c)])])
   ;; flow-right
-)
+  )
