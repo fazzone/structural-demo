@@ -117,3 +117,5 @@
     (if-not dst
       (println "Cannot" movement-type "from" sel)
       (move-selection-tx (:db/id sel) (:db/id dst)))))
+
+

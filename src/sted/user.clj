@@ -6,6 +6,8 @@
   (a/let [res (.writeFile (js/secret_electron_require "fs/promises") file (e/->string ch))]
     [:wrote file]))
 
+(send! [:nrepl-connect "localhost" 1667])
+
 (do
   (defn f [] (throw (ex-info "f" {:where 'f})))
   (defn g [] (f))

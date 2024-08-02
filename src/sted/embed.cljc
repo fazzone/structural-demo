@@ -305,6 +305,8 @@
                     (when (< 0 ci)
                       (apply str (repeat ci " "))))))]
      (or
+      (when-let [ht (:handle/token e)]
+        (str "(sted.embed.data/h " (pr-str ht) ")"))
       (when-let [tt (:token/type e)]
         (case tt
           :symbol  (str (:token/value e))
@@ -418,6 +420,7 @@
                     [tx-entity])]
         (prn 'ds (count (d/datoms db-after :eavt)))
         (= data (->form (d/entity db-after (get tempids (:db/id tx-entity)))))))))
+
 
 (defn parse-token-tx
   [s]

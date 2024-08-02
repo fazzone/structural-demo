@@ -42,10 +42,14 @@
           (.stopPropagation ev))
         
         :else
-        (when-some [mut (get @keymap kbd)]
-          (.preventDefault ev)
-          (.stopPropagation ev)
-          (core/send! bus [mut]))))))
+        (let [mut (get @keymap kbd)]
+          (if-not (some? mut)
+            (println "No binding for " (pr-str kbd))
+            (do
+              (println "[KBD]" kbd "==>" mut)
+              (.preventDefault ev)
+              (.stopPropagation ev)
+              (core/send! bus [mut]))))))))
 
 
 (defn keyup

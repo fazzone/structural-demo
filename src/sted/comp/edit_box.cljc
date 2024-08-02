@@ -15,27 +15,29 @@
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
+(defonce last-entered-token (atom nil))
 
-(defn editbox-keydown-mutation
+(defn editbox-keydown*
   [e text key]
   (case key
-    "Escape" [:edit/reject]
-    "Backspace" (when (empty? text)
-                  [:edit/reject])
-    "Enter" (if (:form/edit-comp e)
-              [:edit/finish-and-move-up text]
-              [:edit/finish text])
-    "C-/" [:undo]
-    ("S-)" "]" "S-}") [:edit/finish-and-move-up text]
-    "[" [:edit/wrap :vec text]
-    "S-(" [:edit/wrap :list text]
-    "S-{" [:edit/wrap :map text]
-    (" " "S- ") (cond
-                  (empty? text) [:edit/reject]
-                  (= "\"" (first text)) (println "Quotedstring")
-                  #_(:form/edit-comp e)
-                  #_[:edit/finish-and-move-up text]
-                  :else [:edit/finish-and-edit-next-node text])
+    "Escape"          {:msg [:edit/reject]}
+    "Backspace"       (when (empty? text)
+                        {:msg [:edit/reject]})
+    "Enter"           (if (:form/edit-comp e)
+                        {:accept true :msg [:edit/finish-and-move-up text]}
+                        {:accept true :msg [:edit/finish text]})
+    "C-/"             {:msg [:undo]}
+    ("S-)" "]" "S-}") {:accept true :msg [:edit/finish-and-move-up text]}
+    "["               {:msg [:edit/wrap :vec text]}
+    "S-("             {:msg [:edit/wrap :list text]}
+    "S-{"             {:msg [:edit/wrap :map text]}
+    "C- "             {:new-text @last-entered-token}
+    (" " "S- ")       (cond
+                        (empty? text)         {:msg [:edit/reject]}
+                        (= "\"" (first text)) (println "Quotedstring")
+                        #_                    (:form/edit-comp e)
+                        #_                    [:edit/finish-and-move-up text]
+                        :else                 {:accept true :msg [:edit/finish-and-edit-next-node text]})
     nil))
 
 (rum/defc edit-box
@@ -68,8 +70,18 @@
                       nil)
       :on-key-down (fn [ev]
                      (let [kbd (ske/event->kbd ev)
-                           mut (editbox-keydown-mutation e value kbd)]
-                       (when mut
-                         (.preventDefault ev)
-                         (.stopPropagation ev)
-                         (core/send! bus mut))))}]))
+                           {:keys [msg accept new-text]} (editbox-keydown* e value kbd)]
+                       (println "EditboxKeydown " kbd accept msg)
+                       (cond
+                         msg
+                         (do (.preventDefault ev)
+                             (.stopPropagation ev)
+                             (when accept
+                               (reset! last-entered-token value))
+                             (core/send! bus msg))
+                         
+                         new-text
+                         (set-text! new-text)
+                         
+                         
+                         )))}]))

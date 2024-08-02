@@ -102,77 +102,12 @@
                    (:form/indent e) (conj [:db/retract (:db/id e) :form/indent ])))))
        (reduce into)))
 
-
-
-(defn el-bfs
-  [top limit]
-  (loop [out   []
-         front [top]]
-    (cond
-      (empty? front)        out
-      (= limit (count out)) out
-      :else                 (let [e (first front)]
-                              (recur (cond-> out
-                                       (:coll/type e) (conj e))
-                                     (cond-> (subvec front 1)
-                                       (:seq/next e)  (conj (:seq/next e))
-                                       (:seq/first e) (conj (:seq/first e))))))))
-
-(defn lazy-bfs
-  [top]
-  ((fn iter [[e :as front]]
-     (when (some? e)
-       (cond->> (lazy-seq (iter (cond-> (subvec front 1)
-                                  (:seq/next e)  (conj (:seq/next e))
-                                  (:seq/first e) (conj (:seq/first e)))))
-         (or (:coll/type e) (:token/type e)) (cons e))))
-   [top]))
-
-(defn no-double-colls
-  [nmv]
-  ((fn iter [[x y :as xs] firsts]
-     (when x
-       (let [fid (:db/id (:seq/first x))
-             add? (not (contains? firsts (:db/id x)))]
-         (cond->> (lazy-seq (iter (next xs) (conj firsts fid)))
-           add? (cons x)))))
-   nmv #{}))
-
-(defn get-numeric-movement-vec
-  [sel]
-  (let [children (next (take 8 (no-double-colls (lazy-bfs sel))))]
-    (if (move/up sel)
-      (into [(peek (nav/parents-vec sel))] children)
-      (into [nil] children))))
-
-(defn numeric-movement
-  [n sel]
-  (when-let [nmv (get-numeric-movement-vec sel)]
-    (when (< -1 n (count nmv))
-      (nth nmv n))))
-
 (defn delete-by-eid
   [db eid]
   (let [e (d/entity db eid)]
     (if-not (:form/highlight e)
       (edit/form-delete-tx e)
       (move-and-delete-tx db move/backward-up move/next-sibling))))
-
-(defn clear-one-eval
-  [sel]
-  (let [db        (d/entity-db sel)
-        top-level (peek (nav/parents-vec sel))
-        chain     (some-> top-level :coll/_contains edit/exactly-one)
-        ch-set    (->> (:db/id chain)
-                    (d/datoms db :avet :coll/contains)
-                    (into #{} (map first)))]
-    (some->> (d/rseek-datoms db :eavt (:db/id chain) :coll/contains)
-             (take-while (fn [[e]] (= e (:db/id chain))))
-             (keep (fn [[_ _ v t]]
-                     (when (seq (d/datoms db :eavt v :eval/of))
-                       v)))
-             (first)
-             (delete-by-eid db))))
 
 (defn insert-txdata
   [et c]
@@ -259,7 +194,9 @@
     (let [text (->> (tree-seq :coll/type e/seq->vec e)
                     (keep :token/value)
                     (apply str))]
-      
+      ;; this is keeping the token type of the first torn token
+      ;; this means you can't convert e.g. symbol/token (also it can be wrong)
+      ;; why do it?
       (into [[:db/add (:db/id head) :token/value text]]
             (concat (edit/form-raise-tx head)
                     (move-selection-tx (:db/id sel) (:db/id head)))))))
@@ -463,14 +400,14 @@
    :next            move/next-sibling
    :prev            move/prev-sibling
    :tail            move/most-nested
-   :m1              (partial numeric-movement 0)
-   :m2              (partial numeric-movement 1)
-   :m3              (partial numeric-movement 2)
-   :m4              (partial numeric-movement 3)
-   :m5              (partial numeric-movement 4)
-   :m6              (partial numeric-movement 5)
-   :m7              (partial numeric-movement 6)
-   :m8              (partial numeric-movement 7)})
+   :m1              (partial nav/numeric 0)
+   :m2              (partial nav/numeric 1)
+   :m3              (partial nav/numeric 2)
+   :m4              (partial nav/numeric 3)
+   :m5              (partial nav/numeric 4)
+   :m6              (partial nav/numeric 5)
+   :m7              (partial nav/numeric 6)
+   :m8              (partial nav/numeric 7)})
 
 #_(defn new-comment-tx
   [sel]
@@ -571,10 +508,34 @@
    :open-chain       chain-from-text
    :new-bar          new-bar-tx
    
+   :new-do (fn [sel]
+             (let [new-node {:db/id         "newnode"
+                             :coll/type     :list
+                             :coll/contains #{"do" #_ "comment" "inner"}
+                             :eval/action   :eval-sci
+                             :seq/first     {:db/id       "do"
+                                             :token/type  :symbol
+                                             :token/value "sted/do"}
+                             :seq/next      {:seq/first {:db/id             "inner"
+                                                         :form/edit-initial ""
+                                                         :form/editing      true}}
+                             #_             #_:seq/next {:seq/first {:db/id       "comment"
+                                                                     :token/type  :comment
+                                                                     :token/value "; cmd"}
+                                                         :seq/next  {:seq/first {:db/id             "inner"
+                                                                                 :form/edit-initial ""
+                                                                                 :form/editing      true}}}}]
+               (into [new-node
+                      (when (:form/linebreak sel)
+                        [:db/add "newnode" :form/linebreak true])]
+                     (concat (edit/insert-before-tx sel new-node)
+                             (move-selection-tx (:db/id sel) "inner")) )))
+   
    :hide          (comp toggle-hide-show peek nav/parents-vec )
    :stringify     replace-with-pr-str
    :plus          plus*
    :minus         minus*
+   
    ;; bad
    :insert-txdata insert-txdata
    
@@ -592,25 +553,25 @@
    :oneline               recursive-oneline-tx
    :oneline-all           (fn [sel]
                             (some->> sel :coll/contains (mapcat recursive-oneline-tx)))
-   :clear-one-eval        clear-one-eval
-   :eval-result           (fn [sel et-eid data props]
+   :eval-result           (fn [sel et-eid data]
                             (let [db     (d/entity-db sel)
                                   et     (d/entity db et-eid)
                                   target (peek (nav/parents-vec et))
                                   spine  (edit/exactly-one (:seq/_first target))
                                   coll   (edit/exactly-one (:coll/_contains target))
-                                  nn     (-> {:db/id     "ncell"
-                                              :seq/_next (:db/id spine)
-                                              :binker    "B I N K"
-                                              ;; :db/ident "HJafongs"
-                                              }
-                                             (merge props))
-                                  nl     (node-limit db)]
+                                  nn     {:db/id     "ncell"
+                                          :seq/_next (:db/id spine)}
+                                  nl     (node-limit db)
+                                  inner  (go data nl coll nn)
+
+                                  [_ [_ _ _ inner-eid]] inner]
+                              
                               (when (and spine coll)
-                                (into [nn
-                                       (when-let [old-next (:seq/next spine)]
-                                         [:db/add (:db/id nn) :seq/next (:db/id old-next)])]
-                                      (go data nl coll nn)))))
+                                (->> inner
+                                     (into [nn
+                                            [:db/add inner-eid :eval/of et-eid]
+                                            (when-let [old-next (:seq/next spine)]
+                                              [:db/add (:db/id nn) :seq/next (:db/id old-next)])])))))
 
    :eval-error (fn [sel et-eid data]
                  (let [db     (d/entity-db sel)
@@ -619,7 +580,7 @@
                        spine  (edit/exactly-one (:seq/_first target))
                        coll   (edit/exactly-one (:coll/_contains target))
                        txe    (embed-except/ex->tx data)]
-                   (into [txe]
+                   (into [(assoc txe :eval/of et-eid)]
                          (edit/insert-after-tx et txe))))
 
    ;; :ingest-markdown (fn [sel md-text]
@@ -676,7 +637,6 @@
                                                (:db/id (move/backward-up target))))
                            tx-data)))))))
    
-
    :summon  summon-tx
    :unraise edit/unraise-tx
    :compose edit/ffff

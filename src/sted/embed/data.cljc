@@ -1,9 +1,11 @@
 (ns sted.embed.data
-  (:require [sted.embed :as e]
-            [datascript.db :as db #?@(:cljs [:refer [Datom]])]
-            [sted.embed.common :as ec]
-            [datascript.core :as d])
-  #?(:clj (:import [datascript.db Datom])))
+  (:require
+   ;; [datascript.db :as db #?@(:cljs [:refer [Datom]])]
+   [sted.embed.common :as ec])
+  #?(:clj (:import [java.util UUID]))
+  ;; #?(:clj (:import [datascript.db Datom]))
+  
+  )
 
 (defn ->token-type
   [e]
@@ -25,9 +27,10 @@
       (:symbol :keyword) (str e)
       (:string :number) e
       (str "# "
-           (or (not-empty (some-> e (.-constructor ) (.-name)))
+           (or #?(:cljs (not-empty (some-> e (.-constructor ) (.-name)))
+                  :clj (str (class e)))
                (do
-                 (js/console.log "What are you?"  e)
+                 #?(:cljs (js/console.log "What are you?"  e))
                  "object"))))))
 
 (defn ->coll-type
@@ -39,7 +42,9 @@
     (map? e)            :map
     (set? e)            :set
     (sequential? e)     :list
-    (instance? Datom e) :vec))
+    
+    ;; (instance? Datom e) :vec
+    ))
 
 (defrecord LoopState [
                       outer       ; eid which coll/contains us
@@ -48,15 +53,59 @@
                       lazy?       ; everything is lazy except for map entries
                       ])
 
+#?(:cljs
+   (defn- to-hex-string [n l]
+     (let [s (.toString n 16)
+           c (count s)]
+       (cond
+         (> c l) (subs s 0 l)
+         (< c l) (str (apply str (repeat (- l c) "0")) s)
+         :else   s))))
+
+(defn- rand-bits [pow]
+  (rand-int (bit-shift-left 1 pow)))
+
+(defn squuid
+  ([]
+   (squuid #?(:clj  (System/currentTimeMillis)
+              :cljs (.getTime (js/Date.)))))
+  ([msec]
+   #?(:clj
+      (let [uuid     (UUID/randomUUID)
+            time     (int (/ msec 1000))
+            high     (.getMostSignificantBits uuid)
+            low      (.getLeastSignificantBits uuid)
+            new-high (bit-or (bit-and high 0x00000000FFFFFFFF)
+                             (bit-shift-left time 32))]
+        (UUID. new-high low))
+      :cljs
+      (uuid
+       (str
+        (-> (int (/ msec 1000))
+            (to-hex-string 8))
+        "-" (-> (rand-bits 16) (to-hex-string 4))
+        "-" (-> (rand-bits 16) (bit-and 0x0FFF) (bit-or 0x4000) (to-hex-string 4))
+        "-" (-> (rand-bits 16) (bit-and 0x3FFF) (bit-or 0x8000) (to-hex-string 4))
+        "-" (-> (rand-bits 16) (to-hex-string 4))
+        (-> (rand-bits 16) (to-hex-string 4))
+        (-> (rand-bits 16) (to-hex-string 4)))))))
+
+
+(def ref-storage (atom {}))
+
+(defn h
+  [k]
+  (get @ref-storage k))
 
 (defn ^:dynamic *store*
   ;; generate a key unconditionally
-  ([])
+  ([] (squuid))
   ;; generate a key optionally
-  ([ptr])
+  ([v] (when (meta v) (squuid)))
   ;; store ptr under key
-  ([key ptr]))
-
+  ([key ptr]
+   (println "Store" key ptr)
+   (swap! ref-storage assoc key ptr)))
 
 (defn emit-tk
   [out eid t v]
@@ -71,12 +120,13 @@
     (if-let [tt (->token-type v)]
       (emit-tk out eid tt (->token-value tt v))
       (let [tt :verbatim
-            ;; k (*store*)
-            ]
-        #_(*store* k v)
+            k (*store*)]
+        
+        (*store* k v)
+        
         (-> out
             (emit-tk eid tt (->token-value tt v))
-            #_(conj! [:db/add eid :handle/token k ]))))))
+            (conj! [:db/add eid :handle/token k ]))))))
 
 (defn emit-cont
   [out cell ptr k]
@@ -183,4 +233,3 @@
                        (when (not= :map (:coll/type coll))
                          :root))]
           (transient [])))
-

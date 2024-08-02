@@ -367,17 +367,28 @@
         coll        (some-> e :coll/_contains exactly-one)
         outer-coll  (some-> coll :coll/_contains exactly-one)
         outer-spine (some-> coll :seq/_first exactly-one)
+        outer-next  (some-> outer-spine :seq/next)
         prev        (some-> spine :seq/_next exactly-one)
         tail        (e/seq->vec spine)]
+    (println "spine" (:db/id spine))
+    (println "next" (:db/id next))
+    (println "outer-coll" (:db/id outer-coll))
+    (println "outer-spine" (:db/id outer-spine))
+    (println "outer-next" (:db/id outer-next))
+    (println "prev" (:db/id prev))
+
+    (println "Tail" (map :db/id tail))
     (when outer-coll
       (if (nil? prev)
         (if-let [n (:seq/first next)]
           (recur n))
         (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
-               {:db/id "cons" :seq/first (:db/id spine)}             ; create a cons pointing to it
+               {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
                [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
                [:db/add (:db/id outer-spine) :seq/next "cons"]
-               (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])]
+               (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
+               (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
+              
               (concat
                (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
                (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))

@@ -1,6 +1,7 @@
 (ns sted.cmd.nav
   (:require
    [sted.cmd.move :as move]
+   [datascript.core :as d]
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
@@ -30,9 +31,9 @@
         (when-let [hop-chain (mover sel)]
           (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))))
     (let [chain (some-> sel parents-vec peek :coll/_contains first)]
-      #_(println "The chain is" (d/touch chain))
+      (println "The chain is" (d/touch chain))
       (when-let [hop-chain (mover chain)]
-        #_(println "The hop-chain is" (d/touch hop-chain) "The tarrget is " (hop-target hop-chain))
+        (println "The hop-chain is" (d/touch hop-chain) "The tarrget is " (hop-target hop-chain))
         (concat (move-selection-tx (:db/id sel) (:db/id (hop-target hop-chain)))
                 [{:db/id (:db/id chain)
                   :chain/selection (:db/id sel)}])))))
@@ -60,3 +61,36 @@
   [db chain]
   (when-let [prev-sel (:chain/selection chain)]
     (select-form-tx db (:db/id prev-sel))))
+
+(defn lazy-bfs
+  [top]
+  ((fn iter [[e :as front]]
+     (when (some? e)
+       (cond->> (lazy-seq (iter (cond-> (subvec front 1)
+                                  (:seq/next e)  (conj (:seq/next e))
+                                  (:seq/first e) (conj (:seq/first e)))))
+         (or (:coll/type e) (:token/type e)) (cons e))))
+   [top]))
+
+(defn no-double-colls
+  [nmv]
+  ((fn iter [[x y :as xs] firsts]
+     (when x
+       (let [fid (:db/id (:seq/first x))
+             add? (not (contains? firsts (:db/id x)))]
+         (cond->> (lazy-seq (iter (next xs) (conj firsts fid)))
+           add? (cons x)))))
+   nmv #{}))
+
+(defn get-numeric-movement-vec
+  [sel]
+  (let [children (next (take 8 (no-double-colls (lazy-bfs sel))))]
+    (if (move/up sel)
+      (into [(peek (parents-vec sel))] children)
+      (into [nil] children))))
+
+(defn numeric
+  [n sel]
+  (when-let [nmv (get-numeric-movement-vec sel)]
+    (when (< -1 n (count nmv))
+      (nth nmv n))))

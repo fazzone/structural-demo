@@ -29,6 +29,9 @@
    [sted.df.github :as dfg]
    [sted.df.async :as a]
    [sted.sys.eval.sci :as eval-sci]
+   [sted.sys.eval.sys-eval :as sys-eval]
+   [sted.sys.nrepl.bencode :as benc]
+   [sted.sys.nrepl.setup :as nrepl]
    [sted.sys.fmt :as sf]
    [sted.sys.kbd.map :as skm]
    [sted.sys.kbd.evt :as ske]
@@ -65,13 +68,13 @@
                 #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
     [{:db/ident ::state
       :state/bar "bar"
-      :state/limit 512}
+      :state/limit 64}
      {:db/ident ::command-chain
       :db/id "command-chain"
       :coll/type :vec
       :form/highlight true}
      {:db/ident ::inspect  :db/id "inspect"
-      :coll/type :demo
+      :coll/type #_:demo :vec
       
       }
      {:db/ident ::default-keymap
@@ -202,6 +205,8 @@
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
+         (nrepl/setup!)
+         (sys-eval/setup!)
          (core/register-mutation!
           :save
           (fn [_ db bus]

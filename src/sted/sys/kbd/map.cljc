@@ -4,7 +4,8 @@
   {" "         :insert-right
    "-"         :hide
    "."         :save-demo
-   "/"         :search/start
+   ;; "/"         :search/start
+   "/"         :search/numeric
    "0"         :parent
    "1"         :m1
    "2"         :m2
@@ -20,6 +21,7 @@
    "C-/"       :undo
    "C-Enter"   :insert-right-newline
    "C-s"       :search/start
+   "C-a"       "No, I don't want to select all"
    "Enter"     :linebreak
    "Escape"    :select-chain
    "M-S-I"     "No, I do not want to report a problem to Google"
@@ -35,6 +37,7 @@
    "S-A"       :alias
    "S-B"       :new-bar
    "'"         :new-quote
+   ","         :new-do
    "S-C"       :new-chain
    "S-F"       :flow-right-coll
    "S-H"       :hoist
@@ -58,7 +61,9 @@
    "a"         :flow-left
    "c"         :clone
    "d"         :delete-right
-   "e"         :eval-sci
+   "e"         :eval
+   "S-E"       :eval-nrepl
+   "M-e"       :delete-last-result
    "f"         :flow-right
    "g"         :gobble
    "h"         :parent

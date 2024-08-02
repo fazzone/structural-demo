@@ -68,6 +68,16 @@
                                          (swap! state dissoc :query)
                                          (core/move-selection-tx (:db/id sel) (.-eid r)))))))
 
+          (core/register-mutation! :search/numeric
+                                   (fn [_ db bus]
+                                     (swap! state
+                                            (fn [{:keys [cheese]}]
+                                              (if cheese
+                                                {}
+                                                {:cheese
+                                                 (sdom/numeric
+                                                  (::bar-ref (d/entity db :sted.page/state))
+                                                  (:db/id (core/get-selected-form db)))})))))
           (core/register-mutation! :update-search
                                    (fn [[_ text] db bus]
                                      (let [top-level (nav/parents-vec (core/get-selected-form db))

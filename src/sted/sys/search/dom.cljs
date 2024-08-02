@@ -77,3 +77,20 @@
                       (reduce search-within-chain []))
               _ (js/console.timeEnd tag)]
           nr)))))
+
+(defn numeric
+  [bar-el sel-eid]
+  (let [sel-el (.querySelector bar-el ".selected")
+
+        rs (->> (.querySelectorAll sel-el ".c")
+                (reduce (fn [a ch]
+                          (conj a #js {:match "?"
+                                       :index 0
+                                       :element (.querySelector ch ".d")
+                                       :eid (some-> ^js ch
+                                                    (..  -dataset -eid)
+                                                    (js/parseInt))}))
+                        []))]
+    (js/console.table (clj->js rs))
+    rs
+    ))

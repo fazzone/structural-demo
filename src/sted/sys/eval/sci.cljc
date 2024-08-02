@@ -71,6 +71,9 @@
                 'js       {'Promise.resolve (fn [p]
                                               (println "Resolver" p)
                                               (js/Promise.resolve p))}
+                'sted {'do ^:sci/macro (fn [&form &env & body]
+                                         (list* 'do body))}
+                
                 'df.async {'do ^:sci/macro (fn [&form &env & body]
                                              (println "Macro!" &form body)
                                              (let [ret (a/do* body)]
@@ -100,6 +103,7 @@
                             (fn [s f]
                               (js/setTimeout (fn [] (s (core/send! bus m)))
                                              0))))
+                
                 '->seq   e/seq->seq
                 'datafy  p/datafy
                 'nav     p/nav
@@ -231,8 +235,9 @@
                           (fn [msg]
                             (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
-    (fn [_ db bus]
-      (let [target (get-selected-form db)]
+    ;; actual mutation fn 
+    (fn [[_ eval-eid] db bus]
+      (let [target (d/entity db eval-eid)]
         (if-let [h (:handle/token target)]
           (core/send! bus [:eval-cont target (sh/load h)])
           (if-let [up-h (some-> target
@@ -241,20 +246,20 @@
             (let [c (sh/load up-h)
                   k (e/->form target)]
               (.then (js/Promise.resolve
-                       (cond
-                         (sequential? c)
-                           (datafy/nav c nil k)
-                         (associative? c)
-                           (datafy/nav c k (get c k))
-                         (set? c)
-                           (datafy/nav c k k)
-                         :else
-                           (str "???" (type c))))
+                      (cond
+                        (sequential? c)
+                        (datafy/nav c nil k)
+                        (associative? c)
+                        (datafy/nav c k (get c k))
+                        (set? c)
+                        (datafy/nav c k k)
+                        :else
+                        (str "???" (type c))))
                      (fn [z]
                        (core/send! bus [:ingest-replacing z]))))
             ;;
-            (let [top (peek (nav/parents-vec target))
-                  estr (e/->string top)
+            (let [estr (e/->string target)
+                  _ (println  estr)
                   ;; res (sci/binding [sel# target] (sci/eval-string* ctx estr))
                   {:keys [ok res]} (try
                                      {:ok true
@@ -267,16 +272,18 @@
                              (if-let [d (ex-data res)]
                                (do
                                  #_(when-let [csa (:sci.impl/callstack d)]
-                                   (println "Csa")
-                                   (run! prn (deref csa)))
-                                 (core/send! bus [:eval-error (:db/id top) res]))
+                                     (println "Csa")
+                                     (run! prn (deref csa)))
+                                 (core/send! bus [:eval-error eval-eid res]))
                                (core/send! bus
-                                           [:eval-result (:db/id top)
+                                           [:eval-result eval-eid
                                             {:error res}])))
+                
                 (instance? js/Promise res)
-                  (.then res (fn [v] (core/send! bus [:eval-result (:db/id top) v])))
+                (.then res (fn [v] (core/send! bus [:eval-result eval-eid v])))
+                
                 :else
-                  (core/send! bus [:eval-result (:db/id top) res])))))))))
+                (core/send! bus [:eval-result eval-eid res])))))))))
 
 
 (comment

@@ -1,5 +1,6 @@
 (ns sted.sys.mouse
-  (:require [sted.core :as core]))
+  (:require [sted.core :as core]
+            [datascript.core :as d]))
 
 (defn mousedown
   [^MouseEvent ev st bus]
@@ -54,7 +55,23 @@
           ls {"mousedown"   (fn [ev] (mousedown ev st bus))
               "mouseup"     (fn [ev] (mouseup ev st bus))
               "contextmenu" (fn [ev] (contextmenu ev st bus))
-              "selectstart" (fn [ev] (selectstart ev st bus))}]
+              "selectstart" (fn [ev] (selectstart ev st bus))
+              "wheel"       (fn [ev]
+                              (let [el (js/document.elementFromPoint
+                                        (.-clientX ev)
+                                        (.-clientY ev))
+                                    eid (aget (.-dataset el) "eid" )]
+                                (when (.matches el ".tk.n")
+                                  (core/send! bus [::arith
+                                                   (js/parseInt eid)
+                                                   (js/Math.sign (.-wheelDeltaY ev))]))))}]
+      
       (doseq [[e f] ls]
         (js/document.addEventListener e f false))
-      (assoc app ::listeners ls))))
+      
+      (-> app
+          (assoc ::listeners ls)
+          (core/register-simple! ::arith (fn [sel eid x]
+                                           (let [e (d/entity (d/entity-db sel) eid)]
+                                             (when (= :number (:token/type e))
+                                               [[:db/add (:db/id e) :token/value (+ x (:token/value e))]]))))))))

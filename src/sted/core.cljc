@@ -75,7 +75,9 @@
        (js/console.log "Re-use sub-map" last-sub-map))
      (reify IBus
        (send! [this msg]
-         (async/put! ch msg))
+         (let [r (async/put! ch msg)]
+           (when-not r
+             (println "!!!! Put broken? Channel closed? What??"))))
        (connect-sub! [this topic sch]
          (async/sub pub topic sch))
        (disconnect-sub! [this topic sch]
@@ -140,7 +142,11 @@
       (let [[mut-name & args :as mut] (async/<! ch)
             db @conn
             sel (get-selected-form db)
-            tx-data (apply mut-fn sel args)
+            tx-data (try (apply mut-fn sel args)
+                         (catch #? (:cljs js/Error :clj Exception) e
+                           (println "Exception in mutation " e)
+                           nil))
+            
             _ (prn (uniqueid bus) mut-name)
             report (try (and tx-data
                              #_(assoc (d/transact! conn tx-data)
@@ -157,9 +163,10 @@
           (if-let [txid (get (:tempids report) :db/current-tx)]
             (do (save-history! bus txid report)
                 
-                #_(println "================================================================" )
-                #_(println txid mut )
-                #_(run! prn (:tx-data report))
+                ;; (println "================================================================" )
+                ;; (println txid mut )
+                ;; (run! prn (:tx-data report))
+                ;; (run! prn (:tempids report))
                 
                 (reset! history (cons report @history)))
             (println "No current-tx?")))

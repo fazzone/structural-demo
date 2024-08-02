@@ -2,7 +2,6 @@
   (:require [datascript.core :as d]
             [rum.core :as rum]
             [clojure.string :as string]
-            [sted.cmd.move :as move]
             [sted.comp.common :as cc]
             [sted.sys.search.db :as sdb]
             [sted.sys.kbd.evt :as ske]
@@ -74,6 +73,19 @@
                             unique-text?
                             unique-token?))))))
 
+(defn simple-highlights!
+  [results]
+  (let [        jj            (volatile! 0)]
+    (for [^js r results]
+      
+      (->> (.-element r)
+           (rum/portal (hlp (count (.-match r))
+                            0
+                            (count (.-match r))
+                            (vswap! jj inc)
+                            nil
+                            nil))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
 (defn searchbox-keydown-mutation
@@ -127,14 +139,29 @@
 
 (rum/defc rs** < rum/reactive
   [bus sstate]
-  (let [{:keys [query results] :as s} (some-> sstate (rum/react))]
+  (let [{:keys [query results cheese] :as s} (some-> sstate (rum/react))]
+    (println "Render Searcher!"
+             "query?" (some? query)
+             "results?" (some? results)
+             "cheese?" (some? cheese))
+    [:span.searcher {}
+     (when query "search: ")
+     (when query (search-box bus query))
+
+     (when (and query results)
+       (dom-result-highlights! query results))
+     (when cheese
+       (println "Cheesesgeg")
+       (simple-highlights! cheese))
+     
+     ]
     
-    (if-not query
-      [:span.searcher {}]
-      [:span.searcher {}
-       "search: "
-       (search-box bus query)
-       (dom-result-highlights! query results)])))
+    #_(if-not query
+        [:span.searcher {}]
+        [:span.searcher {}
+         "search: "
+         (search-box bus query)
+         (dom-result-highlights! query results)])))
 
 
 
