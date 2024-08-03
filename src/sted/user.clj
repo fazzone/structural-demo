@@ -6,7 +6,9 @@
   (a/let [res (.writeFile (js/secret_electron_require "fs/promises") file (e/->string ch))]
     [:wrote file]))
 
+
 (send! [:nrepl-connect "localhost" 1667])
+
 
 (do
   (defn f [] (throw (ex-info "f" {:where 'f})))
@@ -14,27 +16,40 @@
   (defn h [] (g))
   (h))
 
+(do (defn navize-path
+      ([fs root] (navize-path fs root root))
+      ([fs root k]
+       (a/let [dents (.readdir fs root)]
+         {k (with-meta (seq dents)
+              {'clojure.core.protocols/nav
+                 (fn nav-path [c k v]
+                   (if-not (string? v)
+                     {:error "not a path"}
+                     (let [{::keys [fs-ref listing-of]} (meta c)
+                           dest (str listing-of "/" v)]
+                       (a/let [st (.stat fs dest)]
+                         (if-not (.isDirectory st) dest (navize-path fs-ref dest v))))))
+               ::fs-ref fs
+               ::listing-of root})})))
+    (navize-path (js/secret_electron_require "fs/promises") "src"))
 
 (do
   (defn navize-path
-    ([fs root] (navize-path fs root root))
-    ([fs root k]
-     (a/let [dents (.readdir fs root)]
-       {k (with-meta
-            (seq dents)
-            {'clojure.core.protocols/nav
-               (fn nav-path [c k v]
-                 (if-not (string? v)
-                   {:error "not a path"}
-                   (let [{::keys [fs-ref listing-of]} (meta c)
-                         dest (str listing-of "/" v)]
-                     (a/let [st (.stat fs dest)]
-                       (if-not (.isDirectory st)
-                         dest
-                         (navize-path fs-ref dest v))))))
-             ::fs-ref fs
-             ::listing-of root})})))
-  (navize-path (js/secret_electron_require "fs/promises") "src"))
+    [fs root]
+    (a/let [dents (.readdir fs root)
+            st (js/Promise.all
+                 (for [d dents
+                       :let [f (str root "/" d)]]
+                   (a/let [st (.stat fs f)
+                           rec (when (.isDirectory st)
+                                 (navize-path fs f))]
+                     (or rec (list f)))))]
+      (into [] cat st)))
+  (navize-path (js/secret_electron_require "fs/promises") "src/sted"))
+
+(transact! [[:db/add (:db/id (d/entity (d/entity-db sel) :sted.page/state)) :state/limit 128]])
+
+(:state/limit (into {} (d/touch (d/entity (d/entity-db sel) :sted.page/state))))
 
 
 (defn open-file

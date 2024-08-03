@@ -71,7 +71,7 @@
       :state/limit 64}
      {:db/ident ::command-chain
       :db/id "command-chain"
-      :coll/type :vec
+      :coll/type :ol
       :form/highlight true}
      {:db/ident ::inspect  :db/id "inspect"
       :coll/type #_:demo :vec

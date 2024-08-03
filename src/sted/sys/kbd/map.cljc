@@ -18,6 +18,8 @@
    "9"         :wrap
    ";"         :new-comment
    "Backspace" :move-to-deleted-chain
+   "S-Y"       :cycle-deleted-chain
+   "y"         :pop-deleted-chain
    "C-/"       :undo
    "C-Enter"   :insert-right-newline
    "C-s"       :search/start
@@ -41,6 +43,7 @@
    "S-C"       :new-chain
    "S-F"       :flow-right-coll
    "S-H"       :hoist
+   "M-h"       :clone-to-before-parent
    "S-I"       :zp
    "S-M"       :multiline
    "S-N"       :find-first
@@ -51,6 +54,7 @@
    "S-S"       :split
    "S-Tab"     "Nothing yet"
    "S-W"       :save
+   "C-x"       :save
    "S-X"       :drag-right
    "S-Z"       :drag-left
    "S-^"       :new-meta
@@ -94,14 +98,12 @@
    ;; vi
    })
 
+
 (defn kbd->keydowns
   [kbd]
-  (let [[[_m mod1 mod2 mod3 root]] (re-seq #"(.-)?(.-)?(.-)?(.*)" kbd) 
+  (let [[[_m mod1 mod2 mod3 root]] (re-seq #"(.-)?(.-)?(.-)?(.*)" kbd)
         mods (set [mod1 mod2 mod3])]
     (cond->> [root]
       (contains? mods "S-") (into ["ShiftLeft"])
       (contains? mods "M-") (into ["AltLeft"])
       (contains? mods "C-") (into ["Control"]))))
-
-
-

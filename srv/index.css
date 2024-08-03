@@ -75,6 +75,8 @@
     min-width: max-content;
     padding-top: 2px;
     padding-bottom: 2px;
+
+
     /* width: 100%; */
     /* min-width: 20em; */
 }
@@ -84,6 +86,11 @@
 .chain:not(:first-of-type) {
     border-left: 1px solid #333;
 }
+
+/* bar bumpers */ 
+.chain:first-child { margin-left: 1ch; }
+.chain:last-child { margin-right: 1ch; }
+
 .chain-tag {
     margin-top: 0.5ex;
     margin-bottom: 0.5ex;
@@ -202,9 +209,12 @@
     /* width: 800px; */
     /* overflow: auto; */
 }
-.form-card:first-child {
-    padding-top: 1ex;
-}
+/* .form-card:first-child { padding-top: 1ex;} */
+
+/* form bumpers */ 
+.form-card:first-child { margin-top:    1ch;}
+.form-card:last-child  { margin-bottom: 1ch;}
+
 .form-title {
     color: #fff;
     font-size: 18pt;

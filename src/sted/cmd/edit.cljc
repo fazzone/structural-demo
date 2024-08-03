@@ -208,12 +208,14 @@
      :alias/of (:db/id (:alias/of e))}))
 
 (defn insert-duplicate*
-  [duped inserted-at]
-  (let [new-node (-> (or (duplicate-alias duped)
-                         (form-duplicate-tx duped))
-                     (update :db/id #(or % "dup-leaf")))]
-    (into [new-node]
-          (insert-after-tx inserted-at new-node))))
+  ([duped inserted-at]
+   (insert-duplicate* duped inserted-at insert-after-tx))
+  ([duped inserted-at inserter-fn]
+   (let [new-node (-> (or (duplicate-alias duped)
+                          (form-duplicate-tx duped))
+                      (update :db/id #(or % "dup-leaf")))]
+     (into [new-node]
+           (inserter-fn inserted-at new-node)))))
 
 (defn insert-duplicate-tx
   [sel]
@@ -228,6 +230,7 @@
                        (update :db/id #(or % "dup-leaf")))]
       (into [new-node]
             (insert-before-tx parent new-node)))))
+
 
 (defn form-wrap-tx
   ([e ct]
@@ -467,7 +470,6 @@
                       (form-replace-tx parent e)
                       (m-to-dc parent)))))))
 
-
 (defn unraise-tx
   [sel]
   (let [find-tombstone #(->> (e/seq->vec %)
@@ -510,7 +512,46 @@
            (form-overwrite-tx sel "funcall")
            (move-selection-tx (:db/id sel) "funcname"))))))
 
+(defn form-cycle-tx
+  [coll]
+  (let [spine  (some-> coll :seq/_first exactly-one)
+        first  (:seq/first coll)
+        next   (:seq/next coll)
+        fnext  (:seq/first next)
+        nnext  (:seq/next next)
+        tail   (e/seq->vec nnext)
+        n      (count tail )
+        lspine (when (< 0 n)
+                 (some-> (nth tail (dec n)) :seq/_first exactly-one))]
+
+    
+    (when (and spine next)
+      (into [[:db/add (:db/id coll) :seq/first (:db/id fnext)]
+             [:db/add (:db/id next) :seq/first (:db/id first)]]
+            ;; if there were only 2 elements, just swapping is fine
+            (when lspine
+              [ ;; unlink second cons
+               (if nnext
+                 [:db/add (:db/id coll) :seq/next (:db/id nnext)]
+                 [:db/retract (:db/id coll) :seq/next (:db/id next)])
+               ;; it will be the new end
+               [:db/retract (:db/id next) :seq/next (:db/id nnext)]
+               ;; link it into place
+               [:db/add (:db/id lspine) :seq/next (:db/id next)]])))))
+
 (comment
+  (let [top (e/->entity '[a b c d])]
+  
+    (let [txd (form-cycle-tx top)
+          rep (d/with (d/entity-db top)
+                      txd)]
+      (println "Tx-Data:")
+      (run! clojure.pprint/pprint txd)
+      (println "================================================================================" )
+      (run! prn (:tx-data rep))
+      (println (e/->string (d/entity (:db-after rep)
+                                     (:db/id top))))))
+
   (let [top (e/->entity '[1 foo 2 3])
         sel (-> top :seq/next :seq/first)
         ]

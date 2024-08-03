@@ -57,20 +57,27 @@
         (js/setTimeout 0))))
 
 
+(defn sci-send
+  [bus msg]
+  (js/Promise.
+   (fn [resolve _]
+     ;; get a new stack 
+     (js/setTimeout #(resolve (core/send! bus msg)) 0))))
+
 (defn sci-opts
   [{:keys [conn bus] :as app}]
   {:classes    {'js goog/global :allow :all}
-   :namespaces {'d        {'datoms    d/datoms
-                           'touch     d/touch
-                           'entity-db d/entity-db
-                           'entity    d/entity
-                           'q         d/q
-                           'freeze    dser/serializable
-                           'thaw      dser/from-serializable}
-                'e {'->string e/->string}
-                'js       {'Promise.resolve (fn [p]
-                                              (println "Resolver" p)
-                                              (js/Promise.resolve p))}
+   :namespaces {'d    {'datoms    d/datoms
+                       'touch     d/touch
+                       'entity-db d/entity-db
+                       'entity    d/entity
+                       'q         d/q
+                       'freeze    dser/serializable
+                       'thaw      dser/from-serializable}
+                'e    {'->string e/->string}
+                'js   {'Promise.resolve (fn [p]
+                                          (println "Resolver" p)
+                                          (js/Promise.resolve p))}
                 'sted {'do ^:sci/macro (fn [&form &env & body]
                                          (list* 'do body))}
                 
@@ -91,51 +98,50 @@
                              (mdast/fromMarkdown mdtext))}
                 'gobj     {'view   (fn [obj] (gobj/createImmutableView obj))
                            'extend (fn [a b] (gobj/extend a b))
-                           'get (fn [o k d]
+                           'get    (fn [o k d]
                                   (gobj/get o k d))}
                 'a        {'let ^:sci/macro (fn [&form &env bindings & body]
                                               (a/sci-let** bindings body))}
                 'hn       {'stories dfg/stories}
                 #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                 'all     (fn [a b c] (js/Promise.all a b c))}])}
-   :bindings   {'send!   (fn [m]
-                           (js/Promise.
-                            (fn [s f]
-                              (js/setTimeout (fn [] (s (core/send! bus m)))
-                                             0))))
-                
-                '->seq   e/seq->seq
-                'datafy  p/datafy
-                'nav     p/nav
-                'ls      dfg/ls
-                'object? (fn [o] (object? o))
-                'textwin new-window-with-text
-                'handle (fn [k]
-                          (get @sh/storage k))
-                'storage sh/storage
-                '->chain (fn [ent]
-                           (some-> ent nav/parents-vec peek :coll/_contains first))
-                #?@ (:clj ['slurp slurp
-                           'spit spit]
-                     :cljs ['fetch-text (fn [z]
-                                          (.then (js/fetch z)
-                                                 (fn [resp] (.text resp))))
-                            'fetch-json (fn [u]
-                                          (.then (js/fetch u)
-                                                 (fn [resp]
-                                                   (.then (.json resp)
-                                                          #(js->clj % :keywordize-keys true)))))
-                            'ingest (fn [z]
-                                      (with-meta (list z) {`ingest true}))
-                            'then (fn [p f] (.then (js/Promise.resolve p) f))
-                            'slurp      (some-> electron-bridge (aget "slurp"))
-                            'spit       (some-> electron-bridge (aget "spit"))
-                            'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
-                            'new-window (fn [u name features]
-                                          (js/window.open
-                                           (or u js/window.location)
-                                           name
-                                           features))])}})
+   :bindings {'send!   (fn [m] (sci-send bus m ))
+              'open    (fn [path]
+                         (a/let [buf (.readFile (js/secret_electron_require "fs/promises") path)]
+                           (sci-send bus [:open-chain (.toString buf) {:chain/filename path}])))
+              '->seq   e/seq->seq
+              'datafy  p/datafy
+              'nav     p/nav
+              'ls      dfg/ls
+              'ech '(transact! [{:db/id (:db/id (->chain sel)) :chain/filename ""}])
+              'object? (fn [o] (object? o))
+              'textwin new-window-with-text
+              'handle  (fn [k]
+                         (get @sh/storage k))
+              'storage sh/storage
+              '->chain (fn [ent]
+                         (some-> ent nav/parents-vec peek :coll/_contains first))
+              #?@ (:clj ['slurp slurp
+                         'spit spit]
+                   :cljs ['fetch-text (fn [z]
+                                        (.then (js/fetch z)
+                                               (fn [resp] (.text resp))))
+                          'fetch-json (fn [u]
+                                        (.then (js/fetch u)
+                                               (fn [resp]
+                                                 (.then (.json resp)
+                                                        #(js->clj % :keywordize-keys true)))))
+                          'ingest (fn [z]
+                                    (with-meta (list z) {`ingest true}))
+                          'then (fn [p f] (.then (js/Promise.resolve p) f))
+                          'slurp      (some-> electron-bridge (aget "slurp"))
+                          'spit       (some-> electron-bridge (aget "spit"))
+                          'list-dir   list-dir*   #_(some-> electron-bridge (aget "list_dir"))
+                          'new-window (fn [u name features]
+                                        (js/window.open
+                                         (or u js/window.location)
+                                         name
+                                         features))])}})
 
 
 (defn failure-cont
@@ -233,16 +239,18 @@
     (sci/alter-var-root sci/print-fn
                         (fn [_]
                           (fn [msg]
+                            (js/console.log "[SCI]" msg)
                             (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
     ;; actual mutation fn 
     (fn [[_ eval-eid] db bus]
       (let [target (d/entity db eval-eid)]
+        ;; target itself is handle
         (if-let [h (:handle/token target)]
+          ;; load it and expand it in place
           (core/send! bus [:eval-cont target (sh/load h)])
-          (if-let [up-h (some-> target
-                                move/up
-                                :handle/token)]
+          (if-let [up-h (some-> target move/up :handle/token)]
+            ;; parent of target is handle 
             (let [c (sh/load up-h)
                   k (e/->form target)]
               (.then (js/Promise.resolve
@@ -257,7 +265,7 @@
                         (str "???" (type c))))
                      (fn [z]
                        (core/send! bus [:ingest-replacing z]))))
-            ;;
+            ;; code eval
             (let [estr (e/->string target)
                   _ (println  estr)
                   ;; res (sci/binding [sel# target] (sci/eval-string* ctx estr))
@@ -280,7 +288,9 @@
                                             {:error res}])))
                 
                 (instance? js/Promise res)
-                (.then res (fn [v] (core/send! bus [:eval-result eval-eid v])))
+                (-> res
+                    (.then (fn [v] (core/send! bus [:eval-result eval-eid v])))
+                    (.catch (fn [e] (core/send! bus [:eval-error eval-eid e]))))
                 
                 :else
                 (core/send! bus [:eval-result eval-eid res])))))))))

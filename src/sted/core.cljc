@@ -97,7 +97,14 @@
               (fn [] (.delete sub-set func)))))
       
        (get-history [this txid] (get @hs txid))
-       (save-history! [this txid r] (swap! hs assoc txid r))
+       (save-history! [this txid {:as report :keys [tx-data]}]
+         (let [as (into #{} (map (fn [[_ a]] a)) tx-data)]
+           (println "Mutation" txid (str (when (contains? as :form/highlight) "[Move]")
+                                         (when (some #(not= % :form/highlight) as) "[Edit]")))
+           
+           (swap! hs assoc txid (assoc report
+                                       :movement? (contains? as :form/highlight)
+                                       :mutation? (some #(not= % :form/highlight) as)))))
        (uniqueid [_this] uu)
        (reset [_this]
          #?(:cljs (bus sub-map)))
@@ -151,8 +158,10 @@
             report (try (and tx-data
                              #_(assoc (d/transact! conn tx-data)
                                       :mut mut)
-                             #_(js/console.time "Transacting")
-                             (let [ans (assoc (d/transact! conn tx-data)
+                             
+                             (let [
+                                   ;; _ (js/console.time "Transacting")
+                                   ans (assoc (d/transact! conn tx-data)
                                               :mut mut)]
                                #_(js/console.timeEnd "Transacting")
                                ans))
@@ -207,11 +216,7 @@
         (when u
           (let [rr (d/transact! conn (revert-txdata (:tx-data u)))]
             (println "RR Max-tx" (:max-tx (:db-after rr)) "Tempids" (:tempids rr)))
-          #_(let [rr (-> u
-                         (update :db-before update :max-tx inc)
-                         (update :tempids assoc))])
-          #_(do (reset! conn (update (:db-before u) :max-tx inc))
-                (publish-tx-report! bus (:db-before u) (:tx-data u) (:tempids u)))
+          
           (reset! history
                   (cons (cons u prior-undo)
                         (concat undos more)))))
@@ -246,16 +251,14 @@
                       :conn    (doto conn
                                  (d/listen!
                                   (with-meta
-                                    (fn [{:keys [db-after db-before tx-data tempids]}]
+                                    (fn [{:keys [db-after db-before tx-data tempids] :as report}]
                                       (try
                                         (let [emax (:max-eid db-before)
                                               es (into #{}
                                                        (keep (fn [[e]]
                                                                (when-not (> e emax)
                                                                  e)))
-                                                       tx-data)
-                                              as (into #{} (map (fn [[_ a]] a)) tx-data)]
-                                          
+                                                       tx-data)]
                                           (vreset! scroll-snapshot @scroll-sequence-number)
                                           #_(js/console.time "batchedUpdates")
                                           #?(:cljs

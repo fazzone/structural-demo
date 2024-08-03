@@ -288,8 +288,17 @@
         new-node {:db/id tempid
                   :coll/type :alias
                   :alias/of of-eid}]
-    (if (some #(= of-eid) ps)
-      nil
+    (cond
+      (some #(= of-eid) (next ps))
+      (do (println "alias bad parent")
+          nil)
+      
+      ;; you could make an alias of an alias,
+      ;; but it's more useful to go to the aliased form
+      (= :alias (:coll/type sel))
+      (move-selection-tx (:db/id sel) (:db/id (:alias/of sel)))
+      
+      :else
       (into [new-node]
             (concat
              (edit/insert-before-tx top-level new-node)
@@ -436,7 +445,10 @@
 
 (defn store-fn
   ([] (str (d/squuid)))
-  ([v] (when (meta v) (store-fn)))
+  ([v]
+   #_(when (meta v) (store-fn))
+   nil
+   )
   ([k v] (sh/store k v)))
 
 (defn node-limit
@@ -490,7 +502,13 @@
                    (concat
                     (edit/insert-duped-parent-before-tx sel)
                     (edit/offer-tx sel)))
-   
+   :clone-to-before-parent (fn [sel]
+                             (let [top (peek (nav/parents-vec sel))
+                                   new-node (-> (edit/form-duplicate-tx sel)
+                                                (update :db/id #(or % "dup-leaf")))]
+                               (into [new-node]
+                                     (concat (edit/insert-before-tx top new-node)
+                                             (move-selection-tx (:db/id sel) (:db/id new-node))))))
    :linebreak        linebreak-selected-form-tx
    :wrap             (fn [sel] (edit/form-wrap-tx sel :list))
    :indent           (fn [sel] (indent-selected-form-tx sel 1))
@@ -542,6 +560,16 @@
    :hoist                 hoist-tx
    :gobble                gobble-tx
    :move-to-deleted-chain move-to-deleted-chain
+   :cycle-deleted-chain    (fn [sel]
+                             (when-let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)]
+                               (edit/form-cycle-tx dch)))
+   :pop-deleted-chain (fn [sel]
+                        (let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)
+                              rez (some-> dch :seq/first)]
+                          (when rez
+                            (concat (edit/form-unlink-tx rez)
+                                    (edit/insert-after-tx sel rez)
+                                    (move-selection-tx (:db/id sel) (:db/id rez))))))
    :tear                  tear-tx
    :alias                 make-alias-tx
    :drag-left             drag-left-tx

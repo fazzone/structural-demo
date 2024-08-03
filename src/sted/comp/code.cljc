@@ -28,7 +28,7 @@
 
 (declare form)
 
-(defn iobs-callback
+#_(defn iobs-callback
   [ents me]
   (when-not (core/scroll-locked?)
     (let [can-see (some (fn [e]
@@ -37,12 +37,42 @@
       (when-not can-see
         (loop [[ioe & more] ents
                did-scroll nil]
-          #_(when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
+          (when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
           (when ioe
             (if did-scroll
               (js/console.log "What does this mean?")
-              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe)))
+              (do
+                (println "Scroll to select ENTS")
+                (js/console.log ents)
+                (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe))))
             (recur more true)))))))
+
+(defn iobs-callback
+  [ents me]
+  (when-not (core/scroll-locked?)
+    (loop [[ioe & more] ents]
+      (let [^js e   (.-target ioe)
+            
+            ir      (.-intersectionRect ioe)
+            br     (.-boundingClientRect ioe)
+            can-see (> 1 (js/Math.abs (- (.-height ir) (.-height br))))]
+        
+        #_(js/console.log "ELM" e "CANSEE" can-see)
+        
+        (cond
+          can-see nil
+          more    (recur more)
+          
+          ;; all were not visible 
+          :else (scroll/scroll-to-selected* e br))
+        
+        #_(if did-scroll
+            (js/console.log "What does this mean?")
+            (do
+              (println "Scroll to select ENTS")
+              (js/console.log ents)
+              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe))))))))
+
 
 
 (defn make-iobs
@@ -69,8 +99,10 @@
                            (.-nextElementSibling el))]
              (if sel?
                (do (.observe the-iobs real-el)
+                   #_(js/console.log "OBserver" real-el)
                    (assoc state ::prev-sel? true))
                (do (.unobserve the-iobs real-el)
+                   #_(js/console.log "Unobs" real-el)
                    (assoc state ::prev-sel? nil))))))))})
 
 
@@ -173,8 +205,8 @@
                                  :db/id)]
                      (when eid
                        (swap! secret-chain-scroll-position-cache assoc
-                         eid
-                         {:top (.-scrollTop el)  :left (.-scrollLeft el)})))
+                              eid
+                              {:top (.-scrollTop el)  :left (.-scrollLeft el)})))
                    state)
    :after-render (fn [state]
                    (if-some [{:keys [top left]} (some->> state
@@ -228,9 +260,11 @@
     :data-eid (:db/id ch)}
    #_(cd/demo {:form [1 2 3 4]} form)
    #_(lazy-children ch bus)
+   (println "Re-denreder chain" (:db/id ch))
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
-         (rum/with-key (:db/id f))))])
+         (rum/with-key (:db/id f))))
+   ])
 
 
 (rum/defc grid
@@ -244,8 +278,9 @@
 (rum/defc bar
   [b bus classes]
   (let [ref-me (rum/create-ref)]
-    [:div.bar.hide-scrollbar {:ref ref-me
-                              :class classes}
+    [:div.bar.hide-scrollbar
+     {:ref ref-me
+      :class classes}
      
      ;; Hack for DOM search
      (rum/use-layout-effect!
@@ -390,6 +425,15 @@
    (for [f (e/seq->vec a)]
      ^:inline (form f bus 0 nil))])
 
+(rum/defc olc
+  [ch bus classes indent proply]
+  [:ol
+   {:key (:db/id ch)
+    :class classes}
+   (let [v (e/seq->vec ch)]
+     (for [i (range (count v))]
+       [:li {:key i}
+        ^:inline (form (nth v i) bus 0 nil)]))])
 
 (defn any-coll
   [e b c i p]
@@ -407,6 +451,7 @@
        :keyboard      (ck/keyboard-diagram e b c i p)
        :eval-result   (erc e b c i p)
        :alias         (aliasc e b c i p)
+       :ol            (olc e b c i p)
        :md/root       (mdroot e b c i p)
        :md/para       (para e b c i p)
        :md/list       (mdlist e b c i p)

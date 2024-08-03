@@ -7,6 +7,7 @@
    [sted.sys.kbd.evt :as ske]
    [sted.sys.search.dom :as s]
    [sted.comp.search :as cs]
+   [sted.comp.scroll :as csc]
    [datascript.core :as d]
    [cljs.core.async :as async]
    [sted.embed :as e]
@@ -40,6 +41,30 @@
                         :else                 {:accept true :msg [:edit/finish-and-edit-next-node text]})
     nil))
 
+(def multi-edit-box-list (atom nil))
+
+
+
+(defn choose-box-to-focus!
+  []
+  (let [vv js/window.visualViewport
+        w (.-width vv)
+        h (.-height vv)]
+    (println "ChooseBox" (count @multi-edit-box-list))
+    (swap! multi-edit-box-list
+           (fn [els]
+             (let [fel (csc/primary-element els)]
+               (doseq [^js e els]
+                 (js/console.log "E=" e)
+                 (if-not (identical? e fel)
+                   (set! (.-tabindex e) -1)
+                   (do (set! (.-tabindex e) 0)
+                       (js/console.log "Focusge" e)
+                       (.focus e)))))
+             ;;
+             (println "Clear edit box list")
+             nil))))
+
 (rum/defc edit-box
   [e bus r]
   (let [[text set-text!] (rum/use-state nil)
@@ -51,12 +76,22 @@
     
     (rum/use-layout-effect!
      (fn []
+       (println "EditBoxEffect")
        (when-let [el (rum/deref iref)]
-         (if-not (.closest el ".alternate-reality")
+         #_(js/console.log "EditBox@" el)
+         (swap! multi-edit-box-list
+                (fn [others]
+                  (println "Others=" (count others))
+                  (if others
+                    (conj others el)
+                    (do (js/setTimeout choose-box-to-focus! 0)
+                        [el]))))
+         
+         #_(if-not (.closest el ".alternate-reality")
            (.focus el)
            (set! (.-tabindex el) -1)))
        nil)
-     [])
+     [e])
     
     [:input.edit-box
      {:type        :text
@@ -71,7 +106,7 @@
       :on-key-down (fn [ev]
                      (let [kbd (ske/event->kbd ev)
                            {:keys [msg accept new-text]} (editbox-keydown* e value kbd)]
-                       (println "EditboxKeydown " kbd accept msg)
+                       #_(println "EditboxKeydown " kbd accept msg)
                        (cond
                          msg
                          (do (.preventDefault ev)

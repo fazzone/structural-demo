@@ -117,16 +117,28 @@
   [out eid coll-type v]
   (if coll-type
     (conj! out [:db/add eid :coll/type coll-type])
-    (if-let [tt (->token-type v)]
-      (emit-tk out eid tt (->token-value tt v))
-      (let [tt :verbatim
-            k (*store*)]
+    
+    (do 
+     (println "Emit1!" "v=" v "tt" (->token-type v))
+     (if-let [tt (->token-type v)]
+       ;; this is something we understand like a number or something
+       (emit-tk out eid tt (->token-value tt v))
+       ;; something weird
+      
+       ;; store it with a handle
+       #_(let [tt :verbatim
+               k (*store*)]
         
-        (*store* k v)
+           (*store* k v)
         
-        (-> out
-            (emit-tk eid tt (->token-value tt v))
-            (conj! [:db/add eid :handle/token k ]))))))
+           (-> out
+               (emit-tk eid tt (->token-value tt v))
+               (conj! [:db/add eid :handle/token k ])))
+      
+       ;; emit normal tokens  
+       (do
+         (println "NoHandle" v)
+         (emit-tk out eid :verbatim (->token-value :verbatim v)))))))
 
 (defn emit-cont
   [out cell ptr k]
@@ -145,10 +157,14 @@
           me                        (first rest)]
       #_(println "Sdloop" ncount rest)
       (cond
+        ;; finished with input
         (empty? rest)
         (recur ncount popped out)
         
-        ;; unwind our stack - do not call next on any conses
+        ;; reached the limit - we need to:
+        ;; - unwind the stack
+        ;; - store breadcrumbs  
+        ;; - NOT evaluate anything we shouldn't
         (and lazy? (> 1 ncount))
         (let [car  (ec/new-tempid)
               ct   (->coll-type me)
@@ -157,11 +173,13 @@
                        #_(conj! [:db/add cell :seq/first car]))]
           (recur 0 popped
                  (if (->coll-type me)
+                   ;; save a continuation for the coll tail
                    (-> out
                        (conj! [:db/add cell :seq/first car])
                        (conj! [:db/add outer :coll/contains car])
                        (emit1 car nil '...C)
                        (emit-cont car (cons nil rest) (*store*)))
+                   ;; recursive case
                    (let [ccell (ec/new-tempid)]
                      (-> nout
                          (emit1 car nil me)
@@ -175,9 +193,7 @@
         
         ;; reduce one cons, allocate tempids for its pointers
         :else
-        (let [ ;; _ (println "NextRest {")
-              more  (next rest)
-              ;; _ (println "}")
+        (let [more  (next rest)
               vcell (ec/new-tempid)
               ncell (when more (ec/new-tempid))]
           ;; splice map entries directly into parent
@@ -192,14 +208,16 @@
                      true  (conj! [:db/add cell :seq/next vcell])
                      ncell (conj! [:db/add vcell :seq/next ncell])))
             ;; all other coll types
-            (let [nout (cond-> out
+            (let [_ (println "Nout NormalColl")
+                  nout (cond-> out
                          ;; vcell is a value cell for this coll/token node
                          cell  (conj! [:db/add cell :seq/first vcell])
                          ncell (conj! [:db/add cell :seq/next ncell])
+                         ;; add a handle/token if the one-argument store-fn is interested 
                          true  (emit-cont vcell me (*store* me))
                          outer (conj! [:db/add outer :coll/contains vcell]))
-                  npopped (cond-> popped ncell
-                                  (conj (LoopState. outer ncell more :lazy-tail)))
+                  npopped (cond-> popped
+                            ncell (conj (LoopState. outer ncell more :lazy-tail)))
                   coll-type (->coll-type me)]
               (if-not coll-type
                 (recur (dec ncount) npopped (emit1 nout vcell nil me))

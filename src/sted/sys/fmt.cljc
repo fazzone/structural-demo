@@ -6,6 +6,7 @@
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
+
 (defn mutatef
   [app]
   (fn [sel]
@@ -54,4 +55,7 @@
                        (tree-seq :coll/type e/seq->vec pt)))]
       (js/console.timeEnd "reconciling")
       (js/console.timeEnd "formatting")
+      (println "===============================================")
+      (println p)
+      (println "===============================================")
       ans)))
