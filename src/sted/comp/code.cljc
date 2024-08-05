@@ -260,7 +260,6 @@
     :data-eid (:db/id ch)}
    #_(cd/demo {:form [1 2 3 4]} form)
    #_(lazy-children ch bus)
-   (println "Re-denreder chain" (:db/id ch))
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
          (rum/with-key (:db/id f))))
@@ -427,13 +426,17 @@
 
 (rum/defc olc
   [ch bus classes indent proply]
-  [:ol
-   {:key (:db/id ch)
-    :class classes}
+  [:div.olc {:key (:db/id ch)
+             :class classes}
+   [:span.code-font (str (:db/ident ch))]
    (let [v (e/seq->vec ch)]
-     (for [i (range (count v))]
-       [:li {:key i}
-        ^:inline (form (nth v i) bus 0 nil)]))])
+     (if (empty? v)
+       [:div "[]"]
+       [:ol {}
+        
+        (for [i (range (count v))]
+          [:li {:key i}
+           ^:inline (form (nth v i) bus 0 nil)])]))])
 
 (defn any-coll
   [e b c i p]
@@ -474,12 +477,17 @@
                        "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
                        "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
                       "tk m"
+                      
                       ("first" "map" "filter" "apply" "reset!" "swap!"
                        "get" "assoc" "update" "cons" "conj" "seq" "next"
                        "prn" "println" "into" "set" "vector"
                        "take" "drop" "take-while" "drop-while" "reduce"
                        "concat")
                       "tk s"
+                      
+                      ("true" "false")
+                      "tk k"
+                      
                       "tk v")
     :keyword        "tk k"
     (:string :char) "tk l"

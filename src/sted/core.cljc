@@ -1,12 +1,6 @@
 (ns sted.core
   (:require [datascript.core :as d]
-            [sted.embed :as e]
-            #? (:clj [clojure.core.async :as async :refer [go go-loop]]
-                :cljs [cljs.core.async :as async]))
-  #? (:cljs
-      (:require-macros
-       [cljs.core.async.macros :refer [go
-                                       go-loop]])))
+            [sted.embed :as e]))
 
 #?(:cljs (goog-define JSENV "unset"))
 
@@ -65,24 +59,37 @@
 (defn bus
   ([] (bus nil))
   ([last-sub-map]
-   (let [ch (async/chan)
-         pub (async/pub ch first)
+   (let [ ;; ch (async/chan)
+         ;; pub (async/pub ch first)
+         submap #?(:clj (atom {})
+                   :cljs #js {})
+         
          hs (atom {})
          app-ref (atom nil)
          #?@(:cljs [sub-map (or last-sub-map (js/Map.))]) 
          uu (str (d/squuid))]
-     #_(when last-sub-map
-       (js/console.log "Re-use sub-map" last-sub-map))
+     
+     
      (reify IBus
        (send! [this msg]
-         (let [r (async/put! ch msg)]
-           (when-not r
-             (println "!!!! Put broken? Channel closed? What??"))))
-       (connect-sub! [this topic sch]
-         (async/sub pub topic sch))
-       (disconnect-sub! [this topic sch]
-         (async/unsub pub topic sch))
-      
+         #_(let [r (async/put! ch msg)]
+             (when-not r
+               (println "!!!! Put broken? Channel closed? What??")))
+         (let [d (first msg)
+               f #?(:clj (get @submap d)
+                    :cljs (aget submap (str d)))]
+           (if-not f
+             (println "No handler?" msg)
+             (f msg))))
+       
+       ;; (connect-sub! [this topic sch] (async/sub pub topic sch))
+       ;; (disconnect-sub! [this topic sch] (async/unsub pub topic sch))
+       
+       (connect-sub! [this topic sfn] #?(:clj (swap! submap assoc topic sfn)
+                                         :cljs (aset submap (str topic) sfn)))
+       (disconnect-sub! [this topic sfn] #?(:clj (swap! submap dissoc topic)
+                                            :cljs (js-delete submap (str topic))))
+       
        (fire-subs! [this entity]
          #?(:cljs
             (some-> (.get sub-map (:db/id entity))
@@ -97,14 +104,22 @@
               (fn [] (.delete sub-set func)))))
       
        (get-history [this txid] (get @hs txid))
-       (save-history! [this txid {:as report :keys [tx-data]}]
-         (let [as (into #{} (map (fn [[_ a]] a)) tx-data)]
-           (println "Mutation" txid (str (when (contains? as :form/highlight) "[Move]")
-                                         (when (some #(not= % :form/highlight) as) "[Edit]")))
-           
+       (save-history! [this txid {:as report :keys [tx-data mut]}]
+         (let [as (into #{} (map (fn [[_ a]] a)) tx-data)
+               move? (contains? as :form/highlight)
+               edit? (some #(not= % :form/highlight) as)]
+           (println (-> (str (first mut))
+                        #?(:cljs (.padEnd 16 )))
+                    (-> (str (count tx-data))
+                        #?(:cljs (.padStart 6)))
+                    (-> (str (when move? "M")
+                             (when edit? "E"))
+                        #?(:cljs (.padStart 4))))
+         
            (swap! hs assoc txid (assoc report
-                                       :movement? (contains? as :form/highlight)
-                                       :mutation? (some #(not= % :form/highlight) as)))))
+                                       :movement? move?
+                                       :mutation? edit?))))
+       
        (uniqueid [_this] uu)
        (reset [_this]
          #?(:cljs (bus sub-map)))
@@ -126,67 +141,76 @@
 
 (defn register-mutation!
   [{:keys [conn bus] :as app} topic mut-fn]
-  (let [ch (async/chan)]
-    (connect-sub! bus topic ch)
-    (go (async/<!
-         (async/reduce
-          (fn [a m]
-            (try
-              (or (mut-fn m @conn bus) a)
-              (catch #? (:cljs js/Error :clj Exception) e
-                (#?(:clj println :cljs js/console.log)
-                 "Exception in mutation"
-                 (str topic)
-                 e))))
-          :ok
-          ch)))
-    app))
+  #_(let [ch (async/chan)]
+      (connect-sub! bus topic ch)
+      (go (async/<!
+           (async/reduce
+            (fn [a m]
+              (try
+                (or (mut-fn m @conn bus) a)
+                (catch #? (:cljs js/Error :clj Exception) e
+                  (#?(:clj println :cljs js/console.log)
+                   "Exception in mutation"
+                   (str topic)
+                   e))))
+            :ok
+            ch)))
+      app)
+  (connect-sub! bus topic
+                (fn [m]
+                  (try
+                    (mut-fn m @conn bus)
+                    (catch #? (:cljs js/Error :clj Exception) e
+                      (#?(:clj println :cljs js/console.log)
+                       "Exception in mutation"
+                       (str topic)
+                       e)))))
+  
+  app)
 
 (defn register-simple!
   [{:keys [bus conn history] :as app} topic mut-fn]
-  (let [ch (async/chan)]
-    (go-loop [last-tx nil]
-      (let [[mut-name & args :as mut] (async/<! ch)
-            db @conn
-            sel (get-selected-form db)
-            tx-data (try (apply mut-fn sel args)
-                         (catch #? (:cljs js/Error :clj Exception) e
-                           (println "Exception in mutation " e)
-                           nil))
-            
-            _ (prn (uniqueid bus) mut-name)
-            report (try (and tx-data
-                             #_(assoc (d/transact! conn tx-data)
-                                      :mut mut)
-                             
-                             (let [
-                                   ;; _ (js/console.time "Transacting")
-                                   ans (assoc (d/transact! conn tx-data)
-                                              :mut mut)]
-                               #_(js/console.timeEnd "Transacting")
-                               ans))
+  (connect-sub!
+   bus topic
+   (fn [[mut-name & args :as mut]]
+     (let [db @conn
+           sel (get-selected-form db)
+           tx-data (try (apply mut-fn sel args)
                         (catch #? (:cljs js/Error :clj Exception) e
-                          {:error e}))]
-        
-        (when (:db-after report)
-          (if-let [txid (get (:tempids report) :db/current-tx)]
-            (do (save-history! bus txid report)
-                
-                ;; (println "================================================================" )
-                ;; (println txid mut )
-                ;; (run! prn (:tx-data report))
-                ;; (run! prn (:tempids report))
-                
-                (reset! history (cons report @history)))
-            (println "No current-tx?")))
-        (when-let [e (:error report)]
-          (println (str "Error transacting " e mut-name) e)
-          (println "Tx-data")
-          (run! prn tx-data))
-        (recur (or (get (:tempids report) :db/current-tx)
-                   last-tx))))
-    (connect-sub! bus topic ch)
-    app))
+                          (println "Exception in mutation " e)
+                          nil))
+           ;; _ (prn (uniqueid bus) mut-name)
+           report (try (and tx-data
+                            #_(assoc (d/transact! conn tx-data)
+                                     :mut mut)
+                                        
+                            (let [
+                                  ;; _ (js/console.time "Transacting")
+                                  ans (assoc (d/transact! conn tx-data)
+                                             :mut mut)]
+                              #_(js/console.timeEnd "Transacting")
+                              ans))
+                       (catch #? (:cljs js/Error :clj Exception) e
+                         {:error e}))]
+                   
+       (when (:db-after report)
+         (if-let [txid (get (:tempids report) :db/current-tx)]
+           (do (save-history! bus txid report)
+                           
+               #_(println "================================================================" )
+               #_(println txid mut )
+               #_(run! prn (:tx-data report))
+               #_(run! prn (:tempids report))
+                           
+               (reset! history (cons report @history)))
+           (println "No current-tx?")))
+       (when-let [e (:error report)]
+         (println (str "Error transacting " e mut-name) e)
+         (println "Tx-data")
+         (run! prn tx-data)))))
+  
+  app
+  )
 
 (defn movement->mutation
   [mover]
@@ -202,43 +226,40 @@
 
 (defn setup-undo!
   [{:keys [bus conn history] :as app}]
-  (let [ch (async/chan)]
-    (go-loop []
-      (let [_                    (async/<! ch)
-            [prior-undo & undos] (take-while list? @history)
-            [u & more]           (drop-while list? @history)]
-        #_(println "Undof"
-                   (for [h @history]
-                     (if (map? h)
-                       (get (:tempids h) :db/current-tx)
-                       (for [s h]
-                         (get (:tempids s) :db/current-tx)))))
-        (when u
-          (let [rr (d/transact! conn (revert-txdata (:tx-data u)))]
-            (println "RR Max-tx" (:max-tx (:db-after rr)) "Tempids" (:tempids rr)))
-          
-          (reset! history
-                  (cons (cons u prior-undo)
-                        (concat undos more)))))
-      (recur))
-    (connect-sub! bus :undo ch))
 
-  (let [ch (async/chan)]
-    (connect-sub! bus :save-demo ch)
-    (go-loop []
-      (let [_ (async/<! ch)]
-        #_(do (println "All mutations in order:")
-            (cljs.pprint/pprint
-             (reverse
-              (for [h @history
-                    :when (map? h)]
-                (:mut h)))))
-        
-        ;; repeat last mutation
-        (when-let [lm (some :mut @history)]
-          (send! bus lm))
-        
-        (recur))))
+  (connect-sub!
+   bus :undo
+   (fn [_]
+     (let [[prior-undo & undos] (take-while list? @history)
+           [u & more]           (drop-while list? @history)]
+       #_(println "Undof"
+                  (for [h @history]
+                    (if (map? h)
+                      (get (:tempids h) :db/current-tx)
+                      (for [s h]
+                        (get (:tempids s) :db/current-tx)))))
+       (when u
+         (let [rr (d/transact! conn (revert-txdata (:tx-data u)))]
+           (println "RR Max-tx" (:max-tx (:db-after rr)) "Tempids" (:tempids rr)))
+         
+         (reset! history
+                 (cons (cons u prior-undo)
+                       (concat undos more)))))))
+
+  (connect-sub!
+   bus :save-demo
+   (fn []
+     #_(do (println "All mutations in order:")
+           (cljs.pprint/pprint
+            (reverse
+             (for [h @history
+                   :when (map? h)]
+               (:mut h)))))
+                  
+     ;; repeat last mutation
+     (when-let [lm (some :mut @history)]
+       (send! bus lm))))
+  
   app)
 
 (defn app

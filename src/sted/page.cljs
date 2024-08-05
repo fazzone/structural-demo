@@ -50,57 +50,55 @@
 (def test-form-data-bar (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
                                :chain/filename  "src/sted/user.clj"))
 
+(def meta-chain*
+  [{:db/id "label"
+    :token/type :string
+    :token/value "Keyboard"}
+   
+   {:db/ident ::default-keymap
+    :db/id "defaultkeymap"
+    :coll/type :keyboard
+    :keymap/bindings (for [[k m] skm/default]
+                       {:key/kbd k  :key/mutation m})}
+   
+   {:db/ident :messages
+    :db/id "messages"
+    :coll/type :ol}
+   
+   {:db/ident ::command-chain
+    :db/id "command-chain"
+    :coll/type :ol
+    :form/highlight true}
+
+   {:db/ident ::inspect
+    :db/id "inspect"
+    :coll/type #_:demo
+    :vec}])
+
 (def init-tx-data
-  (let [chains (concat
-                #_[(e/string->tx-all (m/macro-slurp "src/core.cljc"))]
-                #_[(e/string->tx-all (m/macro-slurp "src/cmd/edit.cljc"))]
-                #_[(e/->tx [()])]
-                [test-form-data-bar]
-                #_[(e/->tx ["hello"
-                            "hello"
-                            "hello"
-                            "hello"
-                            "hello"
-                            "hello"
-                          
-                            ])]
-                #_[(e/->tx [^:form/highlight ()])]
-                #_[(e/string->tx-all (m/macro-slurp "subtree/input.clj"))])]
-    [{:db/ident ::state
-      :state/bar "bar"
-      :state/limit 64}
-     {:db/ident ::command-chain
-      :db/id "command-chain"
-      :coll/type :ol
-      :form/highlight true}
-     {:db/ident ::inspect  :db/id "inspect"
-      :coll/type #_:demo :vec
-      
-      }
-     {:db/ident ::default-keymap
-      :db/id "defaultkeymap"
-      :coll/type :keyboard
-      :keymap/bindings (for [[k m] skm/default]
-                         {:key/kbd k  :key/mutation m})}
-     (assoc (ec/seq-tx
-             (concat
-              (for [ch chains]
-                (assoc ch
-                       :coll/type :chain
-                       :coll/_contains "bar"))
-              [{:db/ident ::meta-chain
-                :coll/type :chain
-                :coll/_contains "bar"
-                :coll/contains #{"label" "defaultkeymap" "inspect"
-                                 "command-chain"}
-                :seq/first {:db/id "label"
-                            :token/type :string
-                            :token/value "Keyboard"}
-                :seq/next {:seq/first "defaultkeymap"
-                           :seq/next {:seq/first "command-chain"
-                                      :seq/next {:seq/first "inspect"}}}}]))
-            :db/id "bar"
-            :coll/type :bar)]))
+  (let [chains [test-form-data-bar]]
+    (into meta-chain*
+          [
+           ;; 
+           {:db/ident ::state
+            :state/bar "bar"
+            :state/limit 64}
+           ;; 
+           (merge {:db/id "bar" :coll/type :bar}
+                  (ec/seq-tx
+                   (concat
+                    ;; chains first
+                    (for [ch chains]
+                      (assoc ch
+                             :coll/type :chain
+                             :coll/_contains "bar"))
+                    ;; meta chain at the end
+                    [(-> {:db/ident ::meta-chain
+                          :coll/type :chain
+                          :coll/_contains "bar"}
+                         ;; populate it
+                         (assoc :coll/contains (into #{} (map :db/id) meta-chain*))
+                         (merge (ec/seq-tx (map :db/id meta-chain*))))])))])))
 
 #_(declare snapshot)
 
@@ -190,6 +188,8 @@
    (let [zb (some-> the-app deref :bus (core/reset))
          _ (js/console.log "Zbus" zb)
          a (core/app conn zb)]
+     
+
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))
      (doseq [[m f] mut/editing-commands]
@@ -201,7 +201,6 @@
          (core/register-mutation! :eval-sci (eval-sci/mutatef a the-app))
          (core/register-simple! :zp (sf/mutatef a))
          (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
-         
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
@@ -220,9 +219,22 @@
                         (first)))
                   file (or (:chain/filename chain) "noname.clj")]
               (when chain
-                (reset! ml/save-status {:at (:max-tx db)
-                                        :on (:db/id sel)
-                                        :status :saving})
+                #_(reset! ml/save-status {:at (:max-tx db)
+                                          :on (:db/id sel)
+                                          :status :saving})
+                (let [m {:db/id "msg"
+                         :token/type :string
+                         :token/value (str "Save " file)}
+                      
+                      txdata (into [m] 
+                                   (edit/form-cons-tx
+                                    m
+                                    (d/entity db :messages)))]
+                  
+                  (println "Message TX?")
+                  (run! prn txdata)
+                  (d/transact! conn txdata))
+                
                 (save* file (e/->string chain)))
               nil)))))))
 

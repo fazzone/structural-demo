@@ -458,7 +458,8 @@
 (defn form-raise-tx
   [e]
   (when-let [parent (some-> (:coll/_contains e) exactly-one)]
-    (when-not (= :chain (:coll/type parent))
+    (if (= :chain (:coll/type parent))
+      (println "Cannot raise here")
       (let [{:form/keys [linebreak indent]} parent
             ts {:db/id "tombstone" :coll/type :tear}]
         (into [ts

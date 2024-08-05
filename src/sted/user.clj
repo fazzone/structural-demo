@@ -9,12 +9,15 @@
 
 (send! [:nrepl-connect "localhost" 1667])
 
+(open "src/sted/scratch2.clj")
+
 
 (do
   (defn f [] (throw (ex-info "f" {:where 'f})))
   (defn g [] (f))
   (defn h [] (g))
   (h))
+
 
 (do (defn navize-path
       ([fs root] (navize-path fs root root))
@@ -33,6 +36,7 @@
                ::listing-of root})})))
     (navize-path (js/secret_electron_require "fs/promises") "src"))
 
+
 (do
   (defn navize-path
     [fs root]
@@ -47,7 +51,9 @@
       (into [] cat st)))
   (navize-path (js/secret_electron_require "fs/promises") "src/sted"))
 
+
 (transact! [[:db/add (:db/id (d/entity (d/entity-db sel) :sted.page/state)) :state/limit 128]])
+
 
 (:state/limit (into {} (d/touch (d/entity (d/entity-db sel) :sted.page/state))))
 

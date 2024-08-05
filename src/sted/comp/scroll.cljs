@@ -188,26 +188,31 @@
 
 (defn primary-element
   [els]
-  (let [_ (js/console.log els)
-        _ (js/console.log (into-array els))
-        sorted (doto (into-array els)
-                 (.sort (fn [a b]
-                          (let [ra (.getBoundingClientRect a)
-                                rb (.getBoundingClientRect b)]
-                            (- (+ (.-y rb) (* 0.5 (.-height rb)))
-                               (+ (.-y ra) (* 0.5 (.-height ra)))))))
-                 (.sort (fn [a b]
-                          (let [ra (.getBoundingClientRect a)
-                                rb (.getBoundingClientRect b)]
-                            (- (+ (.-x rb) (* 0.5 (.-width rb)))
-                               (+ (.-x ra) (* 0.5 (.-width ra))))))))]
-    (doseq [e els
+  (let [ela (into-array els)
+        _ (js/console.log ela)
+        
+        sorted (if (> 2 (count ela))
+                 ela
+                 (doto ela
+                   (.sort (fn [a b]
+                            (let [ra (.getBoundingClientRect a)
+                                  rb (.getBoundingClientRect b)]
+                              (- (+ (.-y rb) (* 0.5 (.-height rb)))
+                                 (+ (.-y ra) (* 0.5 (.-height ra)))))))
+                   (.sort (fn [a b]
+                            (let [ra (.getBoundingClientRect a)
+                                  rb (.getBoundingClientRect b)]
+                              (- (+ (.-x rb) (* 0.5 (.-width rb)))
+                                 (+ (.-x ra) (* 0.5 (.-width ra)))))))))]
+    
+    #_(doseq [e els
             :let [r (.getBoundingClientRect e)]]
+      
       (js/console.log "PRIMARY?" (identical? e (first sorted))
                       (+ (.-x r) (* 0.5 (.-width r)))
                       (+ (.-y r) (* 0.5 (.-height r)))
-                      e)
-      )
+                      e))
+    
     (first sorted)))
 
 (defn scroll-to-selected!

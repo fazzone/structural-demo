@@ -72,11 +72,11 @@
                                        :margin-left "-0.5ex"
                                        :transform   "rotate(90deg)"}}
                          "->>"]}
-   :eval-sci   {:label  "eval"
+   :eval   {:label  "eval"
                 :symbol [:div {:style {:font-size   "135%"
-                                       :margin-left "0.25ex"
+                                       :margin-left "0.5ex"
                                        :margin-top "0.175ex"}}
-                         "λ>"]}
+                         "λ"]}
    :hide {:label [:span {:style {:color "tomato"}} "hide"]}
    :compose {:label  "comp"
              :symbol [:div {:style {:font-size "150%" :margin-left "0.55ex"}}
@@ -155,13 +155,12 @@
                         "++"]}
    :linebreak {:label "linebreak"}})
 
-(rum/defc binker < rum/reactive
+(rum/defc show-modifiers < rum/reactive
   [db]
   (let [mods (some-> (d/entity db :sted.page/state)
                      :sted.sys.keyboard/mods
                      (rum/react))]
-    (println "Binker")
-    [:code [:pre (pr-str mods)]]))
+    [:span "Modifiers: " [:code (pr-str mods)]]))
 
 (rum/defc keyboard-diagram
   [kme bus classes]
@@ -171,10 +170,10 @@
                 [kbd (get mutation->label mutation)]))
         key (partial kkc k->l)]
     (println "New keyboard diagram?")
-    [:div
+    [:div {:class classes}
      #_[:code [:pre (pr-str mods)]]
-     (binker (d/entity-db kme))
-     [:div.keyboard-container {:class classes}
+     (show-modifiers (d/entity-db kme))
+     [:div.keyboard-container 
       [:div.keyboard-row.number
        (key "Esc" "Escape")
        (for [ch (vec "1234567890-=")]

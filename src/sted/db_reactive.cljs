@@ -1,13 +1,10 @@
 (ns sted.db-reactive
   (:require
    [datascript.core :as d]
-   [cljs.core.async :as async]
+   
    [sted.core :as core]
    [rum.core :as rum]
-   [sted.embed :as e])
-  (:require-macros
-   [cljs.core.async.macros :refer [go
-                                   go-loop]]))
+   [sted.embed :as e]))
 
 (defn update-first-arg!
   [^js/React.Component rc e ident]
@@ -119,27 +116,3 @@
    :will-unmount (fn [state]
                    (run! apply (vals (::eid->unsub state)))
                    state)})
-
-#_(defn areactive
-  ;; mixin for components taking [db bus ...]
-  [& as]
-  {:init
-   (fn [{:rum/keys [react-component] :as state} props]
-     (let [[_ bus] (:rum/args state)
-           ch (async/chan)
-           ident (str "arx " as)]
-       (go-loop []
-         (let [[_ db] (async/<! ch)]
-           (update-first-arg! react-component db ident)
-           (recur)))
-       ;; subscribe to updates about each attr
-       (doseq [a as]
-         (core/connect-sub! bus a ch))
-       (assoc state ::areactive.chan ch)))
-   :will-unmount
-   (fn [{:rum/keys [react-component] :as state}]
-     (let [[_ bus] (:rum/args state)
-           ch (::areactive.chan state)]
-       (doseq [a as]
-         (core/disconnect-sub! bus a ch)))
-     state)})

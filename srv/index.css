@@ -654,3 +654,15 @@ ul.parent-path:empty {
     display: none;
     /* height: 3ex; */
 }
+
+.olc ol {
+    margin: 0;
+}
+
+.olc li > .indent-chars:first-child {
+    display: block;
+    height: 0;
+}
+.olc li > .indenter:first-child {
+    margin-left: 0;
+}
