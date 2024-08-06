@@ -26,6 +26,27 @@
   [db]
   (some-> db (d/entity :sted.page/state) ::state))
 
+(defn sfs
+  [db index text limit]
+  (let [srs (.search index text)
+        tokens (into (sorted-set)
+                     (for [eid srs]
+                       (-> (d/datoms db :eavt eid :token/value)
+                           (nth 0)
+                           (nth 2))))
+        results (for [tk tokens]
+                  (let [tkds (d/datoms db :avet :token/value tk)
+                        [[le _ _ lt]] (sort-by #(- (nth % 3)) tkds)]
+                    #js {:token tk
+                         :n (count tkds)
+                         :eid le
+                         :last_tx lt}))]
+    
+    (->> results
+         (sort-by (juxt (comp - #(.-last_tx ^js %))
+                        #(.-n ^js %)))
+         (take 5))))
+
 (defn setup!
   [{:keys [conn bus] :as app}]
   (if (::results app)
@@ -37,14 +58,14 @@
       (d/listen!
        conn
        (fn [{:keys [tx-data]}]
-         #_(js/console.time "FTS indexing")
+         (js/console.time "FTS indexing")
          (doseq [^Datom dtm tx-data]
            (when (= (.-a dtm) :token/value)
              #_(prn "Indexing" dtm)
              (if (db/datom-added dtm)
                (.add index (.-e dtm) (.-v dtm))
                (.remove index (.-e dtm)))))
-         #_(js/console.timeEnd "FTS indexing")))
+         (js/console.timeEnd "FTS indexing")))
 
       (d/transact! conn
                    [{:db/ident :sted.page/state
@@ -62,11 +83,20 @@
           
           (core/register-simple! :search/select
                                  (fn [sel isr]
-                                   (let [rs (:results @state)]
-                                     (when (<= 1 isr (count rs))
-                                       (let [^js r (nth rs (dec isr))]
-                                         (swap! state dissoc :query)
-                                         (core/move-selection-tx (:db/id sel) (.-eid r)))))))
+                                   (let [st @state]
+                                     (or
+                                      ;; 
+                                      (when-let [rs (:results @state)]
+                                        (when (<= 1 isr (count rs))
+                                          (let [^js r (nth rs (dec isr))]
+                                            (swap! state dissoc :query)
+                                            (core/move-selection-tx (:db/id sel) (.-eid r)))))
+                                      ;; 
+                                      (when-let [rs (:extra @state)]
+                                        (when (<= 1 isr (count rs))
+                                          (let [^js r (nth rs (dec isr))]
+                                            (swap! state dissoc :query)
+                                            (core/move-selection-tx (:db/id sel) (.-eid r)))))))))
 
           (core/register-mutation! :search/numeric
                                    (fn [_ db bus]
@@ -78,6 +108,7 @@
                                                  (sdom/numeric
                                                   (::bar-ref (d/entity db :sted.page/state))
                                                   (:db/id (core/get-selected-form db)))})))))
+          
           (core/register-mutation! :update-search
                                    (fn [[_ text] db bus]
                                      (let [top-level (nav/parents-vec (core/get-selected-form db))
@@ -85,6 +116,18 @@
                                            rs (sdom/substring-search-all-visible-tokens
                                                (::bar-ref (d/entity db :sted.page/state))
                                                (:db/id chain)
-                                               text)]
+                                               text)
+                                           
+                                           ;; _ (js/console.time "dbprefixsearch")
+                                           ;; extra (when (< 0 (count text))
+                                           ;;         (sdb/db-prefix-search db text 10))
+                                           ;; _ (js/console.timeEnd "dbprefixsearch")
+                                           
+                                           ;; _ (js/console.time "flexsearch")
+                                           ;; extra (when (< 0 (count text))
+                                           ;;         (sfs db index text 10))
+                                           ;; _ (js/console.timeEnd "flexsearch")
+                                           ]
                                        (reset! state {:query text
-                                                      :results rs}))))))))
+                                                      :results rs
+                                                      #_ #_:extra extra}))))))))

@@ -16,7 +16,9 @@
    [sted.core :as core :refer [get-selected-form
                                move-selection-tx]]))
 
+
 (defonce last-entered-token (atom nil))
+
 
 (defn editbox-keydown*
   [e text key]
@@ -33,6 +35,7 @@
     "S-("             {:msg [:edit/wrap :list text]}
     "S-{"             {:msg [:edit/wrap :map text]}
     "C- "             {:new-text @last-entered-token}
+    "C-o" {:msg [:linebreak]}
     (" " "S- ")       (cond
                         (empty? text)         {:msg [:edit/reject]}
                         (= "\"" (first text)) (println "Quotedstring")
@@ -41,8 +44,11 @@
                         :else                 {:accept true :msg [:edit/finish-and-edit-next-node text]})
     nil))
 
+
 (def multi-edit-box-list (atom nil))
 
+
+;; the point of this is so that you can edit while looking at an alias
 
 
 (defn choose-box-to-focus!
@@ -65,6 +71,7 @@
              (println "Clear edit box list")
              nil))))
 
+
 (rum/defc edit-box
   [e bus r]
   (let [[text set-text!] (rum/use-state nil)
@@ -73,7 +80,6 @@
                      (:token/value e))
         form-eid (:db/id e)
         iref (rum/create-ref)]
-    
     (rum/use-layout-effect!
      (fn []
        (println "EditBoxEffect")
@@ -86,13 +92,11 @@
                     (conj others el)
                     (do (js/setTimeout choose-box-to-focus! 0)
                         [el]))))
-         
          #_(if-not (.closest el ".alternate-reality")
            (.focus el)
            (set! (.-tabindex el) -1)))
        nil)
      [e])
-    
     [:input.edit-box
      {:type        :text
       :ref         iref
@@ -114,9 +118,5 @@
                              (when accept
                                (reset! last-entered-token value))
                              (core/send! bus msg))
-                         
                          new-text
-                         (set-text! new-text)
-                         
-                         
-                         )))}]))
+                         (set-text! new-text))))}]))

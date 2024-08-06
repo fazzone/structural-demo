@@ -130,20 +130,36 @@
       :on-key-down (fn [ev]
                      (let [kbd (ske/event->kbd ev)
                            mut (searchbox-keydown-mutation kbd)]
-                        
+                       (println "SearchboxKeydown" kbd mut)
                        (when mut
                          (.preventDefault ev)
                          (.stopPropagation ev)
                          (core/send! bus mut))))}]))
 
+(rum/defc far-results
+  [rs]
+  #_[:ol {}
+   (for [[v ds] rs]
+     [:li {:key v :style {:margin 0}}
+      [:span.code-font v]
+      [:span {} (str " x" (count ds))]])]
+
+  [:ol {:style {:margin 0 :height "calc(6*3ex)"}}
+   (for [^js r rs]
+     [:li {:key (.-token r) :style {:margin 0}}
+      [:span.code-font {} (.-token r)]
+      [:span.code-font {} (str " x" (.-n r))]
+      [:span.code-font {} (str " db/id=" (.-eid r))]
+      [:span.code-font {} (str " @ " (.toString (.-last_tx r) 16))]])])
 
 (rum/defc rs** < rum/reactive
   [bus sstate]
-  (let [{:keys [query results cheese] :as s} (some-> sstate (rum/react))]
-    (println "Render Searcher!"
-             "query?" (some? query)
-             "results?" (some? results)
-             "cheese?" (some? cheese))
+  (let [{:keys [query results cheese extra] :as s} (some-> sstate (rum/react))]
+    #_(println "Render Searcher!"
+               "query?" (some? query)
+               "results?" (some? results)
+               "cheese?" (some? cheese))
+    
     [:span.searcher {}
      (when query "search: ")
      (when query (search-box bus query))
@@ -153,7 +169,8 @@
      (when cheese
        (println "Cheesesgeg")
        (simple-highlights! cheese))
-     
+     (when (and query extra)
+       (far-results extra))
      ]
     
     #_(if-not query

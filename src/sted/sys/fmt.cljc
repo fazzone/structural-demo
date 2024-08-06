@@ -12,11 +12,14 @@
   (fn [sel]
     (z/set-options! {:style :fast-hang
                      :map {:sort? nil
+                           :indent 0
                            :respect-nl? true}
                      :set {:sort? nil
                            :respect-nl? true}
                      :list {:respect-nl? true}
                      :vector {:respect-nl? true}
+                     :pair {:indent 0}
+                     :binding {:indent 0}
                      :width 120})
     (let [_ (js/console.time "formatting")
           _ (js/console.time "preparing")

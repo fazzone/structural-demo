@@ -71,6 +71,8 @@
                        'touch     d/touch
                        'entity-db d/entity-db
                        'entity    d/entity
+                       'seek-datoms d/seek-datoms
+                       'rseek-datoms d/rseek-datoms
                        'q         d/q
                        'freeze    dser/serializable
                        'thaw      dser/from-serializable}

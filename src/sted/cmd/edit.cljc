@@ -343,8 +343,10 @@
   ([target from] (insert-editing-before target from nil))
   ([target from props]
    (let [parent (exactly-one (:coll/_contains target))]
-     (if (= :chain (:coll/type parent))
-       (edit-new-wrapped* insert-before-tx target from :list "" props)
+     (case (:coll/type parent)
+       :chain (edit-new-wrapped* insert-before-tx target from :list "" props)
+       :bar   (edit-new-wrapped* insert-before-tx target from :chain "" props)
+       ;; 
        (let [indent-props (select-keys target [:form/linebreak :form/indent])]
          (insert-editing* insert-before-tx target from
                           (merge indent-props props)))))))
@@ -354,8 +356,10 @@
   ([target from] (insert-editing-after target from nil))
   ([target from props]
    (let [parent (exactly-one (:coll/_contains target))]
-     (if (= :chain (:coll/type parent))
-       (edit-new-wrapped* insert-after-tx target from :list "" props)
+     (case (:coll/type parent)
+       :chain (edit-new-wrapped* insert-after-tx target from :list "" props)
+       :bar   (edit-new-wrapped* insert-after-tx target from :chain "" props)
+       ;; 
        (let [indent-props (select-keys target [:form/linebreak :form/indent])]
          (insert-editing* insert-after-tx target from
                           (cond->> props
