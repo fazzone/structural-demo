@@ -42,6 +42,7 @@
     (shadow/release :elec)
     (shadow/release :br)))
 
+
 (defn release-cljs-and-exit
   [& what]
   (future-cancel shadow-watch)
@@ -64,13 +65,14 @@
   (shadow/watch :ptr))
 
 
-
-
-
-
-
-
-
-
-
+(defn thread-first
+  [sel]
+  (loop [[func arg & more] sel
+         acc               []]
+    (if (nil? func)
+      (list* '-> acc)
+      (let [th (cond-> func more (list* more))]
+        (if (list? arg)
+          (recur arg (cons th acc))
+          (list* '-> arg th acc))))))
 

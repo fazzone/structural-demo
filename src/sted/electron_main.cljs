@@ -13,21 +13,19 @@
 (defn init-browser
   []
   #_(.setApplicationMenu Menu nil)
-  (let [dev-version? (some #{"--localhost"}
-                           (some-> js/process
-                                   (.-argv)
-                                   js->clj))
-        
-        file-src      (str "file://" js/__dirname "/index.html")
-        localhost-url "http://localhost:8087/?title=Shadow host"
+  (let [[electron me u :as argv]        (some-> js/process (.-argv) js->clj)
+        dev-version?        (some #{"--localhost"} argv)
+        _                   (println "Aregv=" argv)
+        ;; file-src            (str "file://" js/__dirname "/index.html")
+        ;; localhost-url        #_ "http://localhost:8087/?title=Shadow host"
         
         window-open-handler (fn [_url]
-                              #js {:action "allow"
+                              #js {:action                       "allow"
                                    :overrideBrowserWindowOptions browser-window-opts})
         
-        ^js/electron.BrowserWindow main-window   (BrowserWindow. browser-window-opts)]
+        ^js/electron.BrowserWindow main-window (BrowserWindow. browser-window-opts)]
     
-    (.loadURL main-window file-src)
+    (.loadURL main-window u  #_file-src)
     (doto (.-webContents main-window)
       (.setWindowOpenHandler window-open-handler))
     
@@ -42,3 +40,5 @@
                                     (.quit app)))
   (.on app "window-all-closed" #(.quit app))
   (.on app "ready" init-browser))
+
+

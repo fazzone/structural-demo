@@ -117,28 +117,28 @@
   [out eid coll-type v]
   (if coll-type
     (conj! out [:db/add eid :coll/type coll-type])
-    
     (do 
-     (println "Emit1!" "v=" v "tt" (->token-type v))
-     (if-let [tt (->token-type v)]
-       ;; this is something we understand like a number or something
-       (emit-tk out eid tt (->token-value tt v))
-       ;; something weird
+      #_(println "Emit1!" "v=" v "tt" (->token-type v))
       
-       ;; store it with a handle
-       #_(let [tt :verbatim
-               k (*store*)]
-        
-           (*store* k v)
-        
-           (-> out
-               (emit-tk eid tt (->token-value tt v))
-               (conj! [:db/add eid :handle/token k ])))
+      (if-let [tt (->token-type v)]
+        ;; this is something we understand like a number or something
+        (emit-tk out eid tt (->token-value tt v))
+        ;; something weird
       
-       ;; emit normal tokens  
-       (do
-         (println "NoHandle" v)
-         (emit-tk out eid :verbatim (->token-value :verbatim v)))))))
+        ;; store it with a handle
+        #_(let [tt :verbatim
+                k (*store*)]
+        
+            (*store* k v)
+        
+            (-> out
+                (emit-tk eid tt (->token-value tt v))
+                (conj! [:db/add eid :handle/token k ])))
+      
+        ;; emit normal tokens  
+        (do
+          (println "NoHandle" v)
+          (emit-tk out eid :verbatim (->token-value :verbatim v)))))))
 
 (defn emit-cont
   [out cell ptr k]
@@ -208,8 +208,7 @@
                      true  (conj! [:db/add cell :seq/next vcell])
                      ncell (conj! [:db/add vcell :seq/next ncell])))
             ;; all other coll types
-            (let [_ (println "Nout NormalColl")
-                  nout (cond-> out
+            (let [nout (cond-> out
                          ;; vcell is a value cell for this coll/token node
                          cell  (conj! [:db/add cell :seq/first vcell])
                          ncell (conj! [:db/add cell :seq/next ncell])

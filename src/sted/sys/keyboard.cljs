@@ -28,7 +28,7 @@
       (cond
         (= super (.-key ev)) (swap! mods conj :super)
         (= hyper (.-key ev)) (swap! mods conj :hyper)
-        ;; (= "Shift" (.-key ev))   (swap! mods conj :shift)
+        (= "Shift" (.-key ev))   (swap! mods conj :shift)
         ;; (= "Alt" (.-key ev))     (do (swap! mods conj :meta)
         ;;                              ;; tapping alt switches keyboard focus to browser chrome
         ;;                              (.preventDefault ev)
@@ -55,7 +55,7 @@
     (cond
       (= super (.-key ev))     (swap! mods disj :super)
       (= hyper (.-key ev))     (swap! mods disj :hyper)
-      ;; (= "Shift" (.-key ev))   (swap! mods disj :shift)
+      (= "Shift" (.-key ev))   (swap! mods disj :shift)
       ;; (= "Alt" (.-key ev))     (swap! mods disj :meta)
       ;; (= "Control" (.-key ev)) (swap! mods disj :control)
 )))

@@ -6,7 +6,7 @@
     "dependencies": {
         "create-react-class": "^15.6.3",
         "electron": "^17.0.0",
-        "flexsearch": "^0.7.21",
+        "flexsearch": "^0.7.43",
         "js-yaml": "^4.1.0",
         "mdast-util-from-markdown": "^1.2.0",
         "mdast-util-frontmatter": "^1.0.0",
@@ -15,6 +15,6 @@
         "react-dom": "16.9.0"
     },
     "devDependencies": {
-        "shadow-cljs": "^2.12.2"
+        "shadow-cljs": "^2.28.1"
     }
 }

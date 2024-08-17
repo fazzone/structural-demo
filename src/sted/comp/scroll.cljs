@@ -104,9 +104,9 @@
         hpos          (some-> bar (.-scrollLeft))
         hoff          (some-> chain (.-offsetLeft))
         new-chain-top (scroll1d-center
-                       (.-scrollHeight chain)             ; total size
-                       chh                                ; visible size
-                       (.-scrollTop chain)                ; visible offset
+                       (.-scrollHeight chain) ; total size
+                       chh                    ; visible size
+                       (.-scrollTop chain)    ; visible offset
                        (.-height el-cr) 
                        (+ (.-scrollTop chain) (.-y el-cr)))
         
@@ -115,8 +115,8 @@
                       (.-width bar-cr)
                       (.-scrollLeft bar)
                       (.-width el-cr)
-                      (+ (.-scrollLeft bar) (.-x el-cr)))]
-    
+                      (+ (.-scrollLeft bar)
+                         (.-x el-cr)))]
     
     ;; console minimap svg hack
     #_(let [vv         js/window.visualViewport
@@ -170,7 +170,7 @@
                       "</svg>")]
       
       (js/console.log "%c "
-                      (str ;; "font-size:1px; padding:" (/ vboxw s) "px " (/ vboxw s) "px; background:url("
+                      (str
                        "padding-top: " (/ vboxh s 2) "px"
                        "; padding-left: " (/ vboxh s) "px"
                        "; background:url(" (str "data:image/svg+xml;charset=utf-8," (js/encodeURIComponent svgstr))
@@ -180,17 +180,25 @@
     (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
     (when new-bar-left (.scrollTo bar #js {:left new-bar-left}))))
 
-;; if an alias of something is visible on the screen,
-;; there is no need to snap the view to the "real copy".
-;; if both are on the screen at the same time, there is no way
-;; for us to know which you are looking at and consider "real".
-;; so, we just pick the one closest to the viewport origin.
 
+;; in case of aliases and demo/doc components, there can be multiple
+;; things which think they are "selected".
+;; css class `alternate-reality` is for aliases
+;; css class `no-scroll-within` is for demos
+;; you might want to scroll to an alias, but never within a demo.
 (defn primary-element
   [els]
-  (let [ela (into-array els)
-        _ (js/console.log ela)
+  (let [ela (->> els
+                 (filter (fn [^js el]
+                           (nil? (.closest el ".no-scroll-within"))))
+                 (into-array))
         
+        ;; if an alias of something is visible on the screen,
+        ;; there is no need to snap the view to the "real copy".
+        ;; if both are on the screen at the same time, there is no way
+        ;; for us to know which you are looking at and consider "real".
+        ;; so, we just pick the one closest to the viewport origin.
+
         sorted (if (> 2 (count ela))
                  ela
                  (doto ela
@@ -206,12 +214,12 @@
                                  (+ (.-x ra) (* 0.5 (.-width ra)))))))))]
     
     #_(doseq [e els
-            :let [r (.getBoundingClientRect e)]]
+              :let [r (.getBoundingClientRect e)]]
       
-      (js/console.log "PRIMARY?" (identical? e (first sorted))
-                      (+ (.-x r) (* 0.5 (.-width r)))
-                      (+ (.-y r) (* 0.5 (.-height r)))
-                      e))
+        (js/console.log "PRIMARY?" (identical? e (first sorted))
+                        (+ (.-x r) (* 0.5 (.-width r)))
+                        (+ (.-y r) (* 0.5 (.-height r)))
+                        e))
     
     (first sorted)))
 

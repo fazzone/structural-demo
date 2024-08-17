@@ -72,8 +72,7 @@
 
    {:db/ident ::inspect
     :db/id "inspect"
-    :coll/type #_:demo
-    :vec}])
+    :coll/type #_:demo  :vec}])
 
 (def init-tx-data
   (let [chains [test-form-data-bar]]
@@ -82,7 +81,7 @@
            ;; 
            {:db/ident ::state
             :state/bar "bar"
-            :state/limit 64}
+            :state/limit 128}
            ;; 
            (merge {:db/id "bar" :coll/type :bar}
                   (ec/seq-tx
@@ -182,6 +181,7 @@
 (defonce ^:export the-app (atom nil))
 
 
+
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
@@ -271,6 +271,47 @@
               (sk/cleanup!)
               (sm/cleanup!))))
 
+
+(rum/defc eye-test
+  []
+  (let [halfw 16
+        w (* 2 halfw)
+        halfh 10
+        h (* 2 halfh)
+        inset 2
+        ;; control vertical extent
+        ch 12
+        ;; control pointiness
+        cw 8]
+    
+    [:div {:style {:display :flex
+                   :flex-wrap :wrap
+                   ;; :width "300px"
+                   :gap "1em"
+                   :padding "1em"}}
+     
+     (for [ch (range 10 14)
+           cw (range 2 10)]
+       
+       
+       [:div {:style {:display :flex
+                      :flex-direction "column"}}
+        [:svg {:width "20em"
+               :viewBox (str (- (+ halfw inset)) " " (- halfh) " " (+ w inset inset) " " h)
+               :stroke "#fff"
+               :fill "none"
+               :stroke-width "2"
+               :style {:display "block"
+                       :outline "1px dashed #777"}}
+         [:circle {:x 0 :y 0 :r (* 0.3 halfw)}]
+         [:path {:d (str "M" (- halfw) " " 0
+                         " C" (- cw) " " (- ch) " " cw " " (- ch) " " halfw " " 0
+                         " C" cw " " ch " " (- cw) " " ch " " (- halfw) " " 0
+                         " Z")}]]
+       
+        [:div {:style {:margin :auto}} (str ch ", " cw)]])]))
+
+
 (defn ^:dev/after-load init
   []
   #_(some-> the-singleton-db meta :listeners (reset! {}))
@@ -279,12 +320,18 @@
         el (.getElementById js/document "root")]
     (reset! the-app app)
     
-    (println "Created new app and reset kbdb.  Mount root...")
+    #_(println "Created new app and reset kbdb.  Mount root...")
+    (println "App created" (core/uniqueid bus) "Mount root...")
     
     (-> (cr/root app code/form)
         (rum/mount el))
+    
+    #_(-> (eye-test)
+          (rum/mount el))
+    
     #_(-> (cdoc/root code/form)
         (rum/mount el))))
+
 
 (defn ^:export become
   [db]

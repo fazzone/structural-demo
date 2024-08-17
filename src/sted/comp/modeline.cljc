@@ -40,7 +40,13 @@
       (when-let [v (:eval/action sel )]
         [:span {} [:span.mlgloss {} "action"] (str v)])
 
-      (when-let [v (:chain/filename sel )]
+      #_(when-let [v (:chain/filename sel )]
+        [:span {} [:span.mlgloss {} "file"] (str v)])
+
+      (when-let [v (loop [s sel]
+                     (or (:chain/filename s)
+                         (some->> s :coll/_contains core/exactly-one recur)))]
+        
         [:span {} [:span.mlgloss {} "file"] (str v)])
 
       (when-let [v (:handle/token sel )]

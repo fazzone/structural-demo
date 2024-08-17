@@ -23,6 +23,7 @@
    "C-/"       :undo
    "C-Enter"   :insert-right-newline
    "C-s"       :search/start
+   "g"         :search/dom
    "C-a"       "No, I don't want to select all"
    "Enter"     :linebreak
    "Escape"    :select-chain
@@ -40,7 +41,6 @@
    "S-B"       :new-bar
    "'"         :new-quote
    ","         :new-do
-   "S-C"       :new-chain
    "S-F"       :flow-right-coll
    "S-H"       :hoist
    "M-h"       :clone-to-before-parent
@@ -69,7 +69,6 @@
    "S-E"       :eval-nrepl
    "M-e"       :delete-last-result
    "f"         :flow-right
-   "g"         :gobble
    "h"         :parent
    "i"         :insert-left
    "j"         :prev

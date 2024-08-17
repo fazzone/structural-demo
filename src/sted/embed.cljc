@@ -194,10 +194,12 @@
 
 (defn ->tx
   [e]
-  (when-let [mta (meta e)]
-    (prn 'Mta mta))
+  #_(when-let [mta (meta e)]
+      (prn 'Mta mta))
+  
   #_(merge (meta e) (->tx* e))
   #_(merge (->tx* e) (meta e))
+  
   (->tx* e ->tx))
 
 #? (:clj

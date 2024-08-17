@@ -123,6 +123,7 @@
                   (move-selection-tx (:db/id from) (:db/id new-node))))))
 
 (defn exchange-with-previous-tx
+  "XWP docstring"
   [sel]
   (let [spine  (exactly-one (:seq/_first sel))
         prev   (some-> spine :seq/_next exactly-one)
@@ -293,8 +294,11 @@
       (nil? (:coll/type e)) (recur coll)
       (nil? next)           nil
       :else
-      [[:db/retract (:db/id coll) :coll/contains (:db/id (:seq/first next))]
+      [
+       ;; membership
+       [:db/retract (:db/id coll) :coll/contains (:db/id (:seq/first next))]
        [:db/add (:db/id e) :coll/contains (:db/id (:seq/first next))]
+       ;; 
        (when-not (:seq/first e)
          [:db/retractEntity (:db/id next)])
        (if-not (:seq/first e)
@@ -338,33 +342,18 @@
        (if next
          [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))
 
-(defn insert-editing-before
-  ([sel] (insert-editing-before sel sel))
-  ([target from] (insert-editing-before target from nil))
-  ([target from props]
+(defn insert-editing-cmd
+  ([ins target from props]
    (let [parent (exactly-one (:coll/_contains target))]
      (case (:coll/type parent)
-       :chain (edit-new-wrapped* insert-before-tx target from :list "" props)
-       :bar   (edit-new-wrapped* insert-before-tx target from :chain "" props)
+       :chain (edit-new-wrapped* ins target from :list "" props)
+       :bar   (edit-new-wrapped* ins target from :chain "" props)
        ;; 
        (let [indent-props (select-keys target [:form/linebreak :form/indent])]
-         (insert-editing* insert-before-tx target from
-                          (merge indent-props props)))))))
-
-(defn insert-editing-after
-  ([sel] (insert-editing-after sel sel))
-  ([target from] (insert-editing-after target from nil))
-  ([target from props]
-   (let [parent (exactly-one (:coll/_contains target))]
-     (case (:coll/type parent)
-       :chain (edit-new-wrapped* insert-after-tx target from :list "" props)
-       :bar   (edit-new-wrapped* insert-after-tx target from :chain "" props)
-       ;; 
-       (let [indent-props (select-keys target [:form/linebreak :form/indent])]
-         (insert-editing* insert-after-tx target from
-                          (cond->> props
-                            (:coll/type target) (merge indent-props))))))))
-
+         (insert-editing* ins target from
+                          (merge {:edit/from (:db/id from)}
+                                 indent-props
+                                 props)))))))
 
 (defn form-split-tx
   [e]
@@ -377,14 +366,16 @@
         outer-next  (some-> outer-spine :seq/next)
         prev        (some-> spine :seq/_next exactly-one)
         tail        (e/seq->vec spine)]
-    (println "spine" (:db/id spine))
-    (println "next" (:db/id next))
-    (println "outer-coll" (:db/id outer-coll))
-    (println "outer-spine" (:db/id outer-spine))
-    (println "outer-next" (:db/id outer-next))
-    (println "prev" (:db/id prev))
+    
+    ;; (println "spine" (:db/id spine))
+    ;; (println "next" (:db/id next))
+    ;; (println "outer-coll" (:db/id outer-coll))
+    ;; (println "outer-spine" (:db/id outer-spine))
+    ;; (println "outer-next" (:db/id outer-next))
+    ;; (println "prev" (:db/id prev))
 
-    (println "Tail" (map :db/id tail))
+    #_(println "Tail" (map :db/id tail))
+    
     (when outer-coll
       (if (nil? prev)
         (if-let [n (:seq/first next)]
@@ -445,7 +436,8 @@
                       (if-let [n (:seq/next s)]
                         (recur n)
                         s))]
-      (insert-editing-after (:seq/first last-cons) sel))))
+      
+      (insert-editing-cmd insert-after-tx (:seq/first last-cons) sel nil))))
 
 (defn form-cons-tx
   [elem coll]

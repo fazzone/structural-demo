@@ -1,13 +1,49 @@
 (ns sted.user)
 
 
+(do (defn find-files
+      ([root] (find-files (js/secret_electron_require "fs/promises") root))
+      ([fs root]
+       (a/let [dents (.readdir fs root)
+               st (js/Promise.all
+                    (for [d dents
+                          :let [f (str root "/" d)]]
+                      (a/let [st (.stat fs f)
+                              rec (when (.isDirectory st) (find-files fs f))]
+                        (or rec (list f)))))]
+         (into [] cat st))))
+    (find-files "src/sted"))
+
+
 (let [ch (->chain sel)
       file (or (:chain/filename ch) "noname.clj")]
   (a/let [res (.writeFile (js/secret_electron_require "fs/promises") file (e/->string ch))]
     [:wrote file]))
 
 
+(let [file "db-save.json"]
+  (a/let [res (.writeFile (js/secret_electron_require "fs/promises")
+                          file
+                          (js/JSON.stringify
+                            (d/freeze (d/entity-db sel)
+                                      {:freeze-fn (fn [v]
+                                                    (cond (map? v) (pr-str v)
+                                                          (satisfies? IDeref v) "<frozen atom>"
+                                                          :else
+                                                          (do (println "Some other type:" (type v) v)
+                                                              "<frozen value>")))})))]
+    [:wrote file]))
+
+
+(let [file "db-save.json"]
+  (a/let [json (.readFile (js/secret_electron_require "fs/promises") file #js {:encoding "utf-8"})
+          data (js/JSON.parse json)]
+    #_(d/thaw data {:thaw-fn identity})
+    (js/console.log data)))
+
+
 (send! [:nrepl-connect "localhost" 1667])
+
 
 (open "src/sted/scratch2.clj")
 
@@ -35,21 +71,6 @@
                ::fs-ref fs
                ::listing-of root})})))
     (navize-path (js/secret_electron_require "fs/promises") "src"))
-
-
-(do
-  (defn navize-path
-    [fs root]
-    (a/let [dents (.readdir fs root)
-            st (js/Promise.all
-                 (for [d dents
-                       :let [f (str root "/" d)]]
-                   (a/let [st (.stat fs f)
-                           rec (when (.isDirectory st)
-                                 (navize-path fs f))]
-                     (or rec (list f)))))]
-      (into [] cat st)))
-  (navize-path (js/secret_electron_require "fs/promises") "src/sted"))
 
 
 (transact! [[:db/add (:db/id (d/entity (d/entity-db sel) :sted.page/state)) :state/limit 128]])

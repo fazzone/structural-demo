@@ -11,13 +11,19 @@
   (let [db @conn
         state (d/entity db :sted.page/state)
         ml-ref (rum/create-ref)
-        [h set-h!] (rum/use-state nil)]
+        [h set-h!] (rum/use-state nil)
+        pin-ref (rum/create-ref)]
     
     [:div.bar-container {}
+     
      (rum/bind-context
       [cc/*modeline-ref* ml-ref]
       (rec (:state/bar state) bus 0 nil))
      
+     #_(rum/bind-context
+        [cc/*modeline-ref* ml-ref]
+        (rec (:state/bar state) bus 0 nil))
+
      [:div.modeline-outer.code-font {:id "modeline" :ref ml-ref}
       (cs/rs** bus (:sted.sys.search.setup/state state))]]))
 

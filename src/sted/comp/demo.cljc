@@ -70,7 +70,9 @@
   [steps rec classes]
   (let [dbs (run-steps steps)
         eid (:db/id (core/get-selected-form (:db-after (first dbs))))]
-    [:div {:class (str "alternate-reality " classes)}
+    [:div.no-scroll-within.alternate-reality
+     {:class classes}
+     #_{:class (str "alternate-reality " classes)}
      [:div {:style {:display "grid"
                     :grid-template-columns "4ex min-content min-content 1fr 1fr"
                     :align-items "center"
@@ -662,7 +664,7 @@
                  (prn "Snap" (deref (-> s :system :search :results)))))))
        nil)
      [app muts])
-    [:div.alternate-reality
+    [:div.no-scroll-within.alternate-reality
      [:div {:style {:margin "2ex"
                     :width "32em"}}
       (when app (cr/root app rec))]
@@ -707,19 +709,19 @@
 (rum/defc demo*
   [r c]
   [:div.mememe
-   [:div
-    {:style {:display :grid
-             :grid-template-columns "1fr 1fr 1fr"
-             :grid-gap "1ch"
-             #_:background-color
-             #_"tomato"
-             :width "64ch"
-             :height "32ch"}}
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
-    [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
+   #_[:div
+      {:style {:display :grid
+               :grid-template-columns "1fr 1fr 1fr"
+               :grid-gap "1ch"
+               #_:background-color
+               #_"tomato"
+               :width "64ch"
+               :height "32ch"}}
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
+      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
    (real-root r
               (e/->tx (quote (prefix suffix conj matching testing connect)))
               [[:flow-right]
@@ -740,7 +742,10 @@
               [[:tail]
                [:update-search "ring"]
                #_[:update-search "conj"]])
-   (cdoc/mutations-reference r nil)]
+   
+   #_(cdoc/mutations-reference r nil)
+   
+   ]
   #_(rum/bind-context
       [cc/*modeline-ref* nil]
       [:div

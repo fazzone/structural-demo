@@ -61,7 +61,8 @@
            (fn [els]
              (let [fel (csc/primary-element els)]
                (doseq [^js e els]
-                 (js/console.log "E=" e)
+                 #_(js/console.log "Editboxel=" e)
+                 
                  (if-not (identical? e fel)
                    (set! (.-tabindex e) -1)
                    (do (set! (.-tabindex e) 0)
@@ -82,19 +83,14 @@
         iref (rum/create-ref)]
     (rum/use-layout-effect!
      (fn []
-       (println "EditBoxEffect")
        (when-let [el (rum/deref iref)]
-         #_(js/console.log "EditBox@" el)
          (swap! multi-edit-box-list
                 (fn [others]
-                  (println "Others=" (count others))
                   (if others
                     (conj others el)
                     (do (js/setTimeout choose-box-to-focus! 0)
-                        [el]))))
-         #_(if-not (.closest el ".alternate-reality")
-           (.focus el)
-           (set! (.-tabindex el) -1)))
+                        [el])))))
+       
        nil)
      [e])
     [:input.edit-box

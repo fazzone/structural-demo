@@ -25,27 +25,17 @@
     [:div {:class ["key"
                    (when (= 1 (count keycap))
                      " single-width")]}
-     (comment ;; alignment
-       [:div {:style {:position :relative :top "0.5ex" :left "1.5ex"}}
-        [:div {:style {:position :absolute :width "4ex" :height "2.5ex" :border "1px solid #333"}}]
-        [:div {:style {:position :absolute :margin-top "1.25ex" :width "4ex" :border-top "1px dotted #333"}}]
-        [:div {:style {:position :absolute :margin-left "2ex" :height "2.5ex" :border-left "1px dotted #333"}}]])
+     (comment
+      ;; alignment
+      [:div {:style {:position :relative :top "0.5ex" :left "1.5ex"}}
+       [:div {:style {:position :absolute :width "4ex" :height "2.5ex" :border "1px solid #333"}}]
+       [:div {:style {:position :absolute :margin-top "1.25ex" :width "4ex" :border-top "1px dotted #333"}}]
+       [:div {:style {:position :absolute :margin-left "2ex" :height "2.5ex" :border-left "1px dotted #333"}}]])
      
      [:div.keycap-parent [:div.keycap keycap]]
      (when symbol [:div.key-symbol-parent [:div.key-symbol symbol]])
      (when label [:div.key-label label])]))
 
-(defn thread-first
-  [sel]
-  (loop [[func arg & more] sel
-         acc               []]
-    (println 'func func 'arg arg 'more more 'acc acc)
-    (cond
-      (nil? func) (list* '-> acc)
-      (list? arg) (recur arg (-> func
-                                 (cond-> more (list* more))
-                                 (cons acc)))
-      :else       (list* '-> arg func acc))))
 
 (def mutation->label
   {
@@ -73,24 +63,34 @@
                                        :transform   "rotate(90deg)"}}
                          "->>"]}
    :eval   {:label  "eval"
-                :symbol [:div {:style {:font-size   "135%"
-                                       :margin-left "0.5ex"
-                                       :margin-top "0.175ex"}}
-                         "λ"]}
+            :symbol [:div {:style {:font-size   "135%"
+                                   :margin-left "0.5ex"
+                                   :margin-top "0.175ex"}}
+                     "λ"]}
    :hide {:label [:span {:style {:color "tomato"}} "hide"]}
    :compose {:label  "comp"
              :symbol [:div {:style {:font-size "150%" :margin-left "0.55ex"}}
                       "◯"]}
+   
+   :offer {:label  "offer"
+           :symbol [:div {:style {:font-size "120%"
+                                  :margin-left "0.8ex"
+                                  :margin-top "0.3ex"}}
+                    "o\u0302"]}
+
    :select-chain {:label "chain"}
    :m1 {:label "top"
         :symbol [:div {:style {:transform "rotate(225deg)"
                                :margin-top "0.5ex"}}
                  
                  "==>"]}
-   :slurp-right {:label "push)→"}
+   :slurp-right {:label "push)→"
+                 :symbol [:div {:style {:margin-top "0.65ex"
+                                        :margin-left "0.7ex"}}
+                          ")→"]
+                 }
    :barf-right  {:label [:span {:style {:color "tomato"}} "←)pull"]}
    :gobble {:label "gobble"}
-   :offer {:label "offer"}
    :new-comment {:label "doc"}
    :tear {:label "-tear-"
           :symbol [:div {:style {:font-size "130%"
@@ -125,7 +125,29 @@
                                          :margin-top  "0.25ex"}}
                            "⌦"]}
    :delete-left  {:label "<-delete"}
-   :scroll {:label "view"}
+   
+   :scroll {:label "view"
+            :symbol (let [halfw 16
+                          w (* 2 halfw)
+                          halfh 10
+                          h (* 2 halfh)
+                          inset 2
+                          ;; control vertical extent
+                          ch 12
+                          ;; control pointiness
+                          cw 7]
+                      [:svg {:width "1.6em"
+                             :viewBox (str (- (+ halfw inset)) " " (- halfh) " " (+ w inset inset) " " h)
+                             :stroke "#fff"
+                             :fill "none"
+                             :stroke-width "2"
+                             :style {:margin-top "1ex"}}
+                       [:circle {:x 0 :y 0 :r (* 0.3 halfw)}]
+                       [:path {:d (str "M" (- halfw) " " 0
+                                       " C" (- cw) " " (- ch) " " cw " " (- ch) " " halfw " " 0
+                                       " C" cw " " ch " " (- cw) " " ch " " (- halfw) " " 0
+                                       " Z")}]])}
+   
    :parent {:label  "parent"
             :symbol [:div {:style {:transform "rotate(225deg)"
                                    :font-size "130%"

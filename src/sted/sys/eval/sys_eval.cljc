@@ -13,11 +13,14 @@
   (let [up (nav/parents-vec sel)
         top (peek up)
         chain (some-> top :coll/_contains first)]
-    (println "Up=" up)
+    #_(println "Up=" up)
+    
     (reduce (fn [a e]
               (let [ea (:eval/action e)]
-                (println "EvalTarget Checking" (:db/id e) (let [s (e/->string e)]
-                                                            (subs s (min 128 (count s)))))
+                #_(println "EvalTarget Checking"
+                           (:db/id e)
+                           (let [s (e/->string e)]
+                             (subs s (min 128 (count s)))))
                 (cond
                   ea    (reduced [ea e])
                   :else a)))
@@ -38,7 +41,7 @@
                                    (let [{:keys [backend]} @state
                                          sel               (core/get-selected-form db) 
                                          [emut target]     (get-action-and-target sel backend)]
-                                     (println "EvalSend" [emut (:db/id target)])
+                                     (println "Eval@" (:db/id sel) "Send" [emut (:db/id target)])
                                      (core/send! bus [emut (:db/id target)]))))
         
         (core/register-mutation! :set-eval-backend

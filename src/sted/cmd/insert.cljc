@@ -94,6 +94,6 @@
 (defn finish-edit-and-edit-next-tx
   [ed text]
   (some-> (accept-edit-tx (:db/id ed) text)
-          (into (edit/insert-editing-after ed))))
+          (into (edit/insert-editing-cmd edit/insert-after-tx ed ed nil))))
 
 

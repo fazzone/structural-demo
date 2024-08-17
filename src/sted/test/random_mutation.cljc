@@ -125,7 +125,7 @@
    [[:new-vec] [:edit/reject]]])
 
 (defn search-for-failure
-  [init-form maxn]
+  [init-form maxn]
   (loop [i         0
          db        (setup-db init-form)
          mutations []]

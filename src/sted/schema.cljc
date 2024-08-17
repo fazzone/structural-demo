@@ -16,6 +16,7 @@
   (merge
    form-schema
    {:state/bar             {:db/valueType :db.type/ref}
+    ;; :state/pin             {:db/valueType :db.type/ref}
     :history/item          {:db/valueType :db.type/ref :db/cardinality :db.cardinality/many}
     :history-item/mutation {:db/valueType :db.type/ref}
     :history-item/tx       {:db/valueType :db.type/ref}
@@ -27,8 +28,10 @@
     :form/linebreak        {}
     :form/edited-tx        {:db/valueType :db.type/ref}
     :edit/of               {:db/valueType :db.type/ref}
+    :edit/from             {:db/valueType :db.type/ref}
     :chain/selection       {:db/valueType :db.type/ref}
     :chain/filename        {:db/index true}
+    :bar/pin-left          {}
     :key/kbd               {:db/unique :db.unique/identity}
     :key/mutation          {}
     :keymap/bindings       {:db/valueType   :db.type/ref

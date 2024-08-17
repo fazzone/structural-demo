@@ -39,13 +39,14 @@
         after-left  (:db-after (state-map left))
         after-right (when right
                       (:db-after (state-map right)))]
-    [:div {:class (str "alternate-reality " classes)
-           :style (-> {:display               :grid
-                       ;; :width "min-content"
-                       :grid-template-columns "1fr 12ch 1fr"
-                       :grid-template-rows "1fr 4ex calc(1fr - 3ex)"
-                       :justify-items         "center"}
-                      (merge style))}
+    [:div.no-scroll-within.alternate-reality
+     {:class classes
+      :style (-> {:display               :grid
+                  ;; :width "min-content"
+                  :grid-template-columns "1fr 12ch 1fr"
+                  :grid-template-rows "1fr 4ex calc(1fr - 3ex)"
+                  :justify-items         "center"}
+                 (merge style))}
      [:span {:style {:grid-area "1 / 1 / 4"}}
       (rec (d/entity (if-not right before-left after-left) eid)
            core/blackhole 0 nil)]
@@ -64,11 +65,11 @@
                          :db-before
                          core/get-selected-form)
         eid         (:db/id view-ent)]
-    (println "View????" view (some? (get state-map view)) (keys state-map))
-    [:div {:class "alternate-reality"
-           :style (-> {:display               :grid
-                       :grid-template-columns "1fr 1fr 3ex 1fr"}
-                      (merge style))}
+    
+    [:div.teleport-doc.no-scroll-within.alternate-reality
+     {:style (-> {:display               :grid
+                  :grid-template-columns "1fr 1fr 3ex 1fr"}
+                 (merge style))}
      (for [[label sk] body
            k [:lbl :db-before :arrow :db-after]]
        (case k
@@ -221,7 +222,7 @@
   [r c]
   (let [t-flow (t/build t/flow-left-right)
         t-next-prev (t/build t/next-prev)]
-    [:div.mutdoc {:style {:width "55em"}}
+    [:div.mutdoc
      [:div.form-title.mutdoc-title [:span "-->"] [:span "next"]]
      [:div {:style {:margin "0 0 1ex 0"}}
       "Advances cursor"]
@@ -250,37 +251,86 @@
                     :body [["Steps in to deep nesting" :left-into-many]
                            ["Steps out one level" :left-outof-one]]})]))
 
+(rum/defc tprec
+  [rec state-map view sk k]
+  (let [view-ent (some-> (get state-map view)
+                         :db-before
+                         core/get-selected-form)
+        eid         (:db/id view-ent)]
+    
+    (rec (d/entity (get (state-map sk) k) eid) core/blackhole 0 nil)))
+
+(rum/defc gridspacer
+  [ncol]
+  [:div {:style {:grid-column (str "1 / " (inc ncol))
+                 :width "90%"
+                 :height "2ch"}}])
+
+(rum/defc doc-movement-table
+  [r c]
+  (let [t-flow      (t/build t/flow-left-right)
+        t-next-prev (t/build t/next-prev)
+        xd          (fn [n g t k]
+                      (rum/fragment
+                       (if n
+                         [:div {:style {:justify-self "start"}} n]
+                         [:div {} "\""])
+                       [:div {:style {:justify-self "start"}} g]
+                       [:div {:style {:justify-self "end"}} (tprec r t :start k :db-before)]
+                       [:div "=>"]
+                       [:div {:style {:justify-self "start"}} (tprec r t :start k :db-after)]))
+        spacer      (fn [] (gridspacer 5))]
+    
+    [:div {:style {:outline "1px solid tomato"}}
+     [:div {:style {:display               "grid"
+                    :grid-template-columns "6em 20em 1fr 4em 1fr"
+                    :width                 "40em"
+                    :justify-items         "center"}}
+      
+      [:div "name"]
+      [:div "gloss"]
+      [:div "from"]
+      [:div ""]
+      [:div "to"]
+      
+      (xd "next" "select next form" t-next-prev :nextform)
+      (xd nil "step over" t-next-prev :stepover)
+      (spacer)
+      (xd "flow" "traverse into structure" t-flow :into-colls)
+      (xd nil "step out of lists" t-flow :outof-colls)
+      ]]))
+
 (rum/defc mutations-reference
   [r c]
   (let [t-tail (t/run-steps-next
-                 '(a (b) (c (d e) f))
-                 [{:tag :tail  :do [:tail]}
-                  {:tag :parent  :do [:parent]}
-                  [:tail]
-                  {:tag :tl-b  :do [:toplevel]}])
+                '(a (b) (c (d e) f))
+                [{:tag :tail  :do [:tail]}
+                 {:tag :parent  :do [:parent]}
+                 [:tail]
+                 {:tag :tl-b  :do [:toplevel]}])
         t-float (t/run-steps-next
-                  '(c (d e) f)
-                  [[:tail]
-                   {:tag :float  :do [:float]}
-                   {:tag :sink  :do [:sink]}])
+                 '(c (d e) f)
+                 [[:tail]
+                  {:tag :float  :do [:float]}
+                  {:tag :sink  :do [:sink]}])
         t-del (t/run-steps-next
+               '(a L x R b)
+               [[:flow-right] [:flow-right] [:flow-right]
+                {:tag :dla  :do [:delete-left]}])
+        t-delr (t/run-steps-next
                 '(a L x R b)
                 [[:flow-right] [:flow-right] [:flow-right]
-                 {:tag :dla  :do [:delete-left]}])
-        t-delr (t/run-steps-next
-                 '(a L x R b)
-                 [[:flow-right] [:flow-right] [:flow-right]
-                  {:tag :dr  :do [:delete-right]}])
+                 {:tag :dr  :do [:delete-right]}])
         t-raise (t/run-steps-next
-                  '(f (if a x y))
-                  [[:flow-right] [:flow-right] [:flow-right] [:flow-right]
-                   {:tag :bonk  :do [:raise]}])
+                 '(f (if a x y))
+                 [[:flow-right] [:flow-right] [:flow-right] [:flow-right]
+                  {:tag :bonk  :do [:raise]}])
         t-comp (t/run-steps-next
-                 '(f x)
-                 [[:flow-right]
-                  [:flow-right]
-                  {:tag :create-partial  :do [:compose]}
-                  {:tag :finish  :do [:edit/finish-and-move-up "g"]}])
+                '(f x)
+                [[:flow-right]
+                 [:flow-right]
+                 {:tag :create-partial  :do [:compose]}
+                 {:tag :finish  :do [:edit/finish-and-move-up "g"]}])
         t-tear (t/run-steps-next ["/usr/bin/env"]
                                  [[:flow-right]
                                   [:flow-right]
@@ -311,12 +361,15 @@
                                      {:tag :newlist  :do [:new-list]}
                                      [:edit/finish "g"]
                                      {:tag :newvec  :do [:new-vec]}])
-        t-split (t/run-steps-next '(f [1 2 3 4])
+        t-split (t/run-steps-next '(f [1 2 3 4] x)
                                   [[:flow-right] [:flow-right] [:flow-right] [:flow-right]
                                    {:tag :split  :do [:split]}])
-        t-splice (t/run-steps-next '(f [1 2 3 4])
+        t-splice (t/run-steps-next '(f [1 2 3 4] x)
                                    [[:flow-right] [:flow-right] [:flow-right] [:flow-right]
-                                    {:tag :splice  :do [:splice]}])
+                                    #_{:tag :splice  :do [:splice]}
+
+                                    ^:splice [:splice]
+                                    ])
         t-slurp (t/run-steps-next '(f (g a) b c)
                                   [[:flow-right] [:flow-right] [:flow-right] [:flow-right]
                                    {:tag :slurp-tk  :do [:slurp-right]}
@@ -326,140 +379,148 @@
                                    [:tail]
                                    {:tag :barf-tk  :do [:barf-right]}])]
     (rum/bind-context
-      [cc/*modeline-ref* nil]
-      [:div
-       {:style {:display :flex
-                :flex-direction :column
-                :width "55em"}}
-       (doc-movement r c)
-       [:div.mutdoc {:style {:width "30em"}}
-        [:p.form-title "Movement"]
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(45deg)"}} "==>"]
-         [:span "tail"]]
-        [:div "Selects the last and most-nested node"]
-        (mcn r c t-tail :tail)
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(45deg)"}} "<--"]
-         [:span "parent"]]
-        [:div "One level up"]
-        (mcn r c t-tail :parent)
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(45deg)"}} "<=="]
-         [:span "toplevel"]]
-        [:div "Straight to the top"]
-        (mcn r c t-tail :tl-b)]
+     [cc/*modeline-ref* nil]
+     [:div
+      {:style {:display :flex
+               :flex-direction :column}}
+       
+      (doc-movement r c)
+      (doc-movement-table r c)
+      ;; 
+      [:div.mutdoc {:style {:width "30em"}}
+       [:p.form-title "Movement"]
        [:div.form-title.mutdoc-title
-        [:span {} ")->"]
-        [:span "slurp-right"]]
-       [:div "on collections, add next to end"]
-       (mcn r c t-slurp :slurp-coll)
+        [:span {:style {:transform "rotate(45deg)"}} "==>"]
+        [:span "tail"]]
+       [:div "Selects the last and most-nested node"]
+       (mcn r c t-tail :tail)
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "rotate(45deg)"}} "<--"]
+        [:span "parent"]]
+       [:div "One level up"]
+       (mcn r c t-tail :parent)
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "rotate(45deg)"}} "<=="]
+        [:span "toplevel"]]
+       [:div "Straight to the top"]
+       (mcn r c t-tail :tl-b)]
+
+      [:div.form-title.mutdoc-title
+       [:span {} ")->"]
+       [:span "slurp-right"]]
+      [:div "on collections, add next to end"]
+      (mcn r c t-slurp :slurp-coll)
+      [:div "on tokens, apply to parent"]
+      (mcn r c t-slurp :slurp-tk)
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} "<-)"]
+        [:span "barf-right"]]
+       [:div "on collections, move last element to next"]
+       (mcn r c t-slurp :barf-coll)
        [:div "on tokens, apply to parent"]
-       (mcn r c t-slurp :slurp-tk)
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} "<-)"]
-         [:span "barf-right"]]
-        [:div "on collections, move last element to next"]
-        (mcn r c t-slurp :barf-coll)
-        [:div "on tokens, apply to parent"]
-        (mcn r c t-slurp :barf-tk)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} " "]
-         [:span "splice"]]
-        [:div "remove nesting"]
-        (mcn r c t-splice :splice)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} " "]
-         [:span "split"]]
-        [:div "new list with rest"]
-        (mcn r c t-split :split)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} "+()"]
-         [:span "new-list"]]
-        [:div "create new list after selected"]
-        (mcn r c t-newlist :newlist)
-        [:div "also new-vec"]
-        (mcn r c t-newlist :newvec)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} "(+)"]
-         [:span "wrap"]]
-        [:div "create new list around selected"]
-        (mcn r c t-wrap :wrap)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} ""]
-         [:span "insert-left"]]
-        [:div "add token before selected"]
-        (mcn r c t-insl :insl)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} ""]
-         [:span "insert-right"]]
-        [:div "add token after selected"]
-        (mcn r c t-insr :insr)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} ""]
-         [:span "offer"]]
-        [:div "on tokens, overwrite"]
-        (mcn r c t-offer :offer-tk)
-        [:div "on collections, add to end"]
-        (mcn r c t-offer :offer-coll)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} "«⋯»"]
-         [:span "tear/stitch"]]
-        [:div "split the selected token"]
-        (mcn r c t-tear :tear)
-        [:div "or put it back together"]
-        (mcn r c t-tear :stitch)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {} "◯"]
-         [:span "compose"]]
-        [:div "Wrap selected, then edit first of created list"]
-        (mcn r c t-comp :create-partial)
-        [:div "When the edit is completed, the parent is selected"]
-        (mcn r c t-comp :finish)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(45deg)"}} "<<-"]
-         [:span "raise"]]
-        [:div "replace parent with selected"]
-        (mcn r c t-raise :bonk)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "scale(-1,1)"}} "⌦"]
-         [:span "delete-left"]]
-        [:div "Delete selected, select previous"]
-        (mcn r c t-del :dla)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span "⌦"]
-         [:span "delete-right"]]
-        [:div "Delete selected, select next"]
-        (mcn r c t-delr :dr)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(-90deg)"}} "->>"]
-         [:span "float"]]
-        [:div "Swap with previous"]
-        (mcn r c t-float :float)]
-       [:div.mutdoc
-        [:div.form-title.mutdoc-title
-         [:span {:style {:transform "rotate(90deg)"}} "->>"]
-         [:span "sink"]]
-        [:div "Swap with next"]
-        (mcn r c t-float :sink)]
-       (bar-and-chain r c)])))
+       (mcn r c t-slurp :barf-tk)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} " "]
+        [:span "splice"]]
+       [:div "remove nesting"]
+       (mcn r c t-splice :splice)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} " "]
+        [:span "split"]]
+       [:div "new list with rest"]
+       (mcn r c t-split :split)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} "+()"]
+        [:span "new-list"]]
+       [:div "create new list after selected"]
+       (mcn r c t-newlist :newlist)
+       [:div "also new-vec"]
+       (mcn r c t-newlist :newvec)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} "(+)"]
+        [:span "wrap"]]
+       [:div "create new list around selected"]
+       (mcn r c t-wrap :wrap)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} ""]
+        [:span "insert-left"]]
+       [:div "add token before selected"]
+       (mcn r c t-insl :insl)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} ""]
+        [:span "insert-right"]]
+       [:div "add token after selected"]
+       (mcn r c t-insr :insr)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} ""]
+        [:span "offer"]]
+       [:div "on tokens, overwrite"]
+       (mcn r c t-offer :offer-tk)
+       [:div "on collections, add to end"]
+       (mcn r c t-offer :offer-coll)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} "«⋯»"]
+        [:span "tear/stitch"]]
+       [:div "split the selected token"]
+       (mcn r c t-tear :tear)
+       [:div "or put it back together"]
+       (mcn r c t-tear :stitch)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {} "◯"]
+        [:span "compose"]]
+       [:div "Wrap selected, then edit first of created list"]
+       (mcn r c t-comp :create-partial)
+       [:div "When the edit is completed, the parent is selected"]
+       (mcn r c t-comp :finish)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "rotate(45deg)"}} "<<-"]
+        [:span "raise"]]
+       [:div "replace parent with selected"]
+       (mcn r c t-raise :bonk)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "scale(-1,1)"}} "⌦"]
+        [:span "delete-left"]]
+       [:div "Delete selected, select previous"]
+       (mcn r c t-del :dla)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span "⌦"]
+        [:span "delete-right"]]
+       [:div "Delete selected, select next"]
+       (mcn r c t-delr :dr)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "rotate(-90deg)"}} "->>"]
+        [:span "float"]]
+       [:div "Swap with previous"]
+       (mcn r c t-float :float)]
+      [:div.mutdoc
+       [:div.form-title.mutdoc-title
+        [:span {:style {:transform "rotate(90deg)"}} "->>"]
+        [:span "sink"]]
+       [:div "Swap with next"]
+       (mcn r c t-float :sink)]
+      (bar-and-chain r c)])))
 
 
 (rum/defc root
   [r]
-  [:div.top-level-form.code-font {}
-   (mutations-reference r nil)])
+  [:div {:style {:display :flex} }
+   [:div.top-level-form.code-font
+    {:style {:margin "auto"
+             :padding "2ch"}}
+    (doc-movement-table r nil)
+    [:hr]
+    (mutations-reference r nil)]])

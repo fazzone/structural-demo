@@ -116,6 +116,11 @@
 (def electron-process (atom nil))
 
 
+(comment
+  (reset! electron-process
+          (babashka.process/process
+           [@electron-exe electron-main "http://localhost:10010/index.html"])))
+
 (defn run-electron
   []
   #_(compile-and-host-cljs
@@ -130,7 +135,8 @@
     (if-not (= ":done" result)
       (println "Failed to build")
       (reset! electron-process
-              (p/process [@electron-exe electron-main "These" "Are" "Yourargs"])))))
+              (p/process [@electron-exe electron-main
+                          "http://localhost:8087/?title=Shadow host"])))))
 
 (defn start-repl
   []

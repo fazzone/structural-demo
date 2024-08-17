@@ -4,6 +4,7 @@
             [sted.embed :as e]
             [sted.cmd.move :as move]
             [sted.cmd.nav :as nav]
+            [sted.cmd.edit :as edit]
             [daiquiri.interpreter :as rdi]
             [datascript.core :as d]
             [datascript.serialize :as dser]
@@ -61,7 +62,7 @@
   [bus msg]
   (js/Promise.
    (fn [resolve _]
-     ;; get a new stack 
+     ;; get a new stack
      (js/setTimeout #(resolve (core/send! bus msg)) 0))))
 
 (defn sci-opts
@@ -82,7 +83,6 @@
                                           (js/Promise.resolve p))}
                 'sted {'do ^:sci/macro (fn [&form &env & body]
                                          (list* 'do body))}
-                
                 'df.async {'do ^:sci/macro (fn [&form &env & body]
                                              (println "Macro!" &form body)
                                              (let [ret (a/do* body)]
@@ -101,13 +101,13 @@
                 'gobj     {'view   (fn [obj] (gobj/createImmutableView obj))
                            'extend (fn [a b] (gobj/extend a b))
                            'get    (fn [o k d]
-                                  (gobj/get o k d))}
+                                     (gobj/get o k d))}
                 'a        {'let ^:sci/macro (fn [&form &env bindings & body]
                                               (a/sci-let** bindings body))}
                 'hn       {'stories dfg/stories}
                 #?@ (:cljs ['p {'resolve (fn [p] (js/Promise.resolve p))
                                 'all     (fn [a b c] (js/Promise.all a b c))}])}
-   :bindings {'send!   (fn [m] (sci-send bus m ))
+   :bindings {'send!   (fn [m] (sci-send bus m))
               'open    (fn [path]
                          (a/let [buf (.readFile (js/secret_electron_require "fs/promises") path)]
                            (sci-send bus [:open-chain (.toString buf) {:chain/filename path}])))
@@ -224,19 +224,59 @@
   (datafy [n]
     the-sci-context))
 
+
+(defn create-pending-eval!
+  [conn target]
+  (let [id  "peval"
+        txe {:db/id            id
+             :coll/type        :eval-result
+             :eval/result-type :pending
+             :eval/of          (:db/id target)}
+        tx  (into [txe] (edit/insert-after-tx target txe))
+        r   (d/transact! conn tx)]
+    (get (:tempids r) id)))
+
+
+(defn do-code-eval!
+  [bus ctx sel# target evr-eid]
+  (let [eval-eid (:db/id target)
+        estr     (e/->string target)
+        _        (println  estr)
+        {:keys [ok res]}
+        (try {:ok  true
+              :res (sci/binding [sel# target]
+                     (sci/eval-string* ctx estr))}
+             (catch :default e
+               {:ok nil :res e}))]
+    (js/console.timeEnd "EvalFinish")
+    (cond
+      (not ok)
+      (do #_(js/console.error "SCI" (instance? cljs.core.ExceptionInfo res) res)
+          (if-let [d (ex-data res)]
+            (core/send! bus [:eval-error evr-eid res])
+            (core/send! bus [:eval-finish evr-eid {:error res}])))
+      (instance? js/Promise res)
+      (-> res
+          (.then (fn [v] (core/send! bus [:eval-finish evr-eid v])))
+          (.catch (fn [e] (core/send! bus [:eval-error evr-eid e]))))
+      :else
+      #_(core/send! bus [:eval-result-fat eval-eid res])
+      (core/send! bus [:eval-finish evr-eid res]))))
+
+
 (defn mutatef
   [{:keys [conn bus]  :as app} app-atom-circular-ref]
   (let [sel# (sci/new-dynamic-var 'sel nil)
-        app# (sci/new-var 'sted
-                          app-atom-circular-ref
-                          nil)
+        app# (sci/new-var 'sted app-atom-circular-ref nil)
         unbound-prints (atom [])
-        ctx (-> (sci-opts app #_{:bindings {'sel sel#}})
-                (sci/init)
-                (sci/merge-opts {:bindings {'sel sel#
-                                            'sted app#
-                                            'bus bus
-                                            'transact! (transactor conn)}}))]
+        ctx (-> (sci-opts app)
+                (update :bindings
+                        merge
+                        {'sel sel#
+                         'sted app#
+                         'bus bus
+                         'transact! (transactor conn)})
+                (sci/init))]
     (sci/alter-var-root sci/print-newline (fn [_] false))
     (sci/alter-var-root sci/print-fn
                         (fn [_]
@@ -244,58 +284,29 @@
                             (js/console.log "[SCI]" msg)
                             (swap! unbound-prints conj msg))))
     (reset! the-sci-context ctx)
-    ;; actual mutation fn 
+    ;; actual mutation fn
     (fn [[_ eval-eid] db bus]
       (let [target (d/entity db eval-eid)]
-        ;; target itself is handle
         (if-let [h (:handle/token target)]
-          ;; load it and expand it in place
+          ;; target is handle, load it and expand it in place
           (core/send! bus [:eval-cont target (sh/load h)])
+          ;; not handle
           (if-let [up-h (some-> target move/up :handle/token)]
-            ;; parent of target is handle 
+            ;; parent of target is handle
             (let [c (sh/load up-h)
                   k (e/->form target)]
               (.then (js/Promise.resolve
-                      (cond
-                        (sequential? c)
-                        (datafy/nav c nil k)
-                        (associative? c)
-                        (datafy/nav c k (get c k))
-                        (set? c)
-                        (datafy/nav c k k)
-                        :else
-                        (str "???" (type c))))
-                     (fn [z]
-                       (core/send! bus [:ingest-replacing z]))))
+                       (cond (sequential? c) (datafy/nav c nil k)
+                             (associative? c) (datafy/nav c k (get c k))
+                             (set? c) (datafy/nav c k k)
+                             :else (str "???" (type c))))
+                     (fn [z] (core/send! bus [:ingest-replacing z]))))
             ;; code eval
-            (let [estr (e/->string target)
-                  _ (println  estr)
-                  ;; res (sci/binding [sel# target] (sci/eval-string* ctx estr))
-                  {:keys [ok res]} (try
-                                     {:ok true
-                                      :res (sci/binding [sel# target] (sci/eval-string* ctx estr))}
-                                     (catch :default e
-                                       {:ok nil
-                                        :res e}))]
-              (cond
-                (not ok) (do (js/console.error "Exception in eval" (instance? cljs.core.ExceptionInfo res) res)
-                             (if-let [d (ex-data res)]
-                               (do
-                                 #_(when-let [csa (:sci.impl/callstack d)]
-                                     (println "Csa")
-                                     (run! prn (deref csa)))
-                                 (core/send! bus [:eval-error eval-eid res]))
-                               (core/send! bus
-                                           [:eval-result eval-eid
-                                            {:error res}])))
-                
-                (instance? js/Promise res)
-                (-> res
-                    (.then (fn [v] (core/send! bus [:eval-result eval-eid v])))
-                    (.catch (fn [e] (core/send! bus [:eval-error eval-eid e]))))
-                
-                :else
-                (core/send! bus [:eval-result eval-eid res])))))))))
+            (let [_ (js/console.time "EvalFinish")
+                  evr-eid (create-pending-eval! conn target)]
+              (println "Created pending eval" evr-eid)
+              (-> #(do-code-eval! bus ctx sel# target evr-eid)
+                  (js/setTimeout 0)))))))))
 
 
 (comment

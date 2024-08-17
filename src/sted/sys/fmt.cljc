@@ -25,7 +25,7 @@
           _ (js/console.time "preparing")
           q (if (= :chain (:coll/type sel))
               sel
-              (peek (nav/parents-vec  sel)))
+              (peek (nav/parents-vec sel)))
           _ (js/console.timeEnd "preparing")
           _ (js/console.time "stringifying")
           my-string (e/->string q)
@@ -49,13 +49,15 @@
                              (println "B:")
                              (println (e/->string b) "\n" (pr-str b))
                              (throw (ex-info "cannot reconcile " {})))
+                         ;; 
                          (for [k [:form/indent :form/linebreak]
                                :when (not= (k a) (k b))]
                            (if (k b)
                              [:db/add (:db/id a) k (k b)]
                              [:db/retract (:db/id a) k (k a)])))
-                       (tree-seq :coll/type e/seq->vec q)
-                       (tree-seq :coll/type e/seq->vec pt)))]
+                       ;; skip top-level to avoid un-linebreaking it?
+                       (next (tree-seq :coll/type e/seq->vec q))
+                       (next (tree-seq :coll/type e/seq->vec pt))))]
       (js/console.timeEnd "reconciling")
       (js/console.timeEnd "formatting")
       (println "===============================================")

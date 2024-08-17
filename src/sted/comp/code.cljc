@@ -28,42 +28,31 @@
 
 (declare form)
 
-#_(defn iobs-callback
-  [ents me]
-  (when-not (core/scroll-locked?)
-    (let [can-see (some (fn [e]
-                          (> 1 (js/Math.abs (- (.-height (.-intersectionRect e)) (.-height (.-boundingClientRect e))))))
-                        ents)]
-      (when-not can-see
-        (loop [[ioe & more] ents
-               did-scroll nil]
-          (when ioe (js/console.log "IR" (.-intersectionRatio ioe) ioe))
-          (when ioe
-            (if did-scroll
-              (js/console.log "What does this mean?")
-              (do
-                (println "Scroll to select ENTS")
-                (js/console.log ents)
-                (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe))))
-            (recur more true)))))))
-
 (defn iobs-callback
   [ents me]
   (when-not (core/scroll-locked?)
     (loop [[ioe & more] ents]
-      (let [^js e   (.-target ioe)
+      (let [^js e (.-target ioe)
             
-            ir      (.-intersectionRect ioe)
-            br     (.-boundingClientRect ioe)
-            can-see (> 1 (js/Math.abs (- (.-height ir) (.-height br))))]
-        
-        #_(js/console.log "ELM" e "CANSEE" can-see)
+            ratio (.-intersectionRatio ioe)
+            ir    (.-intersectionRect ioe)
+            br    (.-boundingClientRect ioe)
+            
+            ]
+        #_(js/console.log "Ratio" (pr-str (.-intersectionRatio ioe)) "Can-see" can-see "El" e)
         
         (cond
-          can-see nil
-          more    (recur more)
+          ;; try to find a fully-visible node and quit out if we do
+          (= 1 ratio) nil
+          more        (recur more)
+          ;; we might have to do something
+          ;; we see part but couldn't see all, don't auto scroll it 
+          (and (< 0 ratio)
+               (or (> (.-height br) js/window.visualViewport.height)
+                   (> (.-width br) js/window.visualViewport.width)))
+          (do (println "Partially visible and too large")
+              nil)
           
-          ;; all were not visible 
           :else (scroll/scroll-to-selected* e br))
         
         #_(if did-scroll
@@ -157,42 +146,40 @@
 
 (rum/defc erc
   < rum/reactive
-  [{:eval/keys [of out]  :as e} bus classes]
-  (let [[result-type & result :as svec] (e/seq->vec e)]
-    (println "Erc svec" svec)
-    (println "Rtyp " (:token/value result-type))
-    (case (e/->form result-type)
+  [{:eval/keys [of out result-type]  :as e} bus classes]
+  (let [[result :as svec] (e/seq->vec e)]
+    (case result-type
+      
       :exception
-      (let [[extype msg data stack & more] result]
+      (let [[extype msg data stack & more] svec]
         [:div.eval-exception {:class classes}
-         (form result-type bus nil)
          (when extype
            [:span.ex-type {} "type:" (form extype bus nil)])
          (when msg 
            [:span.ex-message {} "msg:" (form msg bus nil)])
          (when data
            [:span.ex-data {} "data: " (form data bus nil)])
-         
-         #_[:span {} "Stackform" (form stack bus nil)
-          
-          
-          ]
          [:ul.stacktrace {}
           (for [f (e/seq->vec stack)]
-            [:li {}  "Ste" ^:inline (form f bus 0 nil)])]])
+            [:li {:key (:db/id f)}
+             ^:inline (form f bus 0 nil)])]])
       
       :ok
       [:div.eval-result {:class classes} 
-       ^String (:token/value result)
-       ]
+       ^:inline (form result bus 0 nil)]
       
-      [:div (str "No result type: " (pr-str result-type))])))
+      :pending
+      [:span.eval-pending {:class classes}
+       "..."]
+      
+      [:div {} (str "No result type: " (pr-str result-type))])))
 
 
 #_(def inhibit-scroll? (volatile! false))
 
 
 (defonce secret-chain-scroll-position-cache (atom {}))
+
 
 
 (def remember-scroll-position
@@ -262,8 +249,7 @@
    #_(lazy-children ch bus)
    (for [f (e/seq->vec ch)]
      (-> (top-level-form f bus nil)
-         (rum/with-key (:db/id f))))
-   ])
+         (rum/with-key (:db/id f))))])
 
 
 (rum/defc grid
@@ -276,10 +262,14 @@
 
 (rum/defc bar
   [b bus classes]
-  (let [ref-me (rum/create-ref)]
+  (let [ref-me          (rum/create-ref)
+        pin-left?       (some-> b :bar/pin-left)
+        children        (e/seq->vec b)]
+    
     [:div.bar.hide-scrollbar
-     {:ref ref-me
-      :class classes}
+     {:ref   ref-me
+      :class (cond-> classes
+               pin-left? (str " pin-left"))}
      
      ;; Hack for DOM search
      (rum/use-layout-effect!
@@ -289,9 +279,11 @@
       [bus])
      
      #_(lazy-children b bus)
-     (for [chain-head (e/seq->vec b)]
-       (-> (form chain-head bus 0 nil)
-           (rum/with-key (:db/id chain-head))))]))
+     #_(println "Render Bar" (count (e/seq->vec b)) "Childrenge")
+     
+     (for [ch children]
+       ^:inline (-> (form ch bus 0 nil)
+                    (rum/with-key (:db/id ch))))]))
 
 
 (rum/defc aliasc [{:alias/keys [of] :as a} bus classes]
@@ -494,7 +486,7 @@
     :number         "tk n"
     :regex          "tk re"
     :verbatim       "tk verbatim"
-    :comment        "tk comment"
+    :comment        "comment"
     :md/text        "md"
     :md/code        "md-code code-font"
     :md/inline-code "md-inline-code code-font"))
