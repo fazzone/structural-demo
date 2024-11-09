@@ -61,6 +61,11 @@
    []
    xs))
 
+
+
+
+#_(meta (p/parse-string-all "#?(:cljs 1 :clj 4)"))
+
 (defn n->tx
   ([n] (n->tx n 0))
   ([n i]

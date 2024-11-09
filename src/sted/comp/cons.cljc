@@ -11,65 +11,6 @@
 
 (def font-size-ratio 0.4)
 
-(comment
-  #_[:g {:stroke :none :fill st}
-          [:text {:x x :y y} label]
-          [:foreignObject {:x x :y y :width (* font-size-ratio size (count sv)) :height size }
-           (renderer node)]])
-
-#_(rum/defc nonrec
-  < {:key-fn (fn [n b s l r c] (:db/id n))}
-  {:should-update (fn [astate bstate]
-                    (let [[na _ _ _ ra ca] (:rum/args astate)
-                          [nb _ _ _ rb cb] (:rum/args bstate)]
-                      (or (not= ra rb)
-                          (not= ca cb)
-                          (not= (:max-tx (d/entity-db na))
-                                (:max-tx (d/entity-db nb))))))}
-  [node renderer size eid->pos row col]
-  (let [half   (* 0.5 size)
-        double (* 2 size)
-        width  (* 6 half)
-        height double
-        x      (* width col)
-        y      (* height row)
-        label  (str "#" (:db/id node))
-        sel? (:form/highlight node)
-        st (if sel? "#ae81ff" "#fff")
-        sv (:token/value node)]
-    [:g {}
-     (if-some [sv (:token/value node)]
-       [:g {:fill st}
-        [:text {:x x :y y} (str sv)]
-        [:text {:x x :y (+ y half)} label]]
-       [:g {:fill st}
-        [:text {:x (+ x (* 3 half)) :y (- y 6)} label]
-        [:text {:x x :y (- y 6)}
-         (str row "," col)
-         (when-let [ct (:coll/type node)]
-           (str (e/open-delim ct) (e/close-delim ct)))]])
-     [:g {:stroke st}
-      (when (nil? sv)
-        [:rect {:x x :y y :width (+ size size) :height size}])
-      (when (nil? sv) 
-       [:line {:x1 (+ x size) :y1 y :x2 (+ x size) :y2 (+ y size)}])
-      (when-some [cdr (:seq/next node)]
-        (let [[nr nc]    (eid->pos (:db/id cdr))
-              arrowleft  (+ x (* 3 half))
-              arrowright (+ (* nc width) (* 0.2 size))]
-          (when (not= row nr)
-            (println "Bad layout - cdr " (:db/id cdr) "should be in row" row "but is in" nr "??"))
-          [:path {:marker-end "url(#head)"
-                  :d          (str "M" arrowleft "," (+ y half)
-                                   "H" arrowright)}]))
-      (when-some [car (:seq/first node)]
-        (let [[nr nc] (eid->pos (:db/id car))]
-          (when (not= col nc)
-            (println "Bad layout - car " (:db/id car) "should be in column" col "but is in" nc "??"))
-          [:path {:marker-end "url(#head)"
-                  :d          (str "M" (str (+ x half)) "," (str (+ y half))
-                                   "V" (str (- (* nr height) half)))}]))]]))
-
 (rum/defc nonrec
   < {:key-fn (fn [n b s l r c] (:db/id n))}
   {:should-update (fn [astate bstate]
@@ -86,7 +27,7 @@
         height double
         x      (* width col)
         y      (* height row)
-        label  (str "#" (:db/id node))
+        label  (str "#" (:db/id node) " " row "," col)
         st (if sel? "#ae81ff" "#fff")
         sv (:token/value node)
         ch (* half font-size-ratio)]
@@ -100,9 +41,9 @@
                :y (- y ch)}
         label]
        [:text {:fill st :x x :y (- y ch)}
-        (when-let [ct (:coll/type node)]
-          (or (not-empty (str (e/open-delim ct) (e/close-delim ct)))
-              (str ct)))]
+        (str (when-let [ct (:coll/type node)]
+               (or (not-empty (str (e/open-delim ct) (e/close-delim ct)))
+                   (case ct :hidden "-" ct))))]
        [:g {:stroke st}
         (when (nil? sv)
           [:rect {:x x :y y :width (+ size size) :height size}])
@@ -132,53 +73,50 @@
          firstfront []
          occ        []
          save       []]
-    (letfn [(collide? [r c]
-              (some-> (get occ c) (subseq >= r) seq))
-            (claim [r c e]
-              (update occ c (fnil assoc (sorted-map)) r e))]
+    (letfn [(claim [r c e] (update occ c (fnil assoc (sorted-map)) r e))
+            (next-row [c] (inc (key (first (rseq (nth occ c))))))
+            (collide? [r c] (some-> (get occ c) (subseq >= r) seq))]
       (cond
         (> n 999)
         (throw (ex-info "Too many" {}))
         
+        ;; try to go right first
         (seq nextfront)
         (let [[r c e] (peek nextfront)]
           (if (collide? r c)
-            (let [[sc se nf ff nocc] (peek save)
-                  nr                 (inc (key (first (rseq (nth occ c)))))]
-              (do
-                #_ (println (:db/id e) "collides with" (:db/id se) "at" r c)
-                #_ (println "\t"  "sc=" sc "nr=" nr ))
-              
+            ;; something is already here - backtrack to when we decided to put it on this row
+            (let [[sc se nf ff nocc] (peek save)]
               (recur (inc n)
                      nf
-                     (conj ff [nr sc se])
+                     ;; have to go far enough down to clear this column
+                     (conj ff [(next-row c) sc se])
                      nocc
                      (pop save)))
+            ;; safe
             (recur (inc n)
                    (cond-> (pop nextfront) (:seq/next e) (conj [r (inc c) (:seq/next e)]))
                    (cond-> firstfront      (:seq/first e) (conj [(inc r) c (:seq/first e)]))
                    (claim r c e)
+                   ;; 
                    save)))
         
+        ;; go down
         (seq firstfront)
         (let [[r c e] (peek firstfront)]
           (if (collide? r c)
-            (let [[nf ff nocc] (peek save)]
-              (println "FF" (:db/id e) "collides with" (:db/id (get-in occ [c r])) "at" [r c])
-              (recur (inc n) nf ff nocc (pop save)))
+            (throw (ex-info "not supposed to happen" {:r r :c c}))
             (recur (inc n)
                    (cond-> nextfront        (:seq/next e) (conj [r (inc c) (:seq/next e)]))
                    (cond-> (pop firstfront) (:seq/first e) (conj [(inc r) c (:seq/first e)]))
                    (claim r c e)
-                   (conj save [c e nextfront (pop firstfront) occ]))))
+                   ;; 
+                   (conj save [c e nextfront (pop firstfront) occ n]))))
         
         :else
-        (do
-          #_(println "Layout explored" n)
-          (into {}
-                (for [[c col] (map vector (range) occ)
-                      [r e]   col]
-                  [[r c] e])))))))
+        (into {}
+              (for [[c col] (map vector (range) occ)
+                    [r e]   col]
+                [[r c] e]))))))
 
 
 

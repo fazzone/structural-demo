@@ -1,5 +1,6 @@
 (ns sted.electron-main
-  (:require ["electron" :as electron :refer [app remote Menu BrowserWindow crashReporter]]))
+  (:require ["electron" :as electron :refer [app remote Menu BrowserWindow crashReporter]]
+            ["path" :as path]))
 
 (def ^:export browser-window-opts
   (clj->js
@@ -15,8 +16,8 @@
   #_(.setApplicationMenu Menu nil)
   (let [[electron me u :as argv]        (some-> js/process (.-argv) js->clj)
         dev-version?        (some #{"--localhost"} argv)
-        _                   (println "Aregv=" argv)
-        ;; file-src            (str "file://" js/__dirname "/index.html")
+        _                   (println "Init browser, argv=" argv)
+        file-src            (str "file://" js/__dirname "/index.html")
         ;; localhost-url        #_ "http://localhost:8087/?title=Shadow host"
         
         window-open-handler (fn [_url]
@@ -25,7 +26,10 @@
         
         ^js/electron.BrowserWindow main-window (BrowserWindow. browser-window-opts)]
     
-    (.loadURL main-window u  #_file-src)
+    (js/console.log "loadURL u=" (pr-str u))
+    (js/console.log "file-src=" (pr-str file-src))
+    
+    (.loadURL main-window #_u  file-src)
     (doto (.-webContents main-window)
       (.setWindowOpenHandler window-open-handler))
     
@@ -38,6 +42,7 @@
 (defn main []
   #_(.on app "window-all-closed" #(when-not (= js/process.platform "darwin")
                                     (.quit app)))
+  (js/console.log "Electron main")
   (.on app "window-all-closed" #(.quit app))
   (.on app "ready" init-browser))
 

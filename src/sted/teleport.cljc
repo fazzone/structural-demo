@@ -64,8 +64,6 @@
   [{:keys [init do]}]
   (run-steps-next init do))
 
-
-
 (def next-prev
   {:init '(a (f x) c)
    :do [{:tag :start :do [:flow-right]}
@@ -89,9 +87,22 @@
         {:tag :left-into-many :do [:flow-left]}
         {:tag :left-outof-one :do [:flow-left]}]})
 
+(defn check-avet-duplicates!
+  [msg avet]
+  (->> (map (fn [[_ _ va _] [_ _ vb _]]
+              (when (= va vb) va))
+            avet
+            (next avet))
+       (dedupe)
+       (take-while some?)
+       (run! (fn [e]
+               (throw (ex-info (str e " " msg)
+                               (into {:eid e} )))))))
 
 (defn check-db-invariants!
   [db]
+  ;; tree structure?
+  ;; contains
   (let [avet-contains (d/datoms db :avet :coll/contains)]
     (->> (map (fn [[_ _ va _] [_ _ vb _]] (when (= va vb) va))
               avet-contains
@@ -100,8 +111,19 @@
          (take-while some?)
          (run! (fn [e]
                  (throw (ex-info (str e " in >1 coll")
-                                 (into {} (d/touch (d/entity db e))))))))))
+                                 (into {} (d/touch (d/entity db e))))))))
 
+    
+    #_(doseq [[eid _] avet-contains
+              :let [coll (d/entity db eid)
+                    ce (into #{} (map (fn [[_ _ v _]] v))
+                             (d/datoms db :eavt eid :coll/contains))
+                    se (into #{} (map :db/id)
+                             (e/seq->vec coll))]]
+        (println eid ce se)
+        (when (not (= ce se))
+          (throw (ex-info (str eid " seq and contains disagree")
+                          {:ce ce :se se}))))))
 
 (comment
   ;; 
@@ -112,27 +134,15 @@
                     [:db/add "a" :coll/contains "c"]
                     [:db/add "b" :coll/contains "c"]])))))
 
-
-#_(e/->string
- (d/entity
-  (:db-after
-   (peek
-    (:history
-     (run-steps-next
-      '((a b c) (i j k) (u v w))
-      [[:flow-right-coll] [:flow-right-coll]
-       [:flow-right]
-       [:flow-right]
-       [:split]
-       [:splice]]))))
-  4))
-
 (defn permutations [v]
   (if (empty? v)
     [[]]
     (for [i (range (count v))
           rec (permutations (into (subvec v 0 i) (subvec v (inc i))))]
       (cons (nth v i) rec))))
+
+
+
 
 (comment
   (doseq [steps (permutations
@@ -151,3 +161,61 @@
       (run! prn steps) (println "================")
       (println (e/->string (d/entity db-after 4)))
       (check-db-invariants! db-after))))
+
+(defn avet-first-duplicate-value
+  [[[_ _ prev _] & more :as avet]]
+  (when more
+    (loop [prev             prev
+           [[_ _ v _] & ds] more]
+      (cond (= v prev) v
+            ds         (recur v ds)))))
+
+(defn avet-dupe-dual
+  [[[_ _ prev _] & xs] ys]
+  (loop [prev prev
+         [[_ _ x _] & xmore :as xs] xs
+         [[_ _ y _] & ymore :as ys] ys]
+    (cond
+      (= x y)             x
+      (= x prev)          x
+      (= y prev)          y
+      (= nil xmore ymore) nil
+      (nil? ymore)        (recur x xmore nil)
+      (nil? xmore)        (recur y nil ymore)
+      (< x y)             (recur x xmore ys)
+      :else               (recur y xs ymore))))
+
+
+
+
+
+
+(comment
+  (let [
+        
+        ;; reports (run-steps**
+        ;;          {:form      '((a [1] c))
+        ;;           :setup     [[:flow-right] [:flow-right]]
+        ;;           :mutations [[:split]]})
+        ;; db      (:db-after (last reports))
+        db (:db-after
+            (peek
+             (:history
+              (run-steps-next
+               '((a b c))
+               [[:flow-right]
+                [:flow-right]
+                [:split]]))))]
+    
+    ;; (run! prn (d/datoms db :avet :seq/first ))
+    ;; (println "DupeFirst?" (avet-first-duplicate-value (d/datoms db :avet :seq/first)))
+    ;; (println "DupeNext?" (avet-first-duplicate-value (d/datoms db :avet :seq/next)))
+    ;; (run! prn (d/datoms db :avet :seq/first ))
+    ;; "==="
+    ;; (run! prn (d/datoms db :avet :seq/next ))
+    #_(check-db-invariants! db)
+    
+    (avet-dupe-dual (d/datoms db :avet :seq/first)
+                    (d/datoms db :avet :seq/first))
+    ))
+

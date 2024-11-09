@@ -78,9 +78,7 @@
                        'freeze    dser/serializable
                        'thaw      dser/from-serializable}
                 'e    {'->string e/->string}
-                'js   {'Promise.resolve (fn [p]
-                                          (println "Resolver" p)
-                                          (js/Promise.resolve p))}
+                'js   {'Promise.resolve (fn [p] (js/Promise.resolve p))}
                 'sted {'do ^:sci/macro (fn [&form &env & body]
                                          (list* 'do body))}
                 'df.async {'do ^:sci/macro (fn [&form &env & body]
@@ -241,7 +239,7 @@
   [bus ctx sel# target evr-eid]
   (let [eval-eid (:db/id target)
         estr     (e/->string target)
-        _        (println  estr)
+        _        (println  "EvalString" (pr-str estr))
         {:keys [ok res]}
         (try {:ok  true
               :res (sci/binding [sel# target]
@@ -287,19 +285,22 @@
     ;; actual mutation fn
     (fn [[_ eval-eid] db bus]
       (let [target (d/entity db eval-eid)]
+        (println "Target=" eval-eid)
         (if-let [h (:handle/token target)]
           ;; target is handle, load it and expand it in place
-          (core/send! bus [:eval-cont target (sh/load h)])
+          (do (println ":Handle target " eval-eid)
+              (core/send! bus [:eval-cont target (sh/load h)]))
           ;; not handle
           (if-let [up-h (some-> target move/up :handle/token)]
             ;; parent of target is handle
             (let [c (sh/load up-h)
                   k (e/->form target)]
+              (println "Parent is handle?" k)
               (.then (js/Promise.resolve
-                       (cond (sequential? c) (datafy/nav c nil k)
-                             (associative? c) (datafy/nav c k (get c k))
-                             (set? c) (datafy/nav c k k)
-                             :else (str "???" (type c))))
+                      (cond (sequential? c) (datafy/nav c nil k)
+                            (associative? c) (datafy/nav c k (get c k))
+                            (set? c) (datafy/nav c k k)
+                            :else (str "???" (type c))))
                      (fn [z] (core/send! bus [:ingest-replacing z]))))
             ;; code eval
             (let [_ (js/console.time "EvalFinish")

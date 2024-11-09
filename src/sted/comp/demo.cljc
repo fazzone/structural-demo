@@ -50,6 +50,7 @@
 
 (defn run-steps
   [{:keys [form setup mutations]}]
+  (println "Run steps" setup mutations)
   (let [conn (t/create-conn form)
         mut-map (merge mut/editing-commands
                        (zipmap (keys mut/movement-commands)
@@ -60,10 +61,15 @@
                (let [sel    (core/get-selected-form db-after)
                      mut-fn (get mut-map mut-name)
                      report (d/with db-after (apply mut-fn sel args))]
+                 
+                 (println "Check invariants after" mut)
+                 (t/check-db-invariants! db-after)
+                 
                  (assoc report :teleport/mutation mut)))
              {:db-after @conn}
              (concat setup mutations))]
     dbs))
+
 
 
 (rum/defc demo
@@ -72,40 +78,41 @@
         eid (:db/id (core/get-selected-form (:db-after (first dbs))))]
     [:div.no-scroll-within.alternate-reality
      {:class classes}
-     #_{:class (str "alternate-reality " classes)}
-     [:div {:style {:display "grid"
-                    :grid-template-columns "4ex min-content min-content 1fr 1fr"
-                    :align-items "center"
-                    :gap "1ex"}}
-      (for [i (range (count dbs))
-            :let [{:keys [db-after tx-data] :teleport/keys [mutation]} (nth dbs i)]
-            w [:index :mut :app :cons :txd]]
+     [:div {:style {:display               "grid"
+                    :grid-template-columns "4ex max-content max-content 4ex max-content max-content max-content 1fr"
+                    :align-items           "center"
+                    :gap                   "1ex"}}
+      (for [i    (range (inc (count (:setup steps)))
+                        (count dbs))
+            :let [{:keys [db-before db-after tx-data] :teleport/keys [mutation]} (nth dbs i)]
+            w    [:index :mut :app-before :arrow :app-after :cons-before :cons-after :tx-data]]
         (case w
-          :index [:span {:key (str w i)}
-                  (str "#" i " ")]
-          :mut [:span {:key (str w i)}
-                (pr-str mutation)
-                #_(let [im (- i (count setup))]
-                    (str "Im" im " of " (count mutations))
-                    (if (zero? im)
-                      "(init)"
-                      (str (nth mutations (dec im)))))]
-          :txd [:div {:key (str w i)}
-                (cd/tx-data tx-data)]
-          :app [:div {:key (str w i)}
-                (rec (d/entity db-after eid)
-                     core/blackhole
-                     0 nil)]
-          :cons [:div {:key (str w i)}
-                 (ccons/testing
-                     (d/entity db-after eid)
-                     core/blackhole
-                     (fn [n] (rec n core/blackhole 0 nil)))]))]]))
+          :arrow   [:span {:key (str w i)} (str "->")]
+          :index   [:span {:key (str w i)} (str "#" i " ")]
+          :mut     [:span {:key (str w i)} (pr-str mutation)]
+          :app-before [:div {:key (str w i)} ^:inline (rec (d/entity db-before eid) core/blackhole 0 nil)]
+          :app-after  [:div {:key (str w i)} ^:inline (rec (d/entity db-after eid) core/blackhole 0 nil)]
+          
+          :tx-data [:div {:key (str w i)}
+                    ^:inline (cd/tx-data
+                              (->> tx-data
+                                   (sort-by (fn [^ js d] (.-a d)))
+                                   (sort-by (fn [^ js d] (.-e d)))))]
+          
+          
+          :cons-after [:div {:key (str w i)}
+                       (ccons/testing
+                           (d/entity db-after eid)
+                           core/blackhole
+                           (fn [n] ^:inline (rec n core/blackhole 0 nil)))]
+          
+          :cons-before [:div {:key (str w i)}
+                        (ccons/testing
+                            (d/entity db-before eid)
+                            core/blackhole
+                            (fn [n] ^:inline (rec n core/blackhole 0 nil)))]))]]))
 
-
-(rum/defc render-steps*
-  [steps])
-
+(rum/defc render-steps* [steps])
 
 (rum/defc player*
   [classes rec children]
@@ -120,6 +127,7 @@
                                   100)]
            #(js/clearTimeout tid))))
      [s])
+    
     [:div {:style {:border "1px solid aliceblue"
                    :border-radius "2ex"
                    :padding "1ex"
@@ -155,10 +163,10 @@
                              :on-click  #(set-state! (assoc s :index i))}
                        (or (some-> mutation pr-str)
                            "(init)")]))]
-      [:div
-       (:comp (nth children index))
+      [:div {}
+       ^:inline (:comp (nth children index))
        [:div {:style {:height "80vh"}}
-        (:ccons (nth children index))]]
+        ^:inline (:ccons (nth children index))]]
       [:div {:style {:justify-self "end" :overflow :auto}}
        nil
        #_(cd/tx-data (:tx-data (nth children index)))]
@@ -708,61 +716,101 @@
 
 (rum/defc demo*
   [r c]
-  [:div.mememe
-   #_[:div
-      {:style {:display :grid
-               :grid-template-columns "1fr 1fr 1fr"
-               :grid-gap "1ch"
-               #_:background-color
-               #_"tomato"
-               :width "64ch"
-               :height "32ch"}}
-      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
-      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
-      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
-      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
-      [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
-   (real-root r
-              (e/->tx (quote (prefix suffix conj matching testing connect)))
-              [[:flow-right]
-               [:update-search "co"]
-               [:update-search "con"]])
-   (real-root r
-              (e/->tx (quote (prefix suffix conj matching testing connect)))
-              [[:tail]
-               [:update-search "fix"]
-               #_[:update-search "conj"]])
-   (real-root r
-              (e/->tx (quote ("Very long strings with search results"
-                              a
-                              b
-                              :string
-                              c
-                              d)))
-              [[:tail]
-               [:update-search "ring"]
-               #_[:update-search "conj"]])
+  #_[:div.mememe
+     #_[:div
+        {:style {:display :grid
+                 :grid-template-columns "1fr 1fr 1fr"
+                 :grid-gap "1ch"
+                 #_:background-color
+                 #_"tomato"
+                 :width "64ch"
+                 :height "32ch"}}
+        [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Movement"]
+        [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Insertion"]
+        [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Modification"]
+        [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Multiplicity"]
+        [:div {:style {:background-color "peachpuff"  :border-radius "1ex"}} "Search"]]
+     (real-root r
+                (e/->tx (quote (prefix suffix conj matching testing connect)))
+                [[:flow-right]
+                 [:update-search "co"]
+                 [:update-search "con"]])
+     (real-root r
+                (e/->tx (quote (prefix suffix conj matching testing connect)))
+                [[:tail]
+                 [:update-search "fix"]
+                 #_[:update-search "conj"]])
+     (real-root r
+                (e/->tx (quote ("Very long strings with search results"
+                                a
+                                b
+                                :string
+                                c
+                                d)))
+                [[:tail]
+                 [:update-search "ring"]
+                 #_[:update-search "conj"]])
    
-   #_(cdoc/mutations-reference r nil)
+     #_(cdoc/mutations-reference r nil)
    
-   ]
-  #_(rum/bind-context
-      [cc/*modeline-ref* nil]
-      [:div
-       {:style {:display :flex
-                :flex-direction :column}}
-       (demo {:form '((a [1] c))
-              :setup [[:flow-right] [:flow-right] [:flow-right]]
-              :mutations [[:split]]}
-             r
-             c)
-       #_(for [j (range 1)]
-           [:div {:key j}
-            [:h2 (str j)]
-            (player {:form (quote (fn [n] (r 0 g)))
-                     :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
-                     :mutations my-mutations}
-                    r
-                    c)])])
-  ;; flow-right
-)
+     ]
+  
+  (rum/bind-context
+   [cc/*modeline-ref* nil]
+   [:div
+    {:style {:display :flex
+             :flex-direction :column}}
+    
+    (demo {:form '[(a b c)]
+           :setup [[:flow-right] [:flow-right]]
+           :mutations [[:split]]}
+          r
+          c)
+
+    #_[:hr {:style {:width "90%"}}]
+    #_(demo {:form '[(a b c)]
+           :setup [[:flow-right] [:flow-right] [:next]]
+           :mutations [[:split]]}
+          r
+          c)
+    
+    #_[:hr {:style {:width "90%"}}]
+    #_(demo {:form '[(a b c)]
+           :setup [[:flow-right] [:flow-right] [:next] [:next]]
+           :mutations [[:split]]}
+          r
+          c)
+    
+    #_[:hr {:style {:width "90%"}}]
+    #_(demo {:form '[(a b c)]
+           :setup [[:flow-right] [:flow-right] ]
+           :mutations [[:split] [:slurp-right]]}
+          r
+          c)
+    
+    #_[:hr {:style {:width "90%"}}]
+    #_(demo {:form '[(((a (b c d)) (e (f g h))) (i (j (k l (m n o p)))))]
+           :setup [[:flow-right] ]
+           :mutations [[:next]]}
+          r
+          c)]
+   
+   #_(for [j (range 1)]
+       [:div {:key j}
+        [:h2 (str j)]
+        (player {:form (quote (fn [n] (r 0 g)))
+                 :setup [[:flow-right] [:flow-right] [:flow-right] [:flow-right] [:flow-right]]
+                 :mutations my-mutations}
+                r
+                c)]))
+
+  )
+
+
+
+(rum/defc root
+  [r]
+  [:div.code-font {}
+   (demo* r nil)])
+
+

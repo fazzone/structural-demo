@@ -53,7 +53,9 @@
           (do (println "Partially visible and too large")
               nil)
           
-          :else (scroll/scroll-to-selected* e br))
+          :else (do
+                  (println "Maybe scroll? Ratio=" ratio )
+                  (scroll/scroll-to-selected* e br)))
         
         #_(if did-scroll
             (js/console.log "What does this mean?")
@@ -143,7 +145,6 @@
 
 (def render-counter (atom 0))
 
-
 (rum/defc erc
   < rum/reactive
   [{:eval/keys [of out result-type]  :as e} bus classes]
@@ -154,11 +155,11 @@
       (let [[extype msg data stack & more] svec]
         [:div.eval-exception {:class classes}
          (when extype
-           [:span.ex-type {} "type:" (form extype bus nil)])
+           [:span.ex-type {} "type:" ^:inline (form extype bus nil)])
          (when msg 
-           [:span.ex-message {} "msg:" (form msg bus nil)])
+           [:span.ex-message {} "msg:" ^:inline (form msg bus nil)])
          (when data
-           [:span.ex-data {} "data: " (form data bus nil)])
+           [:span.ex-data {} "data: " ^:inline (form data bus nil)])
          [:ul.stacktrace {}
           (for [f (e/seq->vec stack)]
             [:li {:key (:db/id f)}
@@ -180,28 +181,25 @@
 
 (defonce secret-chain-scroll-position-cache (atom {}))
 
-
-
 (def remember-scroll-position
   "This is for when shadow-cljs reloads us"
   {:will-unmount (fn [state]
                    (let [el (rum/dom-node state)
-                         eid (-> state
-                                 :rum/args
-                                 first
-                                 :db/id)]
+                         eid (-> state :rum/args first :db/id)]
                      (when eid
                        (swap! secret-chain-scroll-position-cache assoc
                               eid
                               {:top (.-scrollTop el)  :left (.-scrollLeft el)})))
                    state)
    :after-render (fn [state]
-                   (if-some [{:keys [top left]} (some->> state
-                                                         :rum/args first
-                                                         :db/id (get @secret-chain-scroll-position-cache))]
-                     (let [el (rum/dom-node state)]
-                       (set! (.-scrollTop el) top)
-                       (set! (.-scrollLeft el) left)))
+                   (if-some [{:keys [top left]}
+                             (some->> state
+                                      :rum/args first
+                                      :db/id (get @secret-chain-scroll-position-cache))]
+                     (when-not @core/pending-reload
+                       (let [el (rum/dom-node state)]
+                         (set! (.-scrollTop el) top)
+                         (set! (.-scrollLeft el) left))))
                    state)})
 
 
@@ -337,7 +335,7 @@
    {:class classes}
    [:div {}
     ^:inline (code-coll coll-type e bus classes 0 nil)]
-   [:div {:style {:width "1500px"}}
+   [:div {:style {:width "500px"}}
     #_(ccons/testing e core/blackhole)
     (ccons/testing e bus (fn [n] (form n bus 0 nil)))
     #_[:div {:style {:width "800px"}}
@@ -497,14 +495,17 @@
                   (count (str v))
                   (count v)))
   (case t
-    :symbol v
+    :symbol (case v " " "\u23b5" v)
     :keyword  v #_(let [is (string/index-of k "/")]
                     (if (> 0 is)
                       k
                       (rum/fragment
                        [:span.kn (subs k 0 is)]
                        (subs k is))))
-    :string #_v #_(pr-str v) (js/JSON.stringify v)
+    :string #_v #_(pr-str v) #_(js/JSON.stringify v)
+    ;; display the string of a space as underbracket
+    (case v " " "\u23b5" (js/JSON.stringify v))
+    
     :verbatim v
     :number (str v)
     :comment v

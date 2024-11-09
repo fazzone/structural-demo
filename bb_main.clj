@@ -40,14 +40,20 @@
 (defonce the-prepl
   (delay
     (println "Staring big clojure...")
-    (let [{:keys [in out err]} (deps/clojure ["-M"
-                                              "-e" "(require '[clojure.core.server :as s])"
-                                              "-e" "@user/shadow-server"
-                                              "-e" "(s/io-prepl)"]
-                                             {:in nil
-                                              :out nil
-                                              :err nil
-                                              :shutdown p/destroy-tree})]
+    (let [{:as proc :keys [in out err]}
+          (deps/clojure [
+                         #_"-J-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+                         
+                         "-M"
+                         "-e" "(require '[clojure.core.server :as s])"
+                         "-e" "@user/shadow-server"
+                         "-e" "(s/io-prepl)"
+                         
+                         ]
+                        {:in nil
+                         :out nil
+                         :err nil
+                         :shutdown p/destroy-tree})]
       (future
         (binding [*in* (io/reader err)]
           (loop []
@@ -75,10 +81,10 @@
                     (do (prn 'clj-error v)
                         (recur)))))))))      
       
-      {:out (io/writer in)})
-    #_{:proc proc
-       :writer (-> proc :in io/writer) 
-       :reader (-> proc :out io/reader)}))
+      #_{:out (io/writer in)}
+      {:proc proc
+       :out (-> proc :in io/writer) 
+       :in (-> proc :out io/reader)})))
 
 (defn sync-prepl-exec
   [body-expr]
@@ -128,9 +134,7 @@
      #_(quote (user/release-cljs!)))
   
   (let [result (sync-prepl-exec (quote
-                                 :done
-                                 #_(do
-                                     (shadow.cljs.devtools.api/release :elec)
+                                 (do (shadow.cljs.devtools.api/release :elec)
                                      (shadow.cljs.devtools.api/release :br))))]
     (if-not (= ":done" result)
       (println "Failed to build")
@@ -236,8 +240,27 @@
          (fs/path out e)
          {:replace-existing true}))))
 
+
+
+#_(do @electron-exe)
 (comment
-  (package-electron "/tmp/temperloy"))
+  (release-cljs! :elec)
+  (release-cljs! :br)
+  
+  (package-electron "subtree/fugma")
+  (package-electron "/tmp/temperloy")
+  
+
+  (def my-electron
+    (let [outf (str "subtree/t" (System/currentTimeMillis) )]
+      (package-electron outf)
+      
+      (p/process [@electron-exe
+                  (fs/path outf  electron-main)
+                  (fs/path outf "srv/index.html")
+                  "--localhost"])))
+  
+  )
 
 
 (defn He
@@ -246,7 +269,10 @@
    (release-cljs! :elec)
    (release-cljs! :br)
    (package-electron out)
-   (reset! electron-process (p/process [@electron-exe (fs/path out electron-main) "--localhost"]))
+   (reset! electron-process (p/process [@electron-exe
+                                        (fs/path out electron-main)
+                                        (fs/path out "srv/index.html")
+                                        "--localhost"]))
    (sync-prepl-exec '(do (shadow.cljs.devtools.api/watch :br)
                          #_(shadow.cljs.devtools.api/compile :br)))
    (sync-prepl-exec '(do (shadow.cljs.devtools.api/watch :elec)

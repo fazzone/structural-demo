@@ -1,3 +1,16 @@
+html { height: 100%; }
+body {
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    background-color: #000;
+    color: #fff;
+    font-size: var(--main-font-size);
+    font-family: iosevka-aile-light;
+
+    --main-font-size: 14px;
+}
+
 #root {
     height: 100vh;
     padding: 0;
@@ -74,10 +87,13 @@
 .c.dl > span:nth-last-child(2):nth-child(2) {
     border-width: 0;
 }
-.c.dl.selected > .indent-chars.nl {
+
+/* alternate style where highlight is only over text not indent  */
+.c.dl.selected .indent-chars.nl {
     /* background-color: #000; */
     /* border-radius: 1ex; */
 }
+
 .c.pf + .c.pf {
     margin-left: 1ch;
 }
@@ -87,14 +103,13 @@
 .chain {
     display: flex;
     flex-direction: column;
-    margin-right: 1em;
-    padding-left: 1ch;
+    /* note that if chains had margin, the elementfrompoint center chain scroll hack would break */
+    margin: 0;
+    padding: 2px 1ch 2px 2ch;
     overflow-y: scroll;
     white-space: pre;
     /* it's important that the chain has no declared width */
     min-width: max-content;
-    padding-top: 2px;
-    padding-bottom: 2px;
 
 }
 .chain.selected .indent-chars {
@@ -123,8 +138,7 @@
 }
 .code-font {
     font-family: iosevka-term-ss03-light;
-    /* line-height: 2.5; */
-    /* font-family: "Iosevka Term SS03", monospace; */
+
 }
 .ct-grid {
     display: inline-grid;
@@ -179,6 +193,9 @@
     color: #fff;
     font-size: inherit;
     font-family: inherit;
+    /* the edit box is a little cramped, because otherwise
+       it would cause reflow by being to tall */
+    height: calc(1 * var(--main-font-size));
 }
 .edit-box + .c {
     margin-left: 1ch;
@@ -397,7 +414,7 @@
 /* .modeline-content { grid-row: 1; grid-column: 1; } */
 .modeline-outer {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     /* gap: 3ch; */
     /* color: #777; */
     min-height: 3ex;
@@ -409,10 +426,11 @@
 
 .mlc {
     display: grid;
-    grid-template-columns: 6em 7em 14em repeat(auto-fit, minmax(5em, 1fr));
+    grid-template-columns: 6em 7em 10em repeat(auto-fit, minmax(5em, min-content));
     color: #777;
     column-gap: 1ex;
     white-space: nowrap;
+    flex-grow: 1;
 }
 .mlgloss {
     color: #000;
@@ -460,8 +478,6 @@
     grid-template-columns: 1fr 8ch 1fr;
     grid-template-rows: repeat(auto-fill, 2ex);
     max-width: min-content;
-    /* height: 16ex; */
-    /* line-height: 2ex; */
 }
 .search .indent-chars {
     display: none;
@@ -582,35 +598,20 @@
 }
 .top-level-form.code-font {
     color: #777;
+
+    /* should NOT show strips of black underneath multiline selection */
+    /* should NOT cause edits e.g. tear/stitch to reflow document */
     line-height: 1.25;
-    /* color: #a6a6a0; */
-    /* line-height: 1.15; */
 }
-.unev .d {
-    color: #777;
-}
-.unev .kn {
-    color: #777;
-}
-.unev .tk {
-    color: #777;
-}
-@font-face {
-    font-family: iosevka-aile-light;src: url(font/iosevka-aile-light.woff2);}
-@font-face {
-    font-family: iosevka-term-ss03-light;src: url(font/iosevka-term-ss03-light.woff2);}
+.unev .d  { color: #777; }
+.unev .kn { color: #777; }
+.unev .tk { color: #777; }
+@font-face {font-family: iosevka-aile-light; src: url(font/iosevka-aile-light.woff2); }
+@font-face {font-family: iosevka-term-ss03-light; src: url(font/iosevka-term-ss03-light.woff2); }
+
 a {
     color: #2c32ff;
     text-decoration: none;
-}
-body {
-    height: 100%;
-    padding: 0;
-    margin: 0;
-    background-color: #000;
-    color: #fff;
-    font-size: 14px;
-    font-family: iosevka-aile-light;
 }
 div.bp {
     top: -3ex;
@@ -618,9 +619,6 @@ div.bp {
     position: relative;
     /* height: 3ex; */
     /* margin-top: -1ex; */
-}
-html {
-    height: 100%;
 }
 s {
     text-decoration: none;
@@ -652,25 +650,6 @@ textarea.edit-box {
     overflow: hidden;
     padding: 0;
     vertical-align: text-top;
-}
-ul.parent-path {
-    margin: 0;
-    padding: 0;
-    line-height: 1.5;
-    position: absolute;
-}
-ul.parent-path li {
-    display: inline;
-}
-ul.parent-path li:not(:last-child):after {
-    content: ">";
-    color: #777;
-    padding-left: 1ex;
-    padding-right: 0.3ex;
-}
-ul.parent-path:empty {
-    display: none;
-    /* height: 3ex; */
 }
 
 .olc ol {

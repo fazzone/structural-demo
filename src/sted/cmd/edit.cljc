@@ -367,29 +367,37 @@
         prev        (some-> spine :seq/_next exactly-one)
         tail        (e/seq->vec spine)]
     
-    ;; (println "spine" (:db/id spine))
-    ;; (println "next" (:db/id next))
-    ;; (println "outer-coll" (:db/id outer-coll))
-    ;; (println "outer-spine" (:db/id outer-spine))
-    ;; (println "outer-next" (:db/id outer-next))
-    ;; (println "prev" (:db/id prev))
-
-    #_(println "Tail" (map :db/id tail))
-    
+    ;; you cannot split into nothing 
     (when outer-coll
-      (if (nil? prev)
-        (if-let [n (:seq/first next)]
-          (recur n))
-        (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
-               {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
-               [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
-               [:db/add (:db/id outer-spine) :seq/next "cons"]
-               (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
-               (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
+      ;; splitting the first element is weird - 
+      ;; arguably "correct" is to create a new empty coll
+      ;; likely more useful is to split from the 2nd element
+      #_(if (nil? prev)
+          (if-let [n (:seq/first next)]
+            (recur n))
+          #_(let [new-node {:db/id "split-empty"
+                            :coll/type (:coll/type coll)}]
+              (into [new-node] (insert-before-tx coll new-node)))
+          (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
+                 {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
+                 [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
+                 [:db/add (:db/id outer-spine) :seq/next "cons"]
+                 (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
+                 (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
               
-              (concat
-               (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
-               (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))
+                (concat
+                 (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
+                 (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)]))))
+      (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
+             {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
+             [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
+             [:db/add (:db/id outer-spine) :seq/next "cons"]
+             (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
+             (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
+              
+            (concat
+             (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
+             (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)]))))))
 
 (defn form-splice-tx
   ([e] (form-splice-tx (move/up e) e))
@@ -466,6 +474,20 @@
               (concat (form-overwrite-tx e (:db/id ts))
                       (form-replace-tx parent e)
                       (m-to-dc parent)))))))
+
+(defn form-raise*
+  [e]
+  (when-let [parent (some-> (:coll/_contains e) exactly-one)]
+    (if (= :chain (:coll/type parent))
+      (println "Cannot raise here")
+      (let [{:form/keys [linebreak indent]} parent]
+        (into [[:db/add (:db/id parent) :form/edited-tx :db/current-tx]
+               (when linebreak [:db/add (:db/id e) :form/linebreak linebreak])
+               (when indent [:db/retract (:db/id parent) :form/indent indent])
+               (when indent [:db/add (:db/id e) :form/indent indent])]
+              (form-replace-tx parent e))))))
+
+
 
 (defn unraise-tx
   [sel]

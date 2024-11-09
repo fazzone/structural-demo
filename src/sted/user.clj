@@ -1,37 +1,36 @@
 (ns sted.user)
 
+;; Check for spurious scrolling when using wrap/raise?
 
 (do (defn find-files
       ([root] (find-files (js/secret_electron_require "fs/promises") root))
       ([fs root]
        (a/let [dents (.readdir fs root)
                st (js/Promise.all
-                    (for [d dents
-                          :let [f (str root "/" d)]]
-                      (a/let [st (.stat fs f)
-                              rec (when (.isDirectory st) (find-files fs f))]
-                        (or rec (list f)))))]
+                   (for [d dents
+                         :let [f (str root "/" d)]]
+                     (a/let [st (.stat fs f)
+                             rec (when (.isDirectory st) (find-files fs f))]
+                       (or rec (list f)))))]
          (into [] cat st))))
     (find-files "src/sted"))
-
 
 (let [ch (->chain sel)
       file (or (:chain/filename ch) "noname.clj")]
   (a/let [res (.writeFile (js/secret_electron_require "fs/promises") file (e/->string ch))]
     [:wrote file]))
 
-
 (let [file "db-save.json"]
   (a/let [res (.writeFile (js/secret_electron_require "fs/promises")
                           file
                           (js/JSON.stringify
-                            (d/freeze (d/entity-db sel)
-                                      {:freeze-fn (fn [v]
-                                                    (cond (map? v) (pr-str v)
-                                                          (satisfies? IDeref v) "<frozen atom>"
-                                                          :else
-                                                          (do (println "Some other type:" (type v) v)
-                                                              "<frozen value>")))})))]
+                           (d/freeze (d/entity-db sel)
+                                     {:freeze-fn (fn [v]
+                                                   (cond (map? v) (pr-str v)
+                                                         (satisfies? IDeref v) "<frozen atom>"
+                                                         :else
+                                                         (do (println "Some other type:" (type v) v)
+                                                             "<frozen value>")))})))]
     [:wrote file]))
 
 
@@ -115,6 +114,9 @@ hn/stories
 
 
 (open-url "https://raw.githubusercontent.com/fazzone/structural-demo/master/src/sted/page.cljs")
+
+
+(open-url "https://raw.githubusercontent.com/clojure/clojure/master/src/clj/clojure/core.clj")
 
 
 (count (js/JSON.stringify (d/freeze (d/entity-db sel))))

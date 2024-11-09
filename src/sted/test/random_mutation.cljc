@@ -31,7 +31,7 @@
         (d/transact! conn)
         reports (reductions
                  (fn [{:keys [db-after]} [m & args]]
-                   (if-let [mut-fn (get mut/dispatch-table m)]
+                   (if-let [mut-fn (get mut/editing-commands m)]
                      (try
                        (let [tx (apply mut-fn db-after args)]
                          (assoc (d/with db-after tx) :input-tx tx))
@@ -62,7 +62,7 @@
          [[m & args :as mut] & more] muts]
     (if-not mut
       db
-      (let [tx  (try (apply (mut/dispatch-table m) db args)
+      (let [tx  (try (apply (mut/editing-commands m) db args)
                      (catch Exception e
                        (throw (ex-info "Mutator failure"
                                        {:type ::mutation-failure
@@ -125,7 +125,7 @@
    [[:new-vec] [:edit/reject]]])
 
 (defn search-for-failure
-  [init-form maxn]
+  [init-form maxn]
   (loop [i         0
          db        (setup-db init-form)
          mutations []]

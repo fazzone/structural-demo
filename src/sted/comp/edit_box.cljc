@@ -34,8 +34,9 @@
     "["               {:msg [:edit/wrap :vec text]}
     "S-("             {:msg [:edit/wrap :list text]}
     "S-{"             {:msg [:edit/wrap :map text]}
+    "C-Enter"         {:accept true :msg [[:edit/finish text] [:eval]]}
     "C- "             {:new-text @last-entered-token}
-    "C-o" {:msg [:linebreak]}
+    "C-o"             {:msg [:linebreak]}
     (" " "S- ")       (cond
                         (empty? text)         {:msg [:edit/reject]}
                         (= "\"" (first text)) (println "Quotedstring")

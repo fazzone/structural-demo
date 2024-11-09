@@ -25,61 +25,23 @@
        align-start
        align-end))))
 
-(defn svgdoc
-  [total-size asize apos bsize bpos ]
-  (let [h 100
-        svgstr (str "<svg xmlns=\"http://www.w3.org/2000/svg\" "
-                    "  height=\"" h "\" viewBox=\"" 0 " " 0 " " total-size " " h "\">"
-                    #_(* 0.5 h)
-                    
-                    (str "\n<rect fill=\"" "red"
-                         "\" x=\"" 0
-                         "\" y=\"" 0
-                         "\" width=\"" total-size
-                         "\" height=\"" h
-                         "\"/>")
-
-                    (str "\n<rect fill=\"" "blue"
-                         "\" x=\"" apos
-                         "\" y=\"" 0
-                         "\" width=\"" asize
-                         "\" height=\"" (* 0.5 h)
-                         "\"/>")
-
-                    (str "\n<rect fill=\"" "green"
-                         "\" x=\"" bpos
-                         "\" y=\"" (* 0.5 h)
-                         "\" width=\"" bsize
-                         "\" height=\"" (* 0.5 h)
-                         "\"/>")
-                    
-                    "</svg>")]
-    
-    (js/console.log "%cX"
-                    (str "padding-top: " h "px"
-                         "; padding-left: " 90  "%"
-                         "; background:url("
-                         #_(.-src img)
-                         (str "data:image/svg+xml;charset=utf-8,"
-                              (js/encodeURIComponent svgstr))
-                         ") no-repeat; background-size:contain;"))
-    
-    
-    )
-  
-  )
-
-
 (defn visible?
   [outer-size inner-size pos off]
   (<= 0 (- off pos) (- outer-size inner-size)))
 
 
 (defn scroll1d-center
-  [total-size asize apos bsize bpos]
+  [asize apos bsize bpos]
   (let [acenter (+ apos (* 0.5 asize))
         bcenter (+ bpos (* 0.5 bsize))]
     (+ apos (- bcenter acenter))))
+
+(defn scroll1d-minimal
+  [asize apos bsize bpos]
+  (min-key abs
+           (- bpos apos) 
+           (- (+ bpos bsize) (+ apos asize))))
+
 
 (defn scroll-to-selected*
   [el el-cr]
@@ -103,79 +65,81 @@
         w             (some-> chain-cr (.-width) (js/Math.ceil))
         hpos          (some-> bar (.-scrollLeft))
         hoff          (some-> chain (.-offsetLeft))
-        new-chain-top (scroll1d-center
-                       (.-scrollHeight chain) ; total size
-                       chh                    ; visible size
-                       (.-scrollTop chain)    ; visible offset
-                       (.-height el-cr) 
-                       (+ (.-scrollTop chain) (.-y el-cr)))
+        new-chain-top (when chain
+                        (scroll1d-center
+                         chh                 ; visible size
+                         (.-scrollTop chain) ; visible offset
+                         (.-height el-cr) 
+                         (+ (.-scrollTop chain) (.-y el-cr))))
         
-        new-bar-left (scroll1d-center
-                      (.-scrollWidth bar)
-                      (.-width bar-cr)
-                      (.-scrollLeft bar)
-                      (.-width el-cr)
-                      (+ (.-scrollLeft bar)
-                         (.-x el-cr)))]
+        vis-lr (visible? (.-width bar-cr) (.-width el-cr) (.-scrollLeft bar) (.-x el-cr))
+        new-bar-left (when (and chain (not vis-lr))
+                       (scroll1d-minimal
+                        (.-width bar-cr)
+                        (.-scrollLeft bar)
+                        (.-width el-cr)
+                        (+ (.-scrollLeft bar)
+                           (.-x el-cr))))]
     
     ;; console minimap svg hack
-    #_(let [vv         js/window.visualViewport
-          all-chains (filter #(.matches % ".chain") (.-children bar))
-          s          5
-          imgw       (.-scrollWidth bar)
-          imgh       (.-height vv)
+    #_(if-not bar
+        (println "No BAR?????")
+        (let [vv         js/window.visualViewport
+              all-chains (filter #(.matches % ".chain") (.-children bar))
+              s          5
+              imgw       (.-scrollWidth bar)
+              imgh       (.-height vv)
           
-          outsetf 1.2
+              outsetf 1.2
           
-          vboxw imgw
-          vboxy (apply min (map #(- (.-scrollTop %)) all-chains))
-          vboxh (+ (- vboxy)
-                   (apply max (map #(- (.-scrollHeight %) (.-scrollTop %)) all-chains)))
+              vboxw imgw
+              vboxy (apply min (map #(- (.-scrollTop %)) all-chains))
+              vboxh (+ (- vboxy)
+                       (apply max (map #(- (.-scrollHeight %) (.-scrollTop %)) all-chains)))
           
-          svgstr (str "<svg xmlns=\"http://www.w3.org/2000/svg\"   viewBox=\"" 0 " " vboxy " " vboxw " " vboxh "\">"
-                      ;; each chain
-                      (apply str
-                             (for [c     (.-children bar)
-                                   :when (.matches c ".chain")
-                                   :let  [inset 0]]
-                               (str "\n<rect fill=\""
-                                    (if (identical? c chain) "purple" "blue")
-                                    "\" " "stroke=\"black\" stroke-width=\"4"
-                                    "\" x=\"" (+ (.-offsetLeft c) inset)
-                                    "\" y=\"" (- (- (.-scrollTop c)) inset)
-                                    "\" width=\"" (- (.-scrollWidth c) inset inset)
-                                    "\" height=\"" (- (.-scrollHeight c) inset inset)
-                                    "\"/>")))
+              svgstr (str "<svg xmlns=\"http://www.w3.org/2000/svg\"   viewBox=\"" 0 " " vboxy " " vboxw " " vboxh "\">"
+                          ;; each chain
+                          (apply str
+                                 (for [c     (.-children bar)
+                                       :when (.matches c ".chain")
+                                       :let  [inset 0]]
+                                   (str "\n<rect fill=\""
+                                        (if (identical? c chain) "purple" "blue")
+                                        "\" " "stroke=\"black\" stroke-width=\"4"
+                                        "\" x=\"" (+ (.-offsetLeft c) inset)
+                                        "\" y=\"" (- (- (.-scrollTop c)) inset)
+                                        "\" width=\"" (- (.-scrollWidth c) inset inset)
+                                        "\" height=\"" (- (.-scrollHeight c) inset inset)
+                                        "\"/>")))
                       
-                      (str "\n<rect fill=\"" "green"
-                           "\" x=\"" (+ hpos (.-x el-cr))
-                           "\" y=\"" (.-y el-cr)
-                           "\" width=\"" (.-width el-cr)
-                           "\" height=\""  (.-height el-cr)
-                           "\"/>")
+                          (str "\n<rect fill=\"" "green"
+                               "\" x=\"" (+ hpos (.-x el-cr))
+                               "\" y=\"" (.-y el-cr)
+                               "\" width=\"" (.-width el-cr)
+                               "\" height=\""  (.-height el-cr)
+                               "\"/>")
                       
-                      ;; path with hole to show what is visible
-                      (str "\n<path fill=\"" "#000""\" " "fill-opacity=\"80%\" fill-rule=\"evenodd\" d=\""
-                           "M" 0 "," vboxy " "
-                           "L" vboxw "," vboxy " "
-                           "L" vboxw "," (+ vboxh vboxy) " "
-                           "L" 0 "," (+ vboxh vboxy) " Z "
+                          ;; path with hole to show what is visible
+                          (str "\n<path fill=\"" "#000""\" " "fill-opacity=\"80%\" fill-rule=\"evenodd\" d=\""
+                               "M" 0 "," vboxy " "
+                               "L" vboxw "," vboxy " "
+                               "L" vboxw "," (+ vboxh vboxy) " "
+                               "L" 0 "," (+ vboxh vboxy) " Z "
                            
-                           "M" hpos "," 0 " "
-                           "L" (+ hpos (.-width vv)) "," 0 " "
-                           "L" (+ hpos (.-width vv)) "," (.-height vv) " "
-                           "L" hpos "," (.-height vv) " Z"
-                           "\"/>") 
+                               "M" hpos "," 0 " "
+                               "L" (+ hpos (.-width vv)) "," 0 " "
+                               "L" (+ hpos (.-width vv)) "," (.-height vv) " "
+                               "L" hpos "," (.-height vv) " Z"
+                               "\"/>") 
                       
-                      "</svg>")]
+                          "</svg>")]
       
-      (js/console.log "%c "
-                      (str
-                       "padding-top: " (/ vboxh s 2) "px"
-                       "; padding-left: " (/ vboxh s) "px"
-                       "; background:url(" (str "data:image/svg+xml;charset=utf-8," (js/encodeURIComponent svgstr))
-                       ") no-repeat; background-size:contain;")))
-    
+          (js/console.log "%c "
+                          (str
+                           "padding-top: " (/ vboxh s 2) "px"
+                           "; padding-left: " (/ vboxh s) "px"
+                           "; background:url(" (str "data:image/svg+xml;charset=utf-8," (js/encodeURIComponent svgstr))
+                           ") no-repeat; background-size:contain;"))))
     
     (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
     (when new-bar-left (.scrollTo bar #js {:left new-bar-left}))))
@@ -197,29 +161,28 @@
         ;; there is no need to snap the view to the "real copy".
         ;; if both are on the screen at the same time, there is no way
         ;; for us to know which you are looking at and consider "real".
-        ;; so, we just pick the one closest to the viewport origin.
-
+        ;; so we kind arbitrarily pick the furthest left and up one.
         sorted (if (> 2 (count ela))
                  ela
                  (doto ela
                    (.sort (fn [a b]
                             (let [ra (.getBoundingClientRect a)
                                   rb (.getBoundingClientRect b)]
-                              (- (+ (.-y rb) (* 0.5 (.-height rb)))
-                                 (+ (.-y ra) (* 0.5 (.-height ra)))))))
+                              (- (+ (.-y ra) (* 0.5 (.-height ra)))
+                                 (+ (.-y rb) (* 0.5 (.-height rb)))))))
                    (.sort (fn [a b]
                             (let [ra (.getBoundingClientRect a)
                                   rb (.getBoundingClientRect b)]
-                              (- (+ (.-x rb) (* 0.5 (.-width rb)))
-                                 (+ (.-x ra) (* 0.5 (.-width ra)))))))))]
+                              (- (+ (.-x ra) (* 0.5 (.-width ra)))
+                                 (+ (.-x rb) (* 0.5 (.-width rb)))))))))]
     
-    #_(doseq [e els
-              :let [r (.getBoundingClientRect e)]]
+    #_(doseq [e (seq sorted)
+            :let [r (.getBoundingClientRect e)]]
       
-        (js/console.log "PRIMARY?" (identical? e (first sorted))
-                        (+ (.-x r) (* 0.5 (.-width r)))
-                        (+ (.-y r) (* 0.5 (.-height r)))
-                        e))
+      (js/console.log "PRIMARY?" (identical? e (first sorted))
+                      (+ (.-x r) (* 0.5 (.-width r)))
+                      (+ (.-y r) (* 0.5 (.-height r)))
+                      e))
     
     (first sorted)))
 
@@ -233,8 +196,9 @@
       (if-not el
         (js/console.log "There should be one selected element!")
         (scroll-to-selected* el (.getBoundingClientRect el))))
-  (println "Scroll to selected!")
+
   (let [el (primary-element (js/document.querySelectorAll ".selected"))]
+    #_(js/console.log "Force scroll!" el)
     (scroll-to-selected* el (.getBoundingClientRect el))))
 
 

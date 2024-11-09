@@ -120,7 +120,8 @@
                                                          :coll/_contains
                                                          first)
                                            {:keys [type dom-searcher]} @state
-                                           rs (when (< 1 (count text))
+                                           rs (when (< 0 (count text))
+                                                
                                                 (case type
                                                   :dom #_(sdom/substring-search-all-visible-tokens
                                                           (::bar-ref (d/entity db :sted.page/state))

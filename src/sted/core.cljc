@@ -14,6 +14,8 @@
   #_true
   (not= @scroll-sequence-number @scroll-snapshot))
 
+(defonce pending-reload (atom nil))
+
 (defn get-selected-form
   [db]
   (d/entity db [:form/highlight true]))
@@ -69,29 +71,27 @@
   ([last-sub-map]
    (let [ ;; ch (async/chan)
          ;; pub (async/pub ch first)
-         mut-dispatch #?(:clj (atom {})
-                         :cljs #js {})
-         
+         mut-dispatch #?(:clj (atom {}) :cljs #js{})
          hs (atom {})
          app-ref (atom nil)
          #?@(:cljs [sub-map (volatile! (or last-sub-map (js/Map.)))]) 
-         uu (str (d/squuid))]
-     
+         uu (str (d/squuid))
+         send1 (fn [[d :as msg]]
+                 (let [f #?(:clj (get @mut-dispatch d)
+                            :cljs (aget mut-dispatch (str d)))]
+                   (if-not f
+                     (println "No handler?" msg)
+                     (f msg)))
+                 
+                 nil)
+         send* (fn send* [[mut? :as msg-or-msgs]]
+                 (if (sequential? mut?)
+                   (run! send* msg-or-msgs)
+                   (send1 msg-or-msgs)))]
      
      (reify IBus
        (send! [this msg]
-         #_(let [r (async/put! ch msg)]
-             (when-not r
-               (println "!!!! Put broken? Channel closed? What??")))
-
-         (let [d (first msg)
-               f #?(:clj (get @mut-dispatch d)
-                    :cljs (aget mut-dispatch (str d)))]
-           
-           (println "Mut" uu d)
-           (if-not f
-             (println "No handler?" msg)
-             (f msg)))
+         (send* msg)
          
          nil)
        
@@ -107,9 +107,7 @@
        (fire-subs! [this entity]
          #?(:cljs
             (when-let [^js sm (.get @sub-map (:db/id entity))]
-              (.forEach sm (fn [f] (f entity))))
-            (some-> (.get @sub-map (:db/id entity))
-                    (.forEach (fn [f] (f entity))))))
+              (.forEach sm (fn [f] (f entity))))))
        
        (sub-entity [this eid func]
          #?(:cljs
@@ -188,6 +186,28 @@
   
   app)
 
+(defn avet-dupe-dual
+  [[[_ _ prev _] & xs] ys]
+  (loop [prev prev
+         [[_ _ x _] & xmore :as xs] xs
+         [[_ _ y _] & ymore :as ys] ys]
+    (cond
+      (= x y)             x
+      (= x prev)          x
+      (= y prev)          y
+      (= nil xmore ymore) nil
+      (nil? ymore)        (recur x xmore nil)
+      (nil? xmore)        (recur y nil ymore)
+      (< x y)             (recur x xmore ys)
+      :else               (recur y xs ymore))))
+
+(defn check-db-structure!
+  [db]
+  (when-let [dupe (avet-dupe-dual
+                   (d/datoms db :avet :seq/first)
+                   (d/datoms db :avet :seq/next))]
+    (throw (ex-info "CORRUPT DB!" {:dupe dupe}))))
+
 (defn register-simple!
   [{:keys [bus conn history] :as app} topic mut-fn]
   (connect-sub!
@@ -208,12 +228,14 @@
                               (let [
                                     ;; _ (js/console.time "Transacting")
                                     ans (assoc (d/transact! conn tx-data)
-                                               :mut mut)]
+                                               :mut mut)
+                                    ]
+                                #_(js/console.timeEnd "Checking")
                                 #_(js/console.timeEnd "Transacting")
+                                (check-db-structure! (:db-after ans))
                                 ans))
                          (catch #? (:cljs js/Error :clj Exception) e
                            {:error e}))]
-                   
          (when (:db-after report)
            (if-let [txid (get (:tempids report) :db/current-tx)]
              (do (save-history! bus txid report)
@@ -222,7 +244,7 @@
                  #_(println txid mut )
                  #_(run! prn (:tx-data report))
                  #_(run! prn (:tempids report))
-                           
+                 
                  (reset! history (cons report @history)))
              (println "No current-tx?")))
          (when-let [e (:error report)]

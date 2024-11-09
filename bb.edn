@@ -1,15 +1,15 @@
 {:paths "."
  :tasks
  {:requires    ([bb-main :refer :all ])
-  repl         (start-repl)
+  grepl        (start-repl)
   electron     (run-electron)
   release-cljs (do (release-cljs! :elec)
                    (release-cljs! :ptr)
                    (release-cljs! :br))
-  screenshot (do
-               #_(compile-cljs! :ptr)
-               (maybe-npm-install)
-               (maybe-install-puppeteer)
-               (release-cljs! :ptr)
-               (release-cljs! :br)
-               (System/exit (screenshots)))}}
+  screenshot   (do
+                 #_(compile-cljs! :ptr)
+                 (maybe-npm-install)
+                 (maybe-install-puppeteer)
+                 (release-cljs! :ptr)
+                 (release-cljs! :br)
+                 (System/exit (screenshots)))}}
