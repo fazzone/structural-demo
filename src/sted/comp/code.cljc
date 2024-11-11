@@ -28,42 +28,29 @@
 
 (declare form)
 
+
 (defn iobs-callback
   [ents me]
-  (when-not (core/scroll-locked?)
+  (if (core/scroll-locked?)
+    nil
     (loop [[ioe & more] ents]
       (let [^js e (.-target ioe)
-            
             ratio (.-intersectionRatio ioe)
             ir    (.-intersectionRect ioe)
-            br    (.-boundingClientRect ioe)
-            
-            ]
-        #_(js/console.log "Ratio" (pr-str (.-intersectionRatio ioe)) "Can-see" can-see "El" e)
-        
+            br    (.-boundingClientRect ioe)]
+        #_(js/console.log "Ratio"  (pr-str (.-intersectionRatio ioe)) (.-target ioe) )
         (cond
           ;; try to find a fully-visible node and quit out if we do
           (= 1 ratio) nil
           more        (recur more)
           ;; we might have to do something
-          ;; we see part but couldn't see all, don't auto scroll it 
+          ;; we see part but couldn't see all, don't auto scroll it
           (and (< 0 ratio)
                (or (> (.-height br) js/window.visualViewport.height)
                    (> (.-width br) js/window.visualViewport.width)))
           (do (println "Partially visible and too large")
               nil)
-          
-          :else (do
-                  (println "Maybe scroll? Ratio=" ratio )
-                  (scroll/scroll-to-selected* e br)))
-        
-        #_(if did-scroll
-            (js/console.log "What does this mean?")
-            (do
-              (println "Scroll to select ENTS")
-              (js/console.log ents)
-              (scroll/scroll-to-selected* (.-target ioe) (.-boundingClientRect ioe))))))))
-
+          :else (scroll/scroll-to-selected* e br))))))
 
 
 (defn make-iobs
@@ -75,34 +62,46 @@
 
 (def the-iobs (make-iobs))
 
+(defn skip-indenter
+  [^js el]
+  (if-not (= "S" (.-tagName el))
+    el
+    (.-nextElementSibling el)))
 
 (def scroll-selected
-  {:did-update
+  {:did-mount
+   (fn [state]
+     (if-not (some-> state :rum/args first :form/highlight)
+       state
+       
+       (do
+         (js/console.log "Mount selected" (skip-indenter (rum/dom-node state)))
+         (.observe the-iobs (skip-indenter (rum/dom-node state)))
+         (assoc state ::prev-sel? true))))
+   
+   :will-unmount
+   (fn [state]
+     (.unobserve the-iobs (skip-indenter (rum/dom-node state)))
+     state)
+   
+   :did-update
    (fn [state]
      (let [sel? (some-> state :rum/args first :form/highlight)
            prev-sel? (some-> state ::prev-sel?)]
        (when the-iobs
          (if-not (or sel? prev-sel?)
            state
-           (let [el (rum/dom-node state)
-                 real-el (if-not (= "S" (.-tagName el))
-                           el
-                           (.-nextElementSibling el))]
-             (if sel?
-               (do (.observe the-iobs real-el)
-                   #_(js/console.log "OBserver" real-el)
-                   (assoc state ::prev-sel? true))
-               (do (.unobserve the-iobs real-el)
-                   #_(js/console.log "Unobs" real-el)
-                   (assoc state ::prev-sel? nil))))))))})
-
+           (if sel?
+             (do (.observe the-iobs (skip-indenter (rum/dom-node state)))
+                 (assoc state ::prev-sel? true))
+             (do (.unobserve the-iobs (skip-indenter (rum/dom-node state)))
+                 (dissoc state ::prev-sel?)))))))})
 
 (defn computed-indent
   [e indent-prop]
   (+ indent-prop
      (or (:form/indent e)
          0)))
-
 
 (rum/defc indenter
   [nl? ip fi]
@@ -128,7 +127,7 @@
                                         (aget "eid")
                                         (js/parseInt))]
                    (.stopPropagation ev)
-                   (core/send! bus [:click eid ]))
+                   (core/send! bus [:click eid]))
                  false)}
      #_[:div.form-title.code-font {:style {:margin-bottom "4ex"}} (str "#" (:db/id e) " T+" (- (js/Date.now) load-time) "ms")]
      #_[:div.top-level-form.code-font {}
@@ -145,18 +144,18 @@
 
 (def render-counter (atom 0))
 
+
 (rum/defc erc
   < rum/reactive
   [{:eval/keys [of out result-type]  :as e} bus classes]
   (let [[result :as svec] (e/seq->vec e)]
     (case result-type
-      
       :exception
       (let [[extype msg data stack & more] svec]
         [:div.eval-exception {:class classes}
          (when extype
            [:span.ex-type {} "type:" ^:inline (form extype bus nil)])
-         (when msg 
+         (when msg
            [:span.ex-message {} "msg:" ^:inline (form msg bus nil)])
          (when data
            [:span.ex-data {} "data: " ^:inline (form data bus nil)])
@@ -164,15 +163,12 @@
           (for [f (e/seq->vec stack)]
             [:li {:key (:db/id f)}
              ^:inline (form f bus 0 nil)])]])
-      
       :ok
-      [:div.eval-result {:class classes} 
+      [:div.eval-result {:class classes}
        ^:inline (form result bus 0 nil)]
-      
       :pending
       [:span.eval-pending {:class classes}
        "..."]
-      
       [:div {} (str "No result type: " (pr-str result-type))])))
 
 
@@ -180,6 +176,7 @@
 
 
 (defonce secret-chain-scroll-position-cache (atom {}))
+
 
 (def remember-scroll-position
   "This is for when shadow-cljs reloads us"
@@ -192,14 +189,18 @@
                               {:top (.-scrollTop el)  :left (.-scrollLeft el)})))
                    state)
    :after-render (fn [state]
-                   (if-some [{:keys [top left]}
-                             (some->> state
-                                      :rum/args first
-                                      :db/id (get @secret-chain-scroll-position-cache))]
-                     (when-not @core/pending-reload
+                   (when-some [{:keys [top left]}
+                               (some->> state
+                                        :rum/args first
+                                        :db/id (get @secret-chain-scroll-position-cache))]
+                     ;; Huge hack - this gives us an extra "credit" for an auto-scroll,
+                     ;; in case re-rendering ourselves fires a scroll event
+                     (vswap! core/scroll-sequence-number dec)
+                     (when @core/pending-reload
                        (let [el (rum/dom-node state)]
                          (set! (.-scrollTop el) top)
                          (set! (.-scrollLeft el) left))))
+                   
                    state)})
 
 
@@ -258,27 +259,24 @@
    (for [f (e/seq->vec ch)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc bar
   [b bus classes]
   (let [ref-me          (rum/create-ref)
         pin-left?       (some-> b :bar/pin-left)
         children        (e/seq->vec b)]
-    
     [:div.bar.hide-scrollbar
      {:ref   ref-me
       :class (cond-> classes
                pin-left? (str " pin-left"))}
-     
      ;; Hack for DOM search
      (rum/use-layout-effect!
       (fn []
         (core/send! bus [:update-bar-ref (rum/deref ref-me)])
         nil)
       [bus])
-     
      #_(lazy-children b bus)
      #_(println "Render Bar" (count (e/seq->vec b)) "Childrenge")
-     
      (for [ch children]
        ^:inline (-> (form ch bus 0 nil)
                     (rum/with-key (:db/id ch))))]))
@@ -298,8 +296,8 @@
   (let [children (e/seq->vec e)]
     [:span {:class ["c" cc ec classes]}
      #_[:span.inline-tag.debug
-        #_(str (swap! render-counter inc))
-        (str (:db/id e))]
+      (str (swap! render-counter inc))
+      #_(str (:db/id e))]
      ;; requires checking propcs in dbrx shouldcompunentupdate
      #_(when-some [p (get proply (:db/id e))]
          [:span.inline-tag-outer [:span.inline-tag-inner ^String (str p)]])
@@ -414,6 +412,7 @@
    (for [f (e/seq->vec a)]
      ^:inline (form f bus 0 nil))])
 
+
 (rum/defc olc
   [ch bus classes indent proply]
   [:div.olc {:key (:db/id ch)
@@ -423,10 +422,10 @@
      (if (empty? v)
        [:div "[]"]
        [:ol {}
-        
         (for [i (range (count v))]
           [:li {:key i}
            ^:inline (form (nth v i) bus 0 nil)])]))])
+
 
 (defn any-coll
   [e b c i p]
@@ -436,8 +435,7 @@
      (case ct
        :chain         (chain e b c i p)
        ;; :inspect       (ci/inspect-portal)
-
-       :demo          (cd/demo* form c) 
+       :demo          (cd/demo* form c)
        :grid          (grid e b c i p)
        :bar           (bar e b c i p)
        :hidden        (hiddenc e b c i p)
@@ -467,17 +465,14 @@
                        "when-not" "if-not" "def" "cond" "case" "->" "->>" "some->>"
                        "if-let" "when-let" "recur" "try" "catch" "nil" "defmacro")
                       "tk m"
-                      
                       ("first" "map" "filter" "apply" "reset!" "swap!"
                        "get" "assoc" "update" "cons" "conj" "seq" "next"
                        "prn" "println" "into" "set" "vector"
                        "take" "drop" "take-while" "drop-while" "reduce"
                        "concat")
                       "tk s"
-                      
                       ("true" "false")
                       "tk k"
-                      
                       "tk v")
     :keyword        "tk k"
     (:string :char) "tk l"
@@ -489,29 +484,29 @@
     :md/code        "md-code code-font"
     :md/inline-code "md-inline-code code-font"))
 
+
 (defn token-text
   [t v]
-  #_(subs xxx 0 (if (number? v)
-                  (count (str v))
-                  (count v)))
   (case t
-    :symbol (case v " " "\u23b5" v)
-    :keyword  v #_(let [is (string/index-of k "/")]
-                    (if (> 0 is)
-                      k
-                      (rum/fragment
-                       [:span.kn (subs k 0 is)]
-                       (subs k is))))
-    :string #_v #_(pr-str v) #_(js/JSON.stringify v)
     ;; display the string of a space as underbracket
-    (case v " " "\u23b5" (js/JSON.stringify v))
-    
+    :symbol (case v
+              " " "\u23b5"
+              v)
+    :keyword v
+    #_(let [is (string/index-of k "/")]
+        (if (> 0 is)
+          k
+          (rum/fragment
+            [:span.kn (subs k 0 is)]
+            (subs k is))))
+    :string (js/JSON.stringify v)
     :verbatim v
     :number (str v)
     :comment v
     :char v
     :regex (str "REGEX:" v)
     (:md/text :md/code :md/inline-code) v))
+
 
 (rum/defc form
   < dbrx/ereactive scroll-selected

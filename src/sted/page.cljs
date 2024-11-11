@@ -246,10 +246,7 @@
     #_(cljs.pprint/pprint tree)))
 
 
-(defonce set-scroll-user
-  (fn [ev]
-    (vswap! core/scroll-sequence-number inc)))
-
+(defonce set-scroll-user (fn [ev] (vswap! core/scroll-sequence-number inc)))
 
 (defn ^:dev/before-load stop []
   (js/console.log "stop")

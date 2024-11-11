@@ -8,10 +8,8 @@
 ;; But a div that fights back when you try to scroll is even stupider 
 (defonce scroll-sequence-number (volatile! 0))
 (defonce scroll-snapshot (volatile! 0))
+
 (defn scroll-locked? []
-  #_#?(:cljs
-       (js/console.log "SL" @scroll-sequence-number @scroll-snapshot))
-  #_true
   (not= @scroll-sequence-number @scroll-snapshot))
 
 (defonce pending-reload (atom nil))
@@ -325,6 +323,7 @@
                                                                  e)))
                                                        tx-data)]
                                           (vreset! scroll-snapshot @scroll-sequence-number)
+                                          
                                           #_(js/console.time "batchedUpdates")
                                           #?(:cljs
                                              (js/ReactDOM.unstable_batchedUpdates

@@ -64,7 +64,8 @@
 
 
 
-#_(meta (p/parse-string-all "#?(:cljs 1 :clj 4)"))
+
+
 
 (defn n->tx
   ([n] (n->tx n 0))
@@ -303,6 +304,36 @@
     :tear "»"
     nil))
 
+(defn quote-string-escaping-non-ascii [s]
+  (let [sb #?(:clj  (StringBuilder.)
+              :cljs (goog.string.StringBuffer.))]
+    (.append sb "\"")
+    (doseq [ch s]
+      (let [cp #?(:clj  (int ch)
+                  :cljs (.charCodeAt ch 0))]
+        (cond
+          (= ch \newline)    (.append sb "\\n")
+          (= ch \tab)        (.append sb "\\t")
+          (= ch \backspace)  (.append sb "\\b")
+          (= ch \formfeed)   (.append sb "\\f")
+          (= ch \return)     (.append sb "\\r")
+          (= ch \\)          (.append sb "\\\\")
+          (= ch \")          (.append sb "\\\"")
+          
+          (and (>= cp 0x20) (<= cp 0x7E))
+          (.append sb ch)
+          
+          :else
+          (do (.append sb "\\u")
+              (cond (< cp 0x10)    (.append sb "000")
+                    (< cp 0x100)   (.append sb "00")
+                    (< cp 0x1000)  (.append sb "0"))
+              (.append sb
+                       #?(:clj  (Integer/toString cp 16)
+                          :cljs (.toString cp 16)))))))
+    (.append sb "\"")
+    (.toString sb)))
+
 (defn ->string
   ([e] (->string e 0 nil))
   ([e i last?]
@@ -318,7 +349,8 @@
         (case tt
           :symbol  (str (:token/value e))
           :keyword (str (:token/value e))
-          :string  (pr-str (:token/value e))
+          :string  (quote-string-escaping-non-ascii (:token/value e))
+          #_(pr-str (:token/value e))
           :number  (str (:token/value e))
           :regex   (:token/value e)
           :comment (if-not last?

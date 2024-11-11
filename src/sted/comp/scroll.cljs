@@ -1,6 +1,7 @@
 (ns sted.comp.scroll
   (:require [sted.comp.common :as cc]
-            [rum.core :as rum]))
+            [rum.core :as rum]
+            [sted.core :as core]))
 
 
 (def ^:const scroll-hysteresis-px 3)
@@ -25,10 +26,18 @@
        align-start
        align-end))))
 
-(defn visible?
+
+
+#_(defn visible?
   [outer-size inner-size pos off]
   (<= 0 (- off pos) (- outer-size inner-size)))
 
+
+(defn vis-next
+  [asize apos bsize bpos]
+  (and (<= (js/Math.floor apos) bpos)
+       (<= (js/Math.floor (+ bpos bsize))
+           (+ apos asize))))
 
 (defn scroll1d-center
   [asize apos bsize bpos]
@@ -38,10 +47,10 @@
 
 (defn scroll1d-minimal
   [asize apos bsize bpos]
-  (min-key abs
-           (- bpos apos) 
-           (- (+ bpos bsize) (+ apos asize))))
-
+  (+ apos
+     (min-key abs
+              (js/Math.floor (- bpos apos))
+              (js/Math.ceil (- (+ bpos bsize) (+ apos asize))))))
 
 (defn scroll-to-selected*
   [el el-cr]
@@ -66,13 +75,18 @@
         hpos          (some-> bar (.-scrollLeft))
         hoff          (some-> chain (.-offsetLeft))
         new-chain-top (when chain
-                        (scroll1d-center
+                        (scroll1d-minimal
                          chh                 ; visible size
                          (.-scrollTop chain) ; visible offset
                          (.-height el-cr) 
                          (+ (.-scrollTop chain) (.-y el-cr))))
         
-        vis-lr (visible? (.-width bar-cr) (.-width el-cr) (.-scrollLeft bar) (.-x el-cr))
+        ;; vis-lr (visible? (.-width bar-cr) (.-width el-cr) (.-scrollLeft bar) (.-x el-cr))
+        vis-lr (vis-next (.-width bar-cr)
+                         (.-scrollLeft bar)
+                         (.-width el-cr)
+                         (+ (.-scrollLeft bar)
+                            (.-x el-cr)))
         new-bar-left (when (and chain (not vis-lr))
                        (scroll1d-minimal
                         (.-width bar-cr)
@@ -89,14 +103,14 @@
               s          5
               imgw       (.-scrollWidth bar)
               imgh       (.-height vv)
-          
+            
               outsetf 1.2
-          
+            
               vboxw imgw
               vboxy (apply min (map #(- (.-scrollTop %)) all-chains))
               vboxh (+ (- vboxy)
                        (apply max (map #(- (.-scrollHeight %) (.-scrollTop %)) all-chains)))
-          
+            
               svgstr (str "<svg xmlns=\"http://www.w3.org/2000/svg\"   viewBox=\"" 0 " " vboxy " " vboxw " " vboxh "\">"
                           ;; each chain
                           (apply str
@@ -111,29 +125,29 @@
                                         "\" width=\"" (- (.-scrollWidth c) inset inset)
                                         "\" height=\"" (- (.-scrollHeight c) inset inset)
                                         "\"/>")))
-                      
+                        
                           (str "\n<rect fill=\"" "green"
                                "\" x=\"" (+ hpos (.-x el-cr))
                                "\" y=\"" (.-y el-cr)
                                "\" width=\"" (.-width el-cr)
                                "\" height=\""  (.-height el-cr)
                                "\"/>")
-                      
+                        
                           ;; path with hole to show what is visible
                           (str "\n<path fill=\"" "#000""\" " "fill-opacity=\"80%\" fill-rule=\"evenodd\" d=\""
                                "M" 0 "," vboxy " "
                                "L" vboxw "," vboxy " "
                                "L" vboxw "," (+ vboxh vboxy) " "
                                "L" 0 "," (+ vboxh vboxy) " Z "
-                           
+                             
                                "M" hpos "," 0 " "
                                "L" (+ hpos (.-width vv)) "," 0 " "
                                "L" (+ hpos (.-width vv)) "," (.-height vv) " "
                                "L" hpos "," (.-height vv) " Z"
                                "\"/>") 
-                      
+                        
                           "</svg>")]
-      
+        
           (js/console.log "%c "
                           (str
                            "padding-top: " (/ vboxh s 2) "px"
@@ -141,8 +155,10 @@
                            "; background:url(" (str "data:image/svg+xml;charset=utf-8," (js/encodeURIComponent svgstr))
                            ") no-repeat; background-size:contain;"))))
     
-    (when new-chain-top (.scrollTo chain #js {:top new-chain-top}))
-    (when new-bar-left (.scrollTo bar #js {:left new-bar-left}))))
+    (when (and new-chain-top (not= new-chain-top (.-scrollTop chain)))
+      (.scrollTo chain #js {:top new-chain-top}))
+    (when (and new-bar-left (not= new-bar-left (.-scrollLeft bar)))
+      (.scrollTo bar #js {:left new-bar-left}))))
 
 
 ;; in case of aliases and demo/doc components, there can be multiple
