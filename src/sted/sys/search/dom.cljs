@@ -89,7 +89,8 @@
                  (.push els el)
                  (.push ts t)
                  a)
-               (fs/Index. #js {:tokenize "full"}))]
+               (fs/Index. #js {:tokenize "full"}))
+        c (volatile! 0)]
     (js/console.timeEnd "index-visible-tokens!")
     (println "Indexed " (count els) "visible tokens")
     
@@ -103,16 +104,7 @@
         #js {:token token
              :element el
              :eid eid
-             :matches #_(for [s (string/split (string/lower-case prefix) #"\s+")
-                              m (loop [i 0
-                                       a #js []]
-                                  (let [j (string/index-of lower s i)]
-                                    (if (nil? j)
-                                      a
-                                      (recur (inc j)
-                                             (doto a (.push #js {:offset j :length (count s) }))))))]
-                          m)
-
+             :matches 
              (->> (string/split (string/lower-case prefix) #"\s+")
                   (mapcat
                    (fn [s]
@@ -122,7 +114,9 @@
                          (if (nil? j)
                            a
                            (recur (inc j)
-                                  (doto a (.push #js {:offset j :length (count s) })))))))))}))))
+                                  (doto a (.push #js {:key (vswap! c inc)
+                                                      :offset j
+                                                      :length (count s) })))))))))}))))
 
 (defn substring-search-all-visible-tokens
   [bar-el chain-eid prefix]

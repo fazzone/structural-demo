@@ -372,32 +372,22 @@
       ;; splitting the first element is weird - 
       ;; arguably "correct" is to create a new empty coll
       ;; likely more useful is to split from the 2nd element
-      #_(if (nil? prev)
-          (if-let [n (:seq/first next)]
-            (recur n))
-          #_(let [new-node {:db/id "split-empty"
-                            :coll/type (:coll/type coll)}]
-              (into [new-node] (insert-before-tx coll new-node)))
-          (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
-                 {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
-                 [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
-                 [:db/add (:db/id outer-spine) :seq/next "cons"]
-                 (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
-                 (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
+      (if (nil? prev)
+        (if-let [n (:seq/first next)]
+          (recur n))
+        #_(let [new-node {:db/id "split-empty"
+                          :coll/type (:coll/type coll)}]
+            (into [new-node] (insert-before-tx coll new-node)))
+        (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
+               {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
+               [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
+               [:db/add (:db/id outer-spine) :seq/next "cons"]
+               (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
+               (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
               
-                (concat
-                 (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
-                 (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)]))))
-      (into [[:db/add (:db/id spine) :coll/type (:coll/type coll)] ; upgrade spine to a coll  
-             {:db/id "cons" :seq/first (:db/id spine)} ; create a cons pointing to it
-             [:db/add (:db/id outer-coll) :coll/contains (:db/id spine)] ; update membership
-             [:db/add (:db/id outer-spine) :seq/next "cons"]
-             (when prev [:db/retract (:db/id prev) :seq/next (:db/id spine)])
-             (when outer-next [:db/add "cons" :seq/next (:db/id outer-next)])]
-              
-            (concat
-             (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
-             (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)]))))))
+              (concat
+               (for [t tail] [:db/retract (:db/id coll) :coll/contains (:db/id t)])
+               (for [t tail] [:db/add (:db/id spine) :coll/contains (:db/id t)])))))))
 
 (defn form-splice-tx
   ([e] (form-splice-tx (move/up e) e))

@@ -73,11 +73,8 @@
    (fn [state]
      (if-not (some-> state :rum/args first :form/highlight)
        state
-       
-       (do
-         (js/console.log "Mount selected" (skip-indenter (rum/dom-node state)))
-         (.observe the-iobs (skip-indenter (rum/dom-node state)))
-         (assoc state ::prev-sel? true))))
+       (do (.observe the-iobs (skip-indenter (rum/dom-node state)))
+           (assoc state ::prev-sel? true))))
    
    :will-unmount
    (fn [state]

@@ -115,7 +115,7 @@
   :new-bar             "bar"          nil
   :zp                  "format"       nil
   :find-first          "first"        nil
-  :unraise             "unraise"      nil
+  :unraise             "enclose"      nil
   :split               "split"        nil
   :save                "write"        nil
   :drag-right          "drag->"       nil

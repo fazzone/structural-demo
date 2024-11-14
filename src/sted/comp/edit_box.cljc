@@ -57,7 +57,7 @@
   (let [vv js/window.visualViewport
         w (.-width vv)
         h (.-height vv)]
-    (println "ChooseBox" (count @multi-edit-box-list))
+    #_(println "ChooseBox" (count @multi-edit-box-list))
     (swap! multi-edit-box-list
            (fn [els]
              (let [fel (csc/primary-element els)]
@@ -67,10 +67,10 @@
                  (if-not (identical? e fel)
                    (set! (.-tabindex e) -1)
                    (do (set! (.-tabindex e) 0)
-                       (js/console.log "Focusge" e)
+                       #_(js/console.log "Focusge" e)
                        (.focus e)))))
              ;;
-             (println "Clear edit box list")
+             #_(println "Clear edit box list")
              nil))))
 
 

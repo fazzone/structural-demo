@@ -48,6 +48,7 @@
                 (search/setup!)))))
 
 
+
 (defn run-steps
   [{:keys [form setup mutations]}]
   (println "Run steps" setup mutations)
@@ -79,13 +80,13 @@
     [:div.no-scroll-within.alternate-reality
      {:class classes}
      [:div {:style {:display               "grid"
-                    :grid-template-columns "4ex max-content max-content 4ex max-content max-content max-content 1fr"
+                    :grid-template-columns "4ex max-content max-content 4ex max-content max-content max-content 1fr 1fr"
                     :align-items           "center"
                     :gap                   "1ex"}}
       (for [i    (range (inc (count (:setup steps)))
                         (count dbs))
-            :let [{:keys [db-before db-after tx-data] :teleport/keys [mutation]} (nth dbs i)]
-            w    [:index :mut :app-before :arrow :app-after :cons-before :cons-after :tx-data]]
+            :let [{:keys [db-before db-after tx-data tempids] :teleport/keys [mutation]} (nth dbs i)]
+            w    [:index :mut :app-before :arrow :app-after :cons-before :cons-after :tx-data :tempids]]
         (case w
           :arrow   [:span {:key (str w i)} (str "->")]
           :index   [:span {:key (str w i)} (str "#" i " ")]
@@ -99,7 +100,6 @@
                                    (sort-by (fn [^ js d] (.-a d)))
                                    (sort-by (fn [^ js d] (.-e d)))))]
           
-          
           :cons-after [:div {:key (str w i)}
                        (ccons/testing
                            (d/entity db-after eid)
@@ -110,7 +110,12 @@
                         (ccons/testing
                             (d/entity db-before eid)
                             core/blackhole
-                            (fn [n] ^:inline (rec n core/blackhole 0 nil)))]))]]))
+                            (fn [n] ^:inline (rec n core/blackhole 0 nil)))]
+          
+          :tempids [:div {:key (str w i)}
+                    [:pre {}
+                     (string/join "\n" (map pr-str tempids))]]
+          ))]]))
 
 (rum/defc render-steps* [steps])
 
@@ -759,11 +764,18 @@
    [cc/*modeline-ref* nil]
    [:div
     {:style {:display :flex
-             :flex-direction :column}}
+             :flex-direction :column
+             :padding-bottom "50vh"}}
     
-    (demo {:form '[(a b c)]
+    #_(demo {:form '[(a b c)]
            :setup [[:flow-right] [:flow-right]]
            :mutations [[:split]]}
+          r
+          c)
+
+    (demo {:form '[(a b c)]
+           :setup [[:flow-right] ]
+           :mutations [[:stringify] [:tear] [:flow-right] [:delete-right] [:parent] [:tear]]}
           r
           c)
 

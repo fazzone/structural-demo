@@ -8,6 +8,10 @@
 (def default-state
   {:backend :eval-sci})
 
+;; do-nrepl-eval [conn state db bus]
+;; mutatef  [{:keys [conn bus]  :as app} app-atom-circular-ref]
+
+
 (defn get-action-and-target
   [sel default]
   (let [up (nav/parents-vec sel)

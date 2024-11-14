@@ -134,15 +134,13 @@
                     [:db/add "a" :coll/contains "c"]
                     [:db/add "b" :coll/contains "c"]])))))
 
+
 (defn permutations [v]
   (if (empty? v)
     [[]]
     (for [i (range (count v))
           rec (permutations (into (subvec v 0 i) (subvec v (inc i))))]
       (cons (nth v i) rec))))
-
-
-
 
 (comment
   (doseq [steps (permutations

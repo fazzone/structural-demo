@@ -1,6 +1,8 @@
 (ns sted.user)
 
-;; Check for spurious scrolling when using wrap/raise?
+(take 9
+      ((fn g [h] (if (sequential? h) (mapv g h) (:tempids h)))
+       (deref (:history (deref sted)))))
 
 (do (defn find-files
       ([root] (find-files (js/secret_electron_require "fs/promises") root))

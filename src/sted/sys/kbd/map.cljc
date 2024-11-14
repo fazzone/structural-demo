@@ -45,7 +45,7 @@
    "S-@" :new-deref
    "S-A" :alias
    "S-B" :new-bar
-   "S-E" :eval-nrepl
+   "S-E" :gen-eval
    "S-F" :flow-right-coll
    "S-H" :hoist
    "S-I" :zp

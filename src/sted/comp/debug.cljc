@@ -39,7 +39,7 @@
                                 (when-not a? " retraction"))}
                [:td (str e)]
                [:td (str a)]
-               [:td (let [s (str v)]
+               [:td (let [s (pr-str v)]
                       (if (> sv (count s))
                         s
                         [:abbr {:title s} (subs s 0 sv)]))]

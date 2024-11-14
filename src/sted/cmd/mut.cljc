@@ -243,7 +243,9 @@
     (let [text (->> (tree-seq :coll/type e/seq->vec e)
                     (keep :token/value)
                     (apply str))
-          tok (assoc (insert/parse-editbox-tx text) :db/id "tok")]
+          ;; tok (assoc (insert/parse-editbox-tx text) :db/id "tok")
+          tok (insert/unify-with "tok" (insert/parse-editbox-tx text))
+          ]
       
       #_(println "StitchColl" (pr-str (e/->form sel)))
       #_(println "StitchText" (pr-str text))

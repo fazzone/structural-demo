@@ -30,6 +30,8 @@
         (e/parse-token-tx (str s "\""))
         at))))
 
+;; this is somewhat of a hack so that editbox works with colls,
+;; i.e. so you can paste whole forms into it  
 (defn unify-with
   [eid txm]
   (cond-> txm

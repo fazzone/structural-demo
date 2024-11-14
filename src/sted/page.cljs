@@ -29,6 +29,7 @@
    [sted.cmd.mut :as mut]
    [sted.df.github :as dfg]
    [sted.df.async :as a]
+   [sted.sys.eval.core :as eval-core]
    [sted.sys.eval.sci :as eval-sci]
    [sted.sys.eval.sys-eval :as sys-eval]
    [sted.sys.nrepl.bencode :as benc]
@@ -199,31 +200,32 @@
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
+         (eval-core/setup!)
          (nrepl/setup!)
          (sys-eval/setup!)
          (core/register-mutation!
-           :save
-           (fn [_ db bus]
-             (let [sel (get-selected-form db)
-                   chain (cond-> sel
-                           (not= :chain (:coll/type sel))
-                           (-> (nav/parents-vec)
-                               (peek)
-                               :coll/_contains
-                               (first)))
-                   file (or (:chain/filename chain) "noname.clj")]
-               (when chain
-                 (a/let [tstart (js/performance.now)
-                         {:keys [path size]} (save* file (e/->string chain))
-                         tend (js/performance.now)]
-                   (d/transact! conn
-                                (message-tx @conn
-                                            (str size
-                                                 " b " (js/Math.round (- tend tstart))
-                                                 " ms " path
-                                                 " @ " (.toString (:max-tx db) 16)
-                                                 " @ " (.toString (js/Date.)))))))
-               nil)))))))
+          :save
+          (fn [_ db bus]
+            (let [sel (get-selected-form db)
+                  chain (cond-> sel
+                          (not= :chain (:coll/type sel))
+                          (-> (nav/parents-vec)
+                              (peek)
+                              :coll/_contains
+                              (first)))
+                  file (or (:chain/filename chain) "noname.clj")]
+              (when chain
+                (a/let [tstart (js/performance.now)
+                        {:keys [path size]} (save* file (e/->string chain))
+                        tend (js/performance.now)]
+                  (d/transact! conn
+                               (message-tx @conn
+                                           (str size
+                                                " b " (js/Math.round (- tend tstart))
+                                                " ms " path
+                                                " @ " (.toString (:max-tx db) 16)
+                                                " @ " (.toString (js/Date.)))))))
+              nil)))))))
 
 
 (defonce the-singleton-db
@@ -311,7 +313,7 @@
         (rum/mount el))
     
     #_(-> (cdemo/root code/form)
-          (rum/mount el))
+        (rum/mount el))
     
     #_(-> (eye-test)
           (rum/mount el))

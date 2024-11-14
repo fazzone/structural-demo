@@ -87,8 +87,10 @@
                                0))
                           "ch")}}
       sj #_(subs sj 0 1)]
+     
      (for [^js i infos]
-       [:span.hlp {:style {:width (str (.-length i) "ch")
+       [:span.hlp {:key (.-key i)
+                   :style {:width (str (.-length i) "ch")
                            :left (str (+ (.-offset i) left)
                                       "ch")}}])]))
 
