@@ -121,13 +121,15 @@
          (let [as (into #{} (map (fn [[_ a]] a)) tx-data)
                move? (contains? as :form/highlight)
                edit? (some #(not= % :form/highlight) as)]
-           (println (-> (str (first mut))
+           (println (.toString txid 16)
+                    (-> (str (first mut))
                         #?(:cljs (.padEnd 16 )))
                     (-> (str (count tx-data))
                         #?(:cljs (.padStart 6)))
                     (-> (str (when move? "M")
                              (when edit? "E"))
-                        #?(:cljs (.padStart 4))))
+                        #?(:cljs (.padStart 4)))
+                    )
          
            (swap! hs assoc txid (assoc report
                                        :movement? move?

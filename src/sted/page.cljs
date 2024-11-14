@@ -52,7 +52,7 @@
 
 (def test-form-data-bar
   (assoc (e/string->tx-all (m/macro-slurp "src/sted/user.clj"))
-    :chain/filename "src/sted/user.clj"))
+         :chain/filename "src/sted/user.clj"))
 
 
 (def meta-chain*
@@ -170,7 +170,6 @@
 
 (defonce ^:export the-app (atom nil))
 
-
 (defn message-tx
   [db msg]
   (let [m {:db/id "msg"
@@ -182,11 +181,7 @@
 (defn setup-app
   ([] (setup-app (doto (d/create-conn s/schema) (d/transact! init-tx-data))))
   ([conn]
-   (let [zb (some-> the-app
-                    deref
-                    :bus
-                    (core/reset))
-         _ (js/console.log "Zbus" zb)
+   (let [zb (some-> the-app deref :bus (core/reset))
          a (core/app conn zb)]
      (doseq [[m f] mut/movement-commands]
        (core/register-simple! a m (core/movement->mutation f)))

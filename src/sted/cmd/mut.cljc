@@ -428,7 +428,6 @@
              (edit/insert-before-tx top-level new-node)
              (move-selection-tx (:db/id sel) tempid))))))
 
-
 (defn new-bar-tx
   [sel]
   (let [new-node {:db/id "newbar"
@@ -443,7 +442,6 @@
     (into [new-node]
           (concat (edit/insert-after-tx sel new-node)
                   (move-selection-tx (:db/id sel) "newnode")))))
-
 
 (defn drag*
   [chain-mover chain-inserter sel]
@@ -466,12 +464,6 @@
                          :coll/contains (:db/id sel)
                          :seq/first     (:db/id sel)}]
                  (into [nc] (chain-inserter chain nc)))))))))
-
-
-(def drag-left-tx  (partial drag* move/prev-sibling edit/insert-before-tx))
-
-
-(def drag-right-tx (partial drag* move/next-sibling edit/insert-after-tx))
 
 
 (defn chain-from-text
@@ -547,7 +539,7 @@
    :m8              (partial nav/numeric 7)})
 
 
-#_(defn new-comment-tx
+(defn new-comment-tx
   [sel]
   (into [[:db/add (:db/id sel) :form/linebreak true]]
         (edit/insert-editing*
@@ -560,18 +552,9 @@
            (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
 
 
-(defn new-comment-tx
+#_(defn new-comment-tx
   [sel]
-  (edit/edit-new-wrapped-tx sel :md/root "" {})
-  #_(into [[:db/add (:db/id sel) :form/linebreak true]]
-          (edit/insert-editing*
-           edit/insert-before-tx
-           sel
-           sel
-           (cond-> {:token/type :comment
-                    :form/linebreak true
-                    :form/edit-initial ";; "}
-             (:form/indent sel) (assoc :form/indent (:form/indent sel))))))
+  (edit/edit-new-wrapped-tx sel :md/root "" {}))
 
 
 (defn store-fn
@@ -860,8 +843,10 @@
    :pop-deleted-chain              pop-deleted-chain
    :tear                           tear-tx
    :alias                          make-alias-tx
-   :drag-left                      drag-left-tx
-   :drag-right                     drag-right-tx
+   :drag-left                      (partial drag* move/prev-sibling edit/insert-before-tx)
+   :drag-left-create               (partial drag* (fn [_]) edit/insert-before-tx) 
+   :drag-right                     (partial drag* move/next-sibling edit/insert-after-tx)
+   :drag-right-create              (partial drag* (fn [_]) edit/insert-after-tx)
    :split                          edit/form-split-tx
    :splice                         edit/form-splice-tx
    :offer                          edit/offer-tx
@@ -878,4 +863,4 @@
    :summon                         summon-tx
    :unraise                        edit/unraise-tx
    :compose                        edit/ffff
-   :back-to-edit                        back-to-edit})
+   :back-to-edit                   back-to-edit})

@@ -76,6 +76,7 @@
         (println "No cont?" id)
         (f msg)))))
 
+
 (defn create-pending-eval!
   [conn target]
   (let [id  "peval"
@@ -87,9 +88,11 @@
         r   (d/transact! conn tx)]
     (get (:tempids r) id)))
 
+
 (defn make-eval-string*
   [target er-eid limit]
   (str "(sted.embed.data/rplacd " "(" "list " (e/->string target) ")" " " limit " " er-eid " " er-eid ")"))
+
 
 (defn do-nrepl-eval
   [conn state db]
@@ -98,7 +101,7 @@
         target (peek (nav/parents-vec (core/get-selected-form db)))
         er-eid (create-pending-eval! conn target)
         limit (or (:state/limit (d/entity db :sted.page/state))
-                  128) 
+                  128)
         code (make-eval-string* target er-eid limit)]
     (println "Code:\n" code)
     (if-not sock
@@ -123,18 +126,18 @@
                               :session session
                               :code code}))))))
 
+
 (defn mk-proc
   [{:as app :keys [conn]} db write]
   (let [session (atom nil)
         counter (atom 16)
         pending (atom {})]
-    
     (fn [{:as msg :strs [id]}]
       (case id
         1 (do (reset! session (get msg "new-session"))
               (write {:id 2  :op :describe}))
         2 (do
-            ;; 
+            ;;
             (write {:op :load-file
                     :id 3
                     :session @session
@@ -171,7 +174,7 @@
                 (let [sel (core/get-selected-form db)]
                  (d/transact! conn
                               (ec/bind-session-tx db (:db/id (core/get-selected-form db)) @session)))))
-        ;;  
+        ;;
         (if-let [f (get @pending id)]
           (f msg)
           (println "No cont?" id))))))
@@ -189,10 +192,8 @@
              (let [^js net (require "node:net")
                    sock (.connect net port host)
                    buffer (atom (js/Buffer.alloc 0))
-
                    write (fn [msg] (.write sock (benc/encode msg)))
                    proc (mk-proc app db write)]
-               
                (doto sock
                  (.on "connect" (fn [a b c] (.write sock (benc/encode {:id 1  :op :clone}))))
                  (.on "end" (fn [] (println "Socket end")))
@@ -204,9 +205,6 @@
                             (println m)
                             (proc m)
                             #_(proc write session counter pending msg)
-                            #_(process-one-message sock state conn conn-id m))))))
-               
-               
-               ))))
+                            #_(process-one-message sock state conn conn-id m))))))))))
         (core/register-mutation!
          :eval-nrepl (fn [_ db bus] (do-nrepl-eval conn state db))))))

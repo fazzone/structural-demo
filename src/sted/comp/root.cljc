@@ -4,7 +4,7 @@
    [sted.core :as core]
    [rum.core :as rum]
    [sted.comp.common :as cc]
-   [sted.comp.search :as cs]))
+   #?(:cljs [sted.comp.search :as cs])))
 
 (rum/defc root
   [{:keys [conn bus] :as app} rec]
@@ -21,5 +21,5 @@
       ^:inline (rec (:state/bar state) bus 0 nil))
      
      [:div.modeline-outer.code-font {:id "modeline" :ref ml-ref}
-      (cs/rs** bus (:sted.sys.search.setup/state state))]]))
+      #?(:cljs (cs/rs** bus (:sted.sys.search.setup/state state)))]]))
 

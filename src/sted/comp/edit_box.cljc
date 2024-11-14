@@ -5,9 +5,8 @@
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]
    [sted.sys.kbd.evt :as ske]
-   [sted.sys.search.dom :as s]
-   [sted.comp.search :as cs]
-   [sted.comp.scroll :as csc]
+   #?(:cljs [sted.sys.search.dom :as s])
+   #?(:cljs [sted.comp.scroll :as csc])
    [datascript.core :as d]
    [cljs.core.async :as async]
    [sted.embed :as e]
@@ -18,6 +17,7 @@
 
 
 (defonce last-entered-token (atom nil))
+
 
 
 (defn editbox-keydown*
@@ -38,11 +38,10 @@
     "C- "             {:new-text @last-entered-token}
     "C-o"             {:msg [:linebreak]}
     (" " "S- ")       (cond
-                        (empty? text)         {:msg [:edit/reject]}
-                        (= "\"" (first text)) (println "Quotedstring")
-                        #_                    (:form/edit-comp e)
-                        #_                    [:edit/finish-and-move-up text]
-                        :else                 {:accept true :msg [:edit/finish-and-edit-next-node text]})
+                        (empty? text)            {:msg [:edit/reject]}
+                        (= "\"" (subs text 0 1)) nil
+                        (= ";" (subs text 0 1))  nil
+                        :else                    {:accept true :msg [:edit/finish-and-edit-next-node text]})
     nil))
 
 
@@ -52,26 +51,27 @@
 ;; the point of this is so that you can edit while looking at an alias
 
 
-(defn choose-box-to-focus!
-  []
-  (let [vv js/window.visualViewport
-        w (.-width vv)
-        h (.-height vv)]
-    #_(println "ChooseBox" (count @multi-edit-box-list))
-    (swap! multi-edit-box-list
-           (fn [els]
-             (let [fel (csc/primary-element els)]
-               (doseq [^js e els]
-                 #_(js/console.log "Editboxel=" e)
+#?(:cljs
+   (defn choose-box-to-focus!
+     []
+     (let [vv js/window.visualViewport
+           w (.-width vv)
+           h (.-height vv)]
+       #_(println "ChooseBox" (count @multi-edit-box-list))
+       (swap! multi-edit-box-list
+              (fn [els]
+                (let [fel (csc/primary-element els)]
+                  (doseq [^js e els]
+                    #_(js/console.log "Editboxel=" e)
                  
-                 (if-not (identical? e fel)
-                   (set! (.-tabindex e) -1)
-                   (do (set! (.-tabindex e) 0)
-                       #_(js/console.log "Focusge" e)
-                       (.focus e)))))
-             ;;
-             #_(println "Clear edit box list")
-             nil))))
+                    (if-not (identical? e fel)
+                      (set! (.-tabindex e) -1)
+                      (do (set! (.-tabindex e) 0)
+                          #_(js/console.log "Focusge" e)
+                          (.focus e)))))
+                ;;
+                #_(println "Clear edit box list")
+                nil)))))
 
 
 (rum/defc edit-box
@@ -82,18 +82,19 @@
                      (:token/value e))
         form-eid (:db/id e)
         iref (rum/create-ref)]
-    (rum/use-layout-effect!
-     (fn []
-       (when-let [el (rum/deref iref)]
-         (swap! multi-edit-box-list
-                (fn [others]
-                  (if others
-                    (conj others el)
-                    (do (js/setTimeout choose-box-to-focus! 0)
-                        [el])))))
+    #?(:cljs
+       (rum/use-layout-effect!
+        (fn []
+          (when-let [el (rum/deref iref)]
+            (swap! multi-edit-box-list
+                   (fn [others]
+                     (if others
+                       (conj others el)
+                       (do (js/setTimeout choose-box-to-focus! 0)
+                           [el])))))
        
-       nil)
-     [e])
+          nil)
+        [e]))
     [:input.edit-box
      {:type        :text
       :ref         iref
@@ -104,16 +105,17 @@
                           token    (e/parse-token-tx new-text)]
                       (set-text! new-text)
                       nil)
-      :on-key-down (fn [ev]
-                     (let [kbd (ske/event->kbd ev)
-                           {:keys [msg accept new-text]} (editbox-keydown* e value kbd)]
-                       #_(println "EditboxKeydown " kbd accept msg)
-                       (cond
-                         msg
-                         (do (.preventDefault ev)
-                             (.stopPropagation ev)
-                             (when accept
-                               (reset! last-entered-token value))
-                             (core/send! bus msg))
-                         new-text
-                         (set-text! new-text))))}]))
+      :on-key-down #?(:clj nil
+                      :cljs (fn [ev]
+                              (let [kbd (ske/event->kbd ev)
+                                    {:keys [msg accept new-text]} (editbox-keydown* e value kbd)]
+                                #_(println "EditboxKeydown " kbd accept msg)
+                                (cond
+                                  msg
+                                  (do (.preventDefault ev)
+                                      (.stopPropagation ev)
+                                      (when accept
+                                        (reset! last-entered-token value))
+                                      (core/send! bus msg))
+                                  new-text
+                                  (set-text! new-text)))))}]))

@@ -356,6 +356,17 @@
           :comment (if-not last?
                      (:token/value e)
                      (str (:token/value e) "\n"))))
+      ;; gross - but the alternative (separate node types) is worse? 
+      (when (= :reader-macro (:coll/type e))
+        (let [[rmt body & more] (seq->vec e)
+              rms (->string rmt)]
+          (when more (throw (ex-info "Bad reader macro" {:more more})))
+          (str "#"
+               rms
+               (case rms
+                   ("'" "?" "#" ":" "::" ) nil
+                   " ")
+               (->string body))))
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str
@@ -370,13 +381,14 @@
                (if (nil? y)
                  s
                  (recur y ys (str s
-                                  (case ct :chain "\n\n"
+                                  (case ct :chain "\n"
                                         (when (not (or (:form/linebreak y)
                                                        (:form/indent y)))
                                           " "))
                                   (sep y)
                                   (->string y (+ 2 i) (nil? ys)))))))
            (close-delim ct))))))))
+
 
 (defn string->tx-all
   [s]
@@ -432,6 +444,8 @@
 (comment
   
   (p/parse-string "0x3456")
+  
+  (roundtrip-string "a b c")
   
   ;; (let [s (slurp "f:/gem/env/iocp.fnl")
   ;;       r (roundtrip-string s)]

@@ -68,7 +68,7 @@
       (js/document.removeEventListener e f true)
       (js/document.removeEventListener e f false))
     (d/transact! conn [[:db/retract (:db/id st) ::listeners listeners]])
-    (println "KBD" [my-generation] "Cleanup")
+    #_(println "KBD" [my-generation] "Cleanup")
     app))
 
 
@@ -97,5 +97,5 @@
                        ::listeners ls
                        ::keymap keymap
                        ::mods mods}])
-        (println "KBD" [my-generation] "Setup")
+        #_(println "KBD" [my-generation] "Setup")
         app))))

@@ -38,6 +38,8 @@
    "M-s" :splice
    "M-[" :wrap-vec
    "M-S-{" :wrap-map
+   "M-z" :drag-left-create
+   "M-x" :drag-right-create
    
    "S- " :insert-left
    "S-(" :new-list

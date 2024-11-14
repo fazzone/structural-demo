@@ -105,7 +105,9 @@ body {
     flex-direction: column;
     /* note that if chains had margin, the elementfrompoint center chain scroll hack would break */
     margin: 0;
-    padding: 2px 1ch 2px 2ch;
+    /* padding: 2px 1ch 2px 2ch; */
+    padding: 2px 1ch 2px 2px;
+
     overflow-y: scroll;
     white-space: pre;
     /* it's important that the chain has no declared width */
@@ -248,7 +250,8 @@ body {
 .form-card {
     display: flex;
     flex-direction: column;
-    width: 100%;
+    /* why was this important? */
+    /* width: 100%; */
     resize: both;
     flex-shrink: 0;
     /* margin-bottom: 5ex; */

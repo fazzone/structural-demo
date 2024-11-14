@@ -155,6 +155,9 @@
                            "; background:url(" (str "data:image/svg+xml;charset=utf-8," (js/encodeURIComponent svgstr))
                            ") no-repeat; background-size:contain;"))))
     
+    ;; special case when we are scrolling up to the top?
+    ;; (we snap the ns form to the very top and leave tiny top margin offscreen above)
+    
     (when (and new-chain-top (not= new-chain-top (.-scrollTop chain)))
       (.scrollTo chain #js {:top new-chain-top}))
     (when (and new-bar-left (not= new-bar-left (.-scrollLeft bar)))
@@ -233,3 +236,70 @@
      ;; :height "calc(80vh - 20px)"
      :height "60vh"
      :background-color "#4504b982"}}])
+
+
+(defn iobs-callback
+  [ents me]
+  (if (core/scroll-locked?)
+    nil
+    (loop [[ioe & more] ents]
+      (let [^js e (.-target ioe)
+            ratio (.-intersectionRatio ioe)
+            ir    (.-intersectionRect ioe)
+            br    (.-boundingClientRect ioe)]
+        #_(js/console.log "Ratio"  (pr-str (.-intersectionRatio ioe)) (.-target ioe) )
+        (cond
+          ;; try to find a fully-visible node and quit out if we do
+          (= 1 ratio) nil
+          more        (recur more)
+          ;; we might have to do something
+          ;; we see part but couldn't see all, don't auto scroll it
+          (and (< 0 ratio)
+               (or (> (.-height br) js/window.visualViewport.height)
+                   (> (.-width br) js/window.visualViewport.width)))
+          (do (println "Partially visible and too large")
+              nil)
+          :else (scroll-to-selected* e br))))))
+
+
+(defn make-iobs
+  []
+  ;; hack - must specify these in px, ex/em not allowed
+  (->> #js {:rootMargin "0px 0px -20px 0px"  :threshold #js [0]}
+       (js/IntersectionObserver. iobs-callback)))
+
+
+(def the-iobs (make-iobs))
+
+(defn skip-indenter
+  [^js el]
+  (if-not (= "S" (.-tagName el))
+    el
+    (.-nextElementSibling el)))
+
+(def mixin
+  {:did-mount
+   (fn [state]
+     (if-not (some-> state :rum/args first :form/highlight)
+       state
+       (do (.observe the-iobs (skip-indenter (rum/dom-node state)))
+           (assoc state ::prev-sel? true))))
+   
+   :will-unmount
+   (fn [state]
+     (.unobserve the-iobs (skip-indenter (rum/dom-node state)))
+     state)
+   
+   :did-update
+   (fn [state]
+     (let [sel? (some-> state :rum/args first :form/highlight)
+           prev-sel? (some-> state ::prev-sel?)]
+       (when the-iobs
+         (if-not (or sel? prev-sel?)
+           state
+           (if sel?
+             (do (.observe the-iobs (skip-indenter (rum/dom-node state)))
+                 (assoc state ::prev-sel? true))
+             (do (.unobserve the-iobs (skip-indenter (rum/dom-node state)))
+                 (dissoc state ::prev-sel?)))))))})
+
