@@ -9,6 +9,7 @@
    [sted.cmd.insert :as insert]
    [sted.sys.handle :as sh]
    [sted.cmd.nav :as nav]
+   [sted.cmd.tear :as tear]
    [sted.embed.data :as sed]
    [sted.embed.except :as embed-except]
    #_[sted.embed.md :as emd]
@@ -219,157 +220,6 @@
   (let [dst (move/next-sibling sel)]
     (concat (edit/form-wrap-tx sel :uneval)
             (when dst (move-selection-tx (:db/id sel) (:db/id dst))))))
-
-
-;; This is junk because of retracting the highlight properly
-
-#_(defn stitch*
-  [sel e]
-  (when-let [head (:seq/first e)]
-    (let [text (->> (tree-seq :coll/type e/seq->vec e)
-                    (keep :token/value)
-                    (apply str))]
-      ;; this is keeping the token type of the first torn token
-      ;; this means you can't convert e.g. symbol/token (also it can be wrong)
-      ;; why do it?
-      (into [[:db/add (:db/id head) :token/value text]]
-            (concat (edit/form-raise* head)
-                    (move-selection-tx (:db/id sel) (:db/id head)))))))
-
-
-(defn stitch*
-  [sel e]
-  (when-let [head (:seq/first e)]
-    (let [text (->> (tree-seq :coll/type e/seq->vec e)
-                    (keep :token/value)
-                    (apply str))
-          ;; tok (assoc (insert/parse-editbox-tx text) :db/id "tok")
-          tok (insert/unify-with "tok" (insert/parse-editbox-tx text))
-          ]
-      
-      #_(println "StitchColl" (pr-str (e/->form sel)))
-      #_(println "StitchText" (pr-str text))
-      
-      (into [tok]
-            (concat (edit/form-overwrite-tx e "tok")
-                    (move-selection-tx (:db/id sel) "tok")))
-      
-      #_(into [[:db/add (:db/id head) :token/value text]]
-              (concat (edit/form-raise* head)
-                      (move-selection-tx (:db/id sel) (:db/id head)))))))
-
-
-(defn restitch
-  [sel c]
-  (some->> (nav/parents-seq c)
-           (filter (comp #{:tear} :coll/type))
-           #_(first)
-           (last)
-           (stitch* sel)))
-
-
-(defn tear-re
-  [delim-re]
-  (let [lookahead+ #(str "(?=" % ")")
-        lookback+  #(str "(?<=" % ")")]
-    (re-pattern
-     (str (lookahead+ delim-re)
-          "|" (lookback+ delim-re)))))
-
-
-(defn do-re-tear
-  [s delim-re]
-  (let [pat (re-pattern (str "^(.*?)(" delim-re ")" ))]
-   (loop [s s
-          acc []]
-     (if (empty? s)
-       acc
-       (if-let [[_ m d] (re-find pat s)]
-         (recur (subs s (+ (count m) (count d)))
-                (cond-> acc
-                  (not= "" m) (conj m)
-                  true (conj d)))
-         (conj acc s))))))
-
-
-#_(defn tear-preference-order
-  [s]
-  (letfn [(try-split [[head & more :as groups]]
-            (when more groups))]
-    (or (try-split (string/split s (tear-re #"\s+")))
-        (try-split (string/split s (tear-re "[:\\.\\-_\\$/<>]")))
-        (try-split (string/split s #"(?<=[^A-Z])(?=[A-Z])")))))
-
-(defn tear-preference-order
-  [s]
-  (letfn [(try-split [[head & more :as groups]]
-            (when more groups))]
-    (or (try-split (do-re-tear s "\\s+"))
-        (try-split (do-re-tear s "[:\\.\\-_\\$/<>\\(\\)\\[\\]]"))
-        (try-split (string/split s #"(?<=[^A-Z])(?=[A-Z])")))))
-
-#_(defn tear*
-  [sel [head & more]]
-  (let [tt (:token/type sel)
-        nn (case tt
-             (:string :keyword)
-             {:db/id "tpre"
-              :token/type tt
-              :token/value (case tt
-                             :string "\""
-                             :keyword ":")}
-             nil)]
-    (into [nn
-           [:db/add (:db/id sel) :token/value head]
-           [:db/add (:db/id sel) :token/type :symbol]
-           (when more [:db/add "torn" :seq/next "newtail"])
-           (when more
-             (-> (for [e more]
-                   {:token/value e
-                    :token/type :symbol
-                    :coll/_contains "torn"})
-                 (ec/seq-tx)
-                 (assoc :db/id "newtail")))]
-          (concat
-           
-           (edit/form-wrap-tx sel :tear "torn")
-           (move-selection-tx (:db/id sel) "torn")))))
-
-(defn tear*
-  [sel torn]
-  (let [tt (:token/type sel)
-        pre (case tt
-              (:string)
-              {:db/id "tpre"
-               :coll/_contains "torn"
-               :token/type :symbol
-               :token/value "\""}
-              nil)
-        tels (for [e torn]
-               {:token/value e
-                :token/type :symbol
-                :coll/_contains "torn"})
-        tels+ (cond->> tels pre (cons pre))]
-    
-    (into [(assoc (ec/seq-tx tels+)
-                  :db/id "torn"
-                  :coll/type :tear)]
-          
-          (concat (edit/form-overwrite-tx sel "torn")
-                  
-                  (move-selection-tx (:db/id sel) "torn")))))
-
-(defn tear-tx
-  [sel]
-  (if-some [parts (some-> sel :token/value tear-preference-order)]
-    (do
-      (println "Partts= " (pr-str parts))
-      (tear* sel parts))
-    (restitch sel sel)))
-
-
-(comment
-  (tear-preference-order "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/reference/global_objects/promise/index.md"))
 
 
 (defn find-next*
@@ -777,7 +627,7 @@
       s)))
 
 
-(defn back-to-edit
+#_(defn back-to-edit
   [sel]
   (let [db (d/entity-db sel)
         bar-eid (:db/id (:state/bar (d/entity db :sted.page/state)))
@@ -789,6 +639,41 @@
                                          (= bar-eid (:db/id (->root (d/entity db eid)))))]
                           eid))]
     (select-form-tx db edit-eid)))
+
+
+(defn sorted-merged-map
+  [f k xs ys]
+  ((fn iter [[x :as xs] [y :as ys]]
+     (cond
+       (and (empty? xs) (empty? ys)) nil
+       
+       (empty? ys)     (cons (f x) (lazy-seq (iter (next xs) ys)))
+       (empty? xs)     (cons (f y) (lazy-seq (iter xs (next ys))))
+       (> (k x) (k y)) (cons (f y) (lazy-seq (iter xs (next ys))))
+       :else           (cons (f x) (lazy-seq (iter (next xs) ys)))))
+   xs
+   ys))
+
+(defn back-to-edit
+  ([sel] (back-to-edit sel true))
+  ([sel outside]
+   (let [db (d/entity-db sel)
+         sel-eid (:db/id sel)
+         bar-eid (:db/id (:state/bar (d/entity db :sted.page/state)))
+         chain-eid (:db/id (move/most-upward sel))
+         ;; max-tx (apply max
+         ;;               (for [[_ a _ t] (d/datoms db :eavt (:db/id sel))
+         ;;                     :when (not= :form/highlight a)]
+         ;;                 t))
+         qseq (for [[e a v t] (d/rseek-datoms db :avet :form/edited-tx #_max-tx)
+                    :let [efe (d/entity db e)
+                          _ (println "QSEQ" e a (.toString ^js v 16))]
+                    :when (and (not (= e sel-eid ))
+                               (= bar-eid (:db/id (->root efe)))
+                               (or (not outside) (not (= chain-eid (:db/id (move/most-upward efe))))))]
+                e)]
+     (println "BACK!" sel outside "Sel=" sel-eid "Qseq" (first qseq))
+     (select-form-tx db (first qseq)))))
 
 
 (def editing-commands
@@ -841,7 +726,7 @@
    :move-to-deleted-chain          move-to-deleted-chain
    :cycle-deleted-chain            (fn [sel] (when-let [dch (d/entity (d/entity-db sel) :sted.page/command-chain)] (edit/form-cycle-tx dch)))
    :pop-deleted-chain              pop-deleted-chain
-   :tear                           tear-tx
+   :tear                           tear/tear-tx
    :alias                          make-alias-tx
    :drag-left                      (partial drag* move/prev-sibling edit/insert-before-tx)
    :drag-left-create               (partial drag* (fn [_]) edit/insert-before-tx) 

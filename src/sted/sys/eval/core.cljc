@@ -57,8 +57,10 @@
                                                              (if-let [u (some-> e :coll/_contains first)]
                                                                (recur u)
                                                                nil)))
+                                         
                                          _ (println "Ses-id" ses-id "KState" (keys @state))
-                                         sesf (get @state ses-id)]
+                                         sesf (or (get @state ses-id)
+                                                  (get @state (core/uniqueid bus)))]
                                      
                                      
                                      (sesf sel )

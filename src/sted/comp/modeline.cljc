@@ -72,9 +72,9 @@
       [:span {:style {:margin-left "1ex"}}
        [:span.mlgloss {} "eid"]
        (str (:db/id sel))]
-      [:span {}
-       [:span.mlgloss {} "tx"]
-       (str (.toString (:max-tx db) 16))]
+      
+      #_[:span {} [:span.mlgloss {} "tx"] (str (.toString (:max-tx db) 16))]
+      
       [:span {}
        [:span.mlgloss {} "type"]
        (str (or (:token/type sel) (:coll/type sel)))]

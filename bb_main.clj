@@ -35,6 +35,24 @@
   []
   (deps/clojure []))
 
+(defn setup-readers*
+  [{:keys [in out err] :as proc} tag]
+  (future
+    (binding [*in* (io/reader err)]
+      (loop []
+        (when-let [line (read-line)]
+          (println (str "[" tag " err] " line))
+          (recur)))))
+  
+  (future
+    (binding [*in* (io/reader out)]
+      (loop []
+        (when-let [line (read-line)]
+          (println (str "[" tag " log] " line))
+          (recur)))))
+  
+  proc)
+
 (def value-expected (atom nil))
 
 (defonce the-prepl
@@ -121,12 +139,6 @@
 
 (def electron-process (atom nil))
 
-
-(comment
-  (reset! electron-process
-          (babashka.process/process
-           [@electron-exe electron-main "http://localhost:10010/index.html"])))
-
 (defn run-electron
   []
   #_(compile-and-host-cljs
@@ -139,8 +151,8 @@
     (if-not (= ":done" result)
       (println "Failed to build")
       (reset! electron-process
-              (p/process [@electron-exe electron-main
-                          "http://localhost:8087/?title=Shadow host"])))))
+              (doto (p/process [@electron-exe electron-main "http://localhost:8087/?title=Shadow host"])
+                (setup-readers* "electron"))))))
 
 (defn start-repl
   []

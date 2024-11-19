@@ -411,7 +411,7 @@
     :number         "tk n"
     :regex          "tk re"
     :verbatim       "tk verbatim"
-    :comment        "comment"
+    :comment        "comment prose-font"
     :md/text        "md"
     :md/code        "md-code code-font"
     :md/inline-code "md-inline-code code-font"))

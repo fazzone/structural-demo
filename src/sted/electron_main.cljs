@@ -29,7 +29,7 @@
     (js/console.log "loadURL u=" (pr-str u))
     (js/console.log "file-src=" (pr-str file-src))
     
-    (.loadURL main-window #_u  file-src)
+    (.loadURL main-window u  #_file-src)
     (doto (.-webContents main-window)
       (.setWindowOpenHandler window-open-handler))
     

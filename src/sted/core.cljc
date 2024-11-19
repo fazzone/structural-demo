@@ -220,22 +220,14 @@
                           (catch #? (:cljs js/Error :clj Exception) e
                             (println "Exception in mutation " e)
                             nil))
-             ;; _ (prn (uniqueid bus) mut-name)
-             report (try (and tx-data
-                              #_(assoc (d/transact! conn tx-data)
-                                       :mut mut)
-                                        
-                              (let [
-                                    ;; _ (js/console.time "Transacting")
-                                    ans (assoc (d/transact! conn tx-data)
-                                               :mut mut)
-                                    ]
-                                #_(js/console.timeEnd "Checking")
-                                #_(js/console.timeEnd "Transacting")
-                                (check-db-structure! (:db-after ans))
-                                ans))
-                         (catch #? (:cljs js/Error :clj Exception) e
-                           {:error e}))]
+             report (try
+                      (when tx-data
+                        (assoc (d/transact! conn tx-data)
+                               :mut mut
+                               :sel (:db/id sel)))
+                      (catch #?(:cljs js/Error :clj Exception) e
+                        {:error e}))]
+         
          (when (:db-after report)
            (if-let [txid (get (:tempids report) :db/current-tx)]
              (do (save-history! bus txid report)

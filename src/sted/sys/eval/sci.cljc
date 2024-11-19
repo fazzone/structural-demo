@@ -1,31 +1,30 @@
 (ns sted.sys.eval.sci
-  (:require [sci.core :as sci]
-            [clojure.core.protocols :as p]
-            [sted.embed :as e]
-            [sted.cmd.move :as move]
-            [sted.cmd.nav :as nav]
-            [sted.cmd.edit :as edit]
-            [daiquiri.interpreter :as rdi]
-            [datascript.core :as d]
-            [datascript.serialize :as dser]
-            [sci.impl.vars :as v]
-            [sci.impl.namespaces :as n]
-            [sted.df.github :as dfg]
-            [sted.df.async :as a]
-            [clojure.datafy :as datafy]
-            [clojure.string :as string]
-            [sted.core :as core :refer [get-selected-form]]
-            [sted.sys.eval.sci.protocols :as esp]
-            [goog.object :as gobj]
-            [sted.sys.handle :as sh]
-            [mdast-util-from-markdown :as mdast]))
+  (:require
+   [sci.core :as sci]
+   [clojure.core.protocols :as p]
+   [sted.embed :as e]
+   [sted.cmd.move :as move]
+   [sted.cmd.nav :as nav]
+   [sted.sys.eval.core :as ec]
+   [sted.cmd.edit :as edit]
+   [daiquiri.interpreter :as rdi]
+   [datascript.core :as d]
+   [datascript.serialize :as dser]
+   [sci.impl.vars :as v]
+   [sci.impl.namespaces :as n]
+   [sted.df.github :as dfg]
+   [sted.df.async :as a]
+   [clojure.datafy :as datafy]
+   [clojure.string :as string]
+   [sted.core :as core :refer [get-selected-form]]
+   [sted.sys.eval.sci.protocols :as esp]
+   [goog.object :as gobj]
+   [sted.sys.handle :as sh]
+   [mdast-util-from-markdown :as mdast]))
 
 
 (def electron-bridge #? (:cljs (aget js/window "my_electron_bridge")
                          :clj nil))
-
-
-(def the-sci-context (atom nil))
 
 
 (defn list-dir*
@@ -281,7 +280,7 @@
                           (fn [msg]
                             (js/console.log "[SCI]" msg)
                             (swap! unbound-prints conj msg))))
-    (reset! the-sci-context ctx)
+    
     ;; actual mutation fn
     (fn [[_ eval-eid] db bus]
       (let [target (d/entity db eval-eid)]
@@ -309,6 +308,51 @@
               (-> #(do-code-eval! bus ctx sel# target evr-eid)
                   (js/setTimeout 0)))))))))
 
+(defn setup!
+  [{:keys [conn bus]  :as app} app-atom-circular-ref]
+  (let [sel# (sci/new-dynamic-var 'sel nil)
+        app# (sci/new-var 'sted app-atom-circular-ref nil)
+        unbound-prints (atom [])
+        ctx (-> (sci-opts app)
+                (update :bindings
+                        merge
+                        {'sel sel#
+                         'sted app#
+                         'bus bus
+                         'transact! (transactor conn)})
+                (sci/init))]
+    (sci/alter-var-root sci/print-newline (fn [_] false))
+    (sci/alter-var-root sci/print-fn
+                        (fn [_]
+                          (fn [msg]
+                            (js/console.log "[SCI]" msg)
+                            (swap! unbound-prints conj msg))))
+    ;; actual mutation fn
+    (ec/bind* app (core/uniqueid bus)
+              (fn [target]
+                (if-let [h (:handle/token target)]
+                  ;; target is handle, load it and expand it in place
+                  (core/send! bus [:eval-cont target (sh/load h)])
+                  ;; not handle
+                  (if-let [up-h (some-> target move/up :handle/token)]
+                    ;; parent of target is handle
+                    (let [c (sh/load up-h)
+                          k (e/->form target)]
+                      (println "Parent is handle?" k)
+                      (.then (js/Promise.resolve
+                              (cond (sequential? c) (datafy/nav c nil k)
+                                    (associative? c) (datafy/nav c k (get c k))
+                                    (set? c) (datafy/nav c k k)
+                                    :else (str "???" (type c))))
+                             (fn [z] (core/send! bus [:ingest-replacing z]))))
+                    ;; code eval
+                    (let [_ (js/console.time "EvalFinish")
+                          evr-eid (create-pending-eval! conn target)]
+                      (println "Created pending eval" evr-eid)
+                      (-> #(do-code-eval! bus ctx sel# target evr-eid)
+                          (js/setTimeout 0)))))))
+    (println "Return the app")
+    app))
 
 (comment
   (sci/binding [sci/print-newline true

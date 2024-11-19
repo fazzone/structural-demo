@@ -189,13 +189,15 @@
        (core/register-simple! a m f))
      (-> a
          (sh/setup!)
-         (core/register-mutation! :eval-sci (eval-sci/mutatef a the-app))
+         #_(core/register-mutation! :eval-sci (eval-sci/mutatef a the-app))
+         
          (core/register-simple! :zp (sf/mutatef a))
          (core/register-mutation! :scroll (fn [_ _ _] (csc/scroll-to-selected!)))
          (sk/setup!)
          (sm/setup!)
          (search/setup!)
          (eval-core/setup!)
+         (eval-sci/setup! the-app)
          (nrepl/setup!)
          (sys-eval/setup!)
          (core/register-mutation!
