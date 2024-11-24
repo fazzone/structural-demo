@@ -25,9 +25,7 @@
 
 (rum.core/set-warn-on-interpretation! true)
 
-
 (declare form)
-
 
 (defn computed-indent
   [e indent-prop]

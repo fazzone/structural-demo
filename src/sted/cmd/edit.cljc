@@ -9,9 +9,9 @@
 (defn exactly-one
   [[x & more :as xs]]
   (when more
-    (throw (ex-info (str "More than one: " (pr-str (map :db/id xs)))
-                    {:xs xs}))
-    #_(println "More than one" xs))
+    (throw (ex-info (str "More than one: "
+                         (pr-str (map :db/id xs)))
+                    {:xs xs})))
   x)
 
 (defn form-delete*
@@ -45,8 +45,6 @@
 (defn form-unlink-tx [e] (form-delete* e false))
 
 ;; overwrite with something that has not existed before
-
-
 ;; if you have a tempid, you want this one
 
 
@@ -62,10 +60,7 @@
        [:db/add (:db/id spine) :seq/first replacement-eid]])))
 
 ;; replace with something from somewhere else
-
-
 ;; if you have a second entity, you want this one
-
 
 (defn form-replace-tx
   [e r]
@@ -109,8 +104,6 @@
     (throw (ex-info "Not empty" {})))
   [[:db/add (:db/id target) :coll/contains (:db/id new-node)]
    [:db/add (:db/id target) :seq/first (:db/id new-node)]])
-
-
 
 (defn insert-editing*
   [inserter target from props]
@@ -183,9 +176,7 @@
          [:db/add (:db/id tspine) :seq/next (:db/id snext)])])))
 
 
-(def duplicated-attrs [:form/indent
-                       :form/linebreak])
-
+(def duplicated-attrs [:form/indent :form/linebreak])
 
 (defn form-duplicate-tx
   [e]
@@ -232,7 +223,6 @@
       (into [new-node]
             (insert-before-tx parent new-node)))))
 
-
 (defn form-wrap-tx
   ([e ct]
    (form-wrap-tx e ct "frtx-newnode"))
@@ -269,16 +259,22 @@
                   (move-selection-tx (:db/id from) "inner")))))
 
 (defn edit-new-wrapped-tx
-  ([sel ct init opts]
-   (edit-new-wrapped* insert-after-tx sel sel ct init opts))
-  ([target from ct init opts]
-   (edit-new-wrapped* insert-after-tx target from ct init opts)))
+  [sel ct init opts]
+  (edit-new-wrapped*
+   insert-after-tx sel sel ct init
+   (merge opts (select-keys sel [:form/linebreak :form/indent]))))
 
-(defn move-last*
-  [e]
-  (if-let [n (:seq/next e)]
-    (recur n)
-    (:seq/first e)))
+(defn insert-editing-cmd
+  ([ins target from props]
+   (let [parent (exactly-one (:coll/_contains target))]
+     (case (:coll/type parent)
+       :chain (edit-new-wrapped* ins target from :list "" props)
+       :bar   (edit-new-wrapped* ins target from :chain "" props)
+       ;; 
+       (insert-editing* ins target from
+                        (merge {:edit/from (:db/id from)}
+                               (select-keys target [:form/linebreak :form/indent])
+                               props))))))
 
 (defn slurp-right-tx
   [e]
@@ -342,18 +338,7 @@
        (if next
          [:db/add (:db/id last-cons) :seq/next (:db/id next)])])))
 
-(defn insert-editing-cmd
-  ([ins target from props]
-   (let [parent (exactly-one (:coll/_contains target))]
-     (case (:coll/type parent)
-       :chain (edit-new-wrapped* ins target from :list "" props)
-       :bar   (edit-new-wrapped* ins target from :chain "" props)
-       ;; 
-       (let [indent-props (select-keys target [:form/linebreak :form/indent])]
-         (insert-editing* ins target from
-                          (merge {:edit/from (:db/id from)}
-                                 indent-props
-                                 props)))))))
+
 
 (defn form-split-tx
   [e]

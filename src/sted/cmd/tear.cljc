@@ -2,7 +2,6 @@
   (:require
    [sted.embed.common :as ec]
    [clojure.string :as string]
-   [datascript.core :as d]
    [sted.embed :as e]
    [sted.cmd.edit :as edit]
    [sted.cmd.insert :as insert]

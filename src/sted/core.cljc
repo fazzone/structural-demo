@@ -41,28 +41,12 @@
   (fire-subs! [this eid])
   (sub-entity [this eid func])
   
-  ;; history?
-  (get-history [this txid])
-  (save-history! [this txid tx-report])
   ;; hacks
   (uniqueid [this])
   (reset [this])
   
   ;; more hacks
   (should-update [this]))
-
-(defprotocol ICursor
-  (selection [this ent])
-  (get-selection [this])
-  (set-selection! [this ent]))
-
-(defn cursor
-  []
-  (let [c (atom nil)]
-    (reify ICursor
-      (selection [this e] (= (:db/id e) (:db/id @c)))
-      (get-selection [this] @c)
-      (set-selection! [this e] (reset! c e)))))
 
 (defn bus
   ([] (bus nil))
@@ -116,24 +100,7 @@
               (.add sub-set func)
               (fn [] (.delete sub-set func)))))
       
-       (get-history [this txid] (get @hs txid))
-       (save-history! [this txid {:as report :keys [tx-data mut]}]
-         (let [as (into #{} (map (fn [[_ a]] a)) tx-data)
-               move? (contains? as :form/highlight)
-               edit? (some #(not= % :form/highlight) as)]
-           (println (.toString txid 16)
-                    (-> (str (first mut))
-                        #?(:cljs (.padEnd 16 )))
-                    (-> (str (count tx-data))
-                        #?(:cljs (.padStart 6)))
-                    (-> (str (when move? "M")
-                             (when edit? "E"))
-                        #?(:cljs (.padStart 4)))
-                    )
-         
-           (swap! hs assoc txid (assoc report
-                                       :movement? move?
-                                       :mutation? edit?))))
+       
        
        (uniqueid [_this] uu)
        (reset [_this]
@@ -145,17 +112,17 @@
        ;; hacks?
        (should-update [_] nil)))))
 
+
+
 (def blackhole
   (reify IBus
     (send! [_ _])
     (connect-sub! [_ _ _])
     (disconnect-sub! [_ _ _])
-    (get-history [this txid])
     (sub-entity [_ _ _] (fn []))
-    (save-history! [this txid r])
     (should-update [_] true)))
 
-(defrecord App [conn bus history system])
+(defrecord App [conn bus history back system])
 
 (defn register-mutation!
   [{:keys [conn bus] :as app} topic mut-fn]
@@ -208,8 +175,31 @@
                    (d/datoms db :avet :seq/next))]
     (throw (ex-info "CORRUPT DB!" {:dupe dupe}))))
 
+(defn txinfo
+  [{:keys [tx-data tempids] :as report} mut sel]
+  (let [as (into #{} (map (fn [[_ a]] a)) tx-data)
+        move? (contains? as :form/highlight)
+        edit? (some #(not= % :form/highlight) as)]
+    
+    (println
+     (.toString (get tempids :db/current-tx) 16)
+     (-> (str (first mut))
+         #?(:cljs (.padEnd 16 )))
+     (-> (str (count tx-data))
+         #?(:cljs (.padStart 6)))
+     (-> (str (when move? "M")
+              (when edit? "E"))
+         #?(:cljs (.padStart 4))))
+    
+    {:move? move?
+     :edit? edit?
+     :mut mut
+     :sel (:db/id sel)}))
+
+
+
 (defn register-simple!
-  [{:keys [bus conn history] :as app} topic mut-fn]
+  [{:keys [bus conn history back] :as app} topic mut-fn]
   (connect-sub!
    bus topic
    (with-meta
@@ -221,32 +211,24 @@
                             (println "Exception in mutation " e)
                             nil))
              report (try
-                      (when tx-data
-                        (assoc (d/transact! conn tx-data)
-                               :mut mut
-                               :sel (:db/id sel)))
+                      (when tx-data (d/transact! conn tx-data))
                       (catch #?(:cljs js/Error :clj Exception) e
                         {:error e}))]
          
          (when (:db-after report)
-           (if-let [txid (get (:tempids report) :db/current-tx)]
-             (do (save-history! bus txid report)
-                           
-                 #_(println "================================================================" )
-                 #_(println txid mut )
-                 #_(run! prn (:tx-data report))
-                 #_(run! prn (:tempids report))
-                 
-                 (reset! history (cons report @history)))
-             (println "No current-tx?")))
+           (let [info (txinfo report mut sel)]
+             (reset! history (cons (merge report info) @history))
+             (when (:edit? info)
+               (reset! back (cons (:sel info) @back)))))
+         
          (when-let [e (:error report)]
            (println (str "Error transacting " e mut-name) e)
            (println "Tx-data")
            (run! prn tx-data))))
+     
      (meta mut-fn)))
   
-  app
-  )
+  app)
 
 (defn movement->mutation
   [mover]
@@ -261,8 +243,8 @@
     [(if a? :db/retract :db/add) e a v]))
 
 (defn setup-undo!
-  [{:keys [bus conn history] :as app}]
-
+  [{:keys [bus conn history back] :as app}]
+  ;; slugme
   (connect-sub!
    bus :undo
    (fn [_]
@@ -281,6 +263,20 @@
          (reset! history
                  (cons (cons u prior-undo)
                        (concat undos more)))))))
+  
+  
+  (register-simple! app :back
+                    (fn [sel]
+                      (println "Back!" "Sel=" (:db/id sel) "|" @back)
+                      (let [[prior-back & backs] (take-while list? @back)
+                            [p & more]           (drop-while list? @back)]
+
+                        (when p
+                          (reset! back
+                                  (cons (cons p prior-back)
+                                        (concat backs more)))
+                          
+                          (move-selection-tx (:db/id sel) p)))))
 
   (connect-sub!
    bus :save-demo
@@ -302,16 +298,17 @@
   ([conn] (app conn nil))
   ([conn pbus]
    (let [the-bus (or pbus (bus))
-         my-id (uniqueid the-bus)
+         my-id   (uniqueid the-bus)
          the-app (-> {:bus     the-bus
                       :history (atom ())
+                      :back    (atom ())
                       :conn    (doto conn
                                  (d/listen!
                                   (with-meta
                                     (fn [{:keys [db-after db-before tx-data tempids] :as report}]
                                       (try
                                         (let [emax (:max-eid db-before)
-                                              es (into #{}
+                                              es   (into #{}
                                                        (keep (fn [[e]]
                                                                (when-not (> e emax)
                                                                  e)))

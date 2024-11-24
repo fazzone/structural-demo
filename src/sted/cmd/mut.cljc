@@ -660,6 +660,7 @@
    (let [db (d/entity-db sel)
          sel-eid (:db/id sel)
          bar-eid (:db/id (:state/bar (d/entity db :sted.page/state)))
+         ;; WRONG: this is the toplevle and not the chain...
          chain-eid (:db/id (move/most-upward sel))
          ;; max-tx (apply max
          ;;               (for [[_ a _ t] (d/datoms db :eavt (:db/id sel))
@@ -675,11 +676,21 @@
      (println "BACK!" sel outside "Sel=" sel-eid "Qseq" (first qseq))
      (select-form-tx db (first qseq)))))
 
+(defn select-chain-selection-tx
+  [sel]
+  (let [top-level (move/most-upward sel)
+        ch (some-> top-level :coll/_contains first)
+        cs (:chain/selection ch)]
+    (when cs
+      (into [[:db/add (:db/id ch) :chain/selection (:db/id sel)]]
+            (move-selection-tx (:db/id sel) (:db/id cs))))))
+
 
 (def editing-commands
   {:float                          #'edit/exchange-with-previous-tx
    :sink                           edit/exchange-with-next-tx
    :select-chain                   nav/select-chain-tx
+   :select-chain-selection         select-chain-selection-tx
    :hop-left                       nav/hop-left
    :hop-right                      nav/hop-right
    :uneval                         uneval-and-next

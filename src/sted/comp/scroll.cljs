@@ -269,7 +269,20 @@
        (js/IntersectionObserver. iobs-callback)))
 
 
-(def the-iobs (make-iobs))
+(defonce iobs-count (atom 0))
+(defonce the-iobs (make-iobs))
+
+(defn observe [el]
+  (.observe the-iobs el)
+  (case (swap! iobs-count inc)
+    1 :ok
+    (println "IObs messed up")))
+
+(defn unobserve [el]
+  (.unobserve the-iobs el)
+  (case (swap! iobs-count dec)
+    0 :ok
+    (println "IObs messed up")))
 
 (defn skip-indenter
   [^js el]

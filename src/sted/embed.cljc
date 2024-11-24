@@ -357,6 +357,7 @@
                      (:token/value e)
                      (str (:token/value e) "\n"))))
       ;; gross - but the alternative (separate node types) is worse? 
+      ;; (this is to avoid an unnatural space between the #? and the ()s)
       (when (= :reader-macro (:coll/type e))
         (let [[rmt body & more] (seq->vec e)
               rms (->string rmt)]
@@ -364,9 +365,11 @@
           (str "#"
                rms
                (case rms
-                   ("'" "?" "#" ":" "::" ) nil
-                   " ")
+                 ("'" "?" "#" ":" "::" ) nil
+                 " ")
                (->string body))))
+      ;; auto stitch?
+      ;; 
       (when-let [ct (:coll/type e)]
         (let [[x & xs] (seq->vec e)]
           (str

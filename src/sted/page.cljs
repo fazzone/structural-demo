@@ -317,7 +317,6 @@
     
     #_(-> (cdoc/root code/form)
           (rum/mount el))
-    
     ;; 
     (reset! core/pending-reload nil)
     ))
